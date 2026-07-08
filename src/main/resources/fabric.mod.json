@@ -13,10 +13,10 @@
   "environment": "*",
   "entrypoints": {
     "client": [
-      "com.duperknight.client.DmlsClient"
+      "com.duperknight.client.DMLSClient"
     ],
     "main": [
-      "com.duperknight.Dmls"
+      "com.duperknight.DMLS"
     ]
   },
   "depends": {
