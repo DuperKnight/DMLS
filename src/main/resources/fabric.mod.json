@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "dmls",
+  "version": "${version}",
+  "name": "Duper's Mod for Lazy Staff",
+  "description": "A mod made for the LAZY staff of stoneworks",
+  "authors": ["DuperKnight"],
+  "contact": {
+    "Discord": "DuperKnight"
+  },
+  "license": "MIT",
+  "icon": "assets/dmls/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "com.duperknight.client.DmlsClient"
+    ],
+    "main": [
+      "com.duperknight.Dmls"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
