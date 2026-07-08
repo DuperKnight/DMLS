@@ -19,6 +19,7 @@ import net.minecraft.util.Formatting;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -210,10 +211,14 @@ public final class CheckLandsCommand {
         return inLands && !lands.isEmpty() ? Optional.of(lands) : Optional.empty();
     }
 
-    private static Optional<LandRole> parsePlayerRole(List<TooltipLine> tooltip, String ign) {
+    private static Optional<RankScan> parsePlayerRank(List<TooltipLine> tooltip, String ign) {
         boolean inPlayers = false;
         int playerPosition = 0;
-        LandRole found = LandRole.MEMBER_OR_UNKNOWN;
+        List<String> distinctRanks = new ArrayList<>();
+        List<RankStats> rankStats = new ArrayList<>();
+        String previousRank = "";
+        RankAssignment targetRank = null;
+        boolean hasMorePlayers = false;
 
         for (TooltipLine line : tooltip) {
             String stripped = stripListMarker(line.text());
@@ -227,6 +232,11 @@ public final class CheckLandsCommand {
                 continue;
             }
 
+            if (stripped.equals("...")) {
+                hasMorePlayers = true;
+                continue;
+            }
+
             Optional<String> parsedPlayerName = line.grayUsername().or(() -> lastUsername(stripped));
             if (parsedPlayerName.isEmpty()) {
                 continue;
@@ -234,21 +244,104 @@ public final class CheckLandsCommand {
 
             playerPosition++;
             String playerName = parsedPlayerName.get();
+            String role = stripped.substring(0, Math.max(0, stripped.lastIndexOf(playerName))).trim();
+            String rankName = rankName(playerPosition, role);
+            String formattedRankName = formattedRankName(playerPosition, line, playerName, rankName);
+            addDistinctRank(distinctRanks, rankName);
+            int position = rankPosition(distinctRanks, rankName);
+            RankStats stats = getOrCreateRankStats(rankStats, rankName, formattedRankName, position);
+            stats.visibleCount++;
+            if (!previousRank.isEmpty() && !previousRank.equalsIgnoreCase(rankName)) {
+                setOpenEnded(rankStats, previousRank, false);
+            }
+            previousRank = rankName;
+
             if (!playerName.equalsIgnoreCase(ign)) {
                 continue;
             }
 
             if (playerPosition == 1) {
-                return Optional.of(LandRole.OWNER);
+                targetRank = RankAssignment.owner();
+                continue;
             }
 
-            String role = stripped.substring(0, Math.max(0, stripped.lastIndexOf(playerName))).trim().toLowerCase(Locale.ROOT);
-            if (role.contains("admin")) {
-                return Optional.of(LandRole.ADMIN);
+            String normalizedRole = role.toLowerCase(Locale.ROOT);
+            if (normalizedRole.contains("admin")) {
+                targetRank = RankAssignment.admin();
+                continue;
+            }
+            if (normalizedRole.equals("member")) {
+                targetRank = RankAssignment.memberOrUnknown();
+                continue;
+            }
+
+            targetRank = RankAssignment.custom(rankName, formattedRankName, position);
+        }
+
+        if (!previousRank.isEmpty()) {
+            setOpenEnded(rankStats, previousRank, hasMorePlayers);
+        }
+
+        if (!inPlayers) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new RankScan(targetRank == null ? RankAssignment.memberOrUnknown() : targetRank, rankStats));
+    }
+
+    private static String formattedRankName(int playerPosition, TooltipLine line, String playerName, String fallbackRank) {
+        if (playerPosition == 1 || fallbackRank.equals("Admin") || fallbackRank.equals("Member/Unknown")) {
+            return fallbackRank;
+        }
+        return line.formattedRoleBefore(playerName).orElse(fallbackRank);
+    }
+
+    private static String rankName(int playerPosition, String role) {
+        if (playerPosition == 1) {
+            return "Owner";
+        }
+        if (role.toLowerCase(Locale.ROOT).contains("admin")) {
+            return "Admin";
+        }
+        return role.isEmpty() ? "Member/Unknown" : role;
+    }
+
+    private static void addDistinctRank(List<String> ranks, String rank) {
+        for (String existingRank : ranks) {
+            if (existingRank.equalsIgnoreCase(rank)) {
+                return;
+            }
+        }
+        ranks.add(rank);
+    }
+
+    private static int rankPosition(List<String> ranks, String rank) {
+        for (int i = 0; i < ranks.size(); i++) {
+            if (ranks.get(i).equalsIgnoreCase(rank)) {
+                return i + 1;
+            }
+        }
+        return ranks.size() + 1;
+    }
+
+    private static RankStats getOrCreateRankStats(List<RankStats> rankStats, String rank, String formattedRank, int position) {
+        for (RankStats stats : rankStats) {
+            if (stats.rank.equalsIgnoreCase(rank) && stats.position == position) {
+                return stats;
             }
         }
 
-        return inPlayers ? Optional.of(found) : Optional.empty();
+        RankStats stats = new RankStats(rank, formattedRank, position);
+        rankStats.add(stats);
+        return stats;
+    }
+
+    private static void setOpenEnded(List<RankStats> rankStats, String rank, boolean openEnded) {
+        for (RankStats stats : rankStats) {
+            if (stats.rank.equalsIgnoreCase(rank)) {
+                stats.openEnded = openEnded;
+            }
+        }
     }
 
     private static Optional<String> lastUsername(String text) {
@@ -279,6 +372,30 @@ public final class CheckLandsCommand {
 
             return Optional.empty();
         }
+
+        private Optional<String> formattedRoleBefore(String playerName) {
+            int playerNameIndex = text.lastIndexOf(playerName);
+            if (playerNameIndex < 0) {
+                return Optional.empty();
+            }
+
+            String role = stripListMarker(text.substring(0, playerNameIndex)).trim();
+            if (role.isEmpty()) {
+                return Optional.empty();
+            }
+
+            Style roleStyle = Style.EMPTY;
+            for (TooltipSegment segment : segments) {
+                if (segment.isGray() && segment.text().contains(playerName)) {
+                    break;
+                }
+                if (!segment.isGray() && !segment.text().isBlank()) {
+                    roleStyle = segment.style();
+                }
+            }
+
+            return Optional.of(stylePrefix(roleStyle) + role);
+        }
     }
 
     private record TooltipSegment(String text, Style style) {
@@ -289,23 +406,119 @@ public final class CheckLandsCommand {
         }
     }
 
+    private static String stylePrefix(Style style) {
+        StringBuilder prefix = new StringBuilder();
+        if (style.getColor() != null) {
+            for (Formatting formatting : Formatting.values()) {
+                if (formatting.isColor() && style.getColor().equals(TextColor.fromFormatting(formatting))) {
+                    prefix.append('§').append(formatting.getCode());
+                    break;
+                }
+            }
+        }
+        if (style.isBold()) {
+            prefix.append("§l");
+        }
+        if (style.isItalic()) {
+            prefix.append("§o");
+        }
+        if (style.isUnderlined()) {
+            prefix.append("§n");
+        }
+        if (style.isStrikethrough()) {
+            prefix.append("§m");
+        }
+        if (style.isObfuscated()) {
+            prefix.append("§k");
+        }
+        return prefix.toString();
+    }
+
     private enum Stage {
         WAITING_FOR_LANDS,
         SENDING_NEXT_INFO_COMMAND,
         WAITING_FOR_INFO
     }
 
-    private enum LandRole {
+    private enum RankType {
         OWNER,
         ADMIN,
+        CUSTOM,
         MEMBER_OR_UNKNOWN
+    }
+
+    private record RankScan(RankAssignment assignment, List<RankStats> stats) {
+    }
+
+    private static final class RankStats {
+        private final String rank;
+        private final String formattedRank;
+        private final int position;
+        private int visibleCount;
+        private boolean openEnded;
+
+        private RankStats(String rank, String formattedRank, int position) {
+            this.rank = rank;
+            this.formattedRank = formattedRank;
+            this.position = position;
+        }
+    }
+
+    private record RankAssignment(RankType type, String customRank, String formattedCustomRank, int position) {
+        private static RankAssignment owner() {
+            return new RankAssignment(RankType.OWNER, "", "", 1);
+        }
+
+        private static RankAssignment admin() {
+            return new RankAssignment(RankType.ADMIN, "", "", Integer.MAX_VALUE);
+        }
+
+        private static RankAssignment custom(String customRank, String formattedCustomRank, int position) {
+            return new RankAssignment(RankType.CUSTOM, customRank, formattedCustomRank, position);
+        }
+
+        private static RankAssignment memberOrUnknown() {
+            return new RankAssignment(RankType.MEMBER_OR_UNKNOWN, "", "", Integer.MAX_VALUE);
+        }
+    }
+
+    private static final class RankClaims {
+        private final String rank;
+        private String formattedRank;
+        private final int position;
+        private final List<ClaimResult> claims = new ArrayList<>();
+
+        private RankClaims(String rank, String formattedRank, int position) {
+            this.rank = rank;
+            this.formattedRank = formattedRank;
+            this.position = position;
+        }
+
+        private void addClaim(String claim, Optional<RankStats> stats) {
+            claims.add(toClaimResult(claim, stats));
+            stats.ifPresent(rankStats -> {
+                if (!rankStats.formattedRank.isBlank()) {
+                    formattedRank = rankStats.formattedRank;
+                }
+            });
+        }
+    }
+
+    private record ClaimResult(String claim, int visibleCount, boolean openEnded) {
+    }
+
+    private static ClaimResult toClaimResult(String claim, Optional<RankStats> stats) {
+        return stats
+                .map(rankStats -> new ClaimResult(claim, Math.max(1, rankStats.visibleCount), rankStats.openEnded))
+                .orElseGet(() -> new ClaimResult(claim, 1, false));
     }
 
     private static final class CheckSession {
         private final String ign;
         private final Queue<String> remainingClaims = new ArrayDeque<>();
         private final List<String> ownedClaims = new ArrayList<>();
-        private final List<String> adminClaims = new ArrayList<>();
+        private final List<ClaimResult> adminClaims = new ArrayList<>();
+        private final List<RankClaims> customRankClaims = new ArrayList<>();
         private final List<String> memberOrUnknownClaims = new ArrayList<>();
 
         private Stage stage = Stage.WAITING_FOR_LANDS;
@@ -393,14 +606,19 @@ public final class CheckLandsCommand {
                 return;
             }
 
-            Optional<LandRole> parsedRole = parsePlayerRole(snapshot.get().tooltip(), ign);
-            if (parsedRole.isEmpty()) {
+            Optional<RankScan> parsedRank = parsePlayerRank(snapshot.get().tooltip(), ign);
+            if (parsedRank.isEmpty()) {
                 return;
             }
 
-            switch (parsedRole.get()) {
+            RankScan scan = parsedRank.get();
+            RankAssignment rank = scan.assignment();
+            switch (rank.type()) {
                 case OWNER -> ownedClaims.add(currentClaim);
-                case ADMIN -> adminClaims.add(currentClaim);
+                case ADMIN -> {
+                    adminClaims.add(toClaimResult(currentClaim, findRankStats(scan.stats(), "Admin", Integer.MAX_VALUE)));
+                }
+                case CUSTOM -> addCustomRankClaim(rank, findRankStats(scan.stats(), rank.customRank(), rank.position()), currentClaim);
                 case MEMBER_OR_UNKNOWN -> memberOrUnknownClaims.add(currentClaim);
             }
 
@@ -422,15 +640,72 @@ public final class CheckLandsCommand {
         }
 
         private void report(MinecraftClient client) {
-            sendClientMessage(client, PREFIX + separatorForChatWidth(client, PREFIX));
+            String header = PREFIX + "Player §6" + ign + "§7 ";
+            sendClientMessage(client, header + separatorForChatWidth(client, header));
             sendClientMessage(client, "§4§lOwner§r§7: " + formatClaims(ownedClaims));
-            sendClientMessage(client, "§c§lAdmin§r§7: " + formatClaims(adminClaims));
+            sendClientMessage(client, "§c§lAdmin§r§7: " + formatClaimResults(adminClaims));
+            customRankClaims.stream()
+                    .sorted(Comparator.comparingInt((RankClaims rank) -> rank.position).thenComparing(rank -> rank.rank, String.CASE_INSENSITIVE_ORDER))
+                    .forEach(rank -> sendClientMessage(client, rank.formattedRank + "§r§7 (" + ordinal(rank.position) + " position): " + formatClaimResults(rank.claims)));
             sendClientMessage(client, "§e§lMember/Unknown§r§7: " + formatClaims(memberOrUnknownClaims));
             sendClientMessage(client, "§7" + separatorForChatWidth(client, ""));
         }
 
+        private void addCustomRankClaim(RankAssignment rank, Optional<RankStats> stats, String claim) {
+            for (RankClaims existingRank : customRankClaims) {
+                if (existingRank.rank.equalsIgnoreCase(rank.customRank()) && existingRank.position == rank.position()) {
+                    existingRank.addClaim(claim, stats);
+                    return;
+                }
+            }
+
+            RankClaims claims = new RankClaims(rank.customRank(), rank.formattedCustomRank(), rank.position());
+            claims.addClaim(claim, stats);
+            customRankClaims.add(claims);
+        }
+
         private String formatClaims(List<String> claims) {
             return claims.isEmpty() ? "None" : String.join(", ", claims);
+        }
+
+        private String formatClaimResults(List<ClaimResult> claims) {
+            if (claims.isEmpty()) {
+                return "None";
+            }
+
+            List<String> formattedClaims = new ArrayList<>();
+            for (ClaimResult claim : claims) {
+                formattedClaims.add(claim.claim() + " " + countSuffix(claim));
+            }
+            return String.join(", ", formattedClaims);
+        }
+
+        private Optional<RankStats> findRankStats(List<RankStats> stats, String rank, int position) {
+            for (RankStats rankStats : stats) {
+                if (rankStats.rank.equalsIgnoreCase(rank)
+                        && (position == Integer.MAX_VALUE || rankStats.position == position)) {
+                    return Optional.of(rankStats);
+                }
+            }
+            return Optional.empty();
+        }
+
+        private String countSuffix(ClaimResult claim) {
+            return "(1/" + claim.visibleCount() + (claim.openEnded() ? "+" : "") + ")";
+        }
+
+        private String ordinal(int number) {
+            int lastTwoDigits = number % 100;
+            if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
+                return number + "th";
+            }
+
+            return switch (number % 10) {
+                case 1 -> number + "st";
+                case 2 -> number + "nd";
+                case 3 -> number + "rd";
+                default -> number + "th";
+            };
         }
 
         private String separatorForChatWidth(MinecraftClient client, String linePrefix) {
