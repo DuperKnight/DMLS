@@ -6,12 +6,16 @@ import com.duperknight.client.utils.MenuCommandQuery;
 import com.duperknight.client.utils.ScreenUtils;
 import com.duperknight.client.utils.TooltipUtils;
 import com.duperknight.client.utils.TooltipUtils.TooltipLine;
+import com.duperknight.client.gui.CheckLandsScreen;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.MutableText;
@@ -37,7 +41,30 @@ public final class CheckLandsModule extends DMLSModule {
     private CheckSession activeSession;
 
     public CheckLandsModule() {
-        super(StaffRank.HELPER);
+        super(StaffRank.MODERATOR);
+    }
+
+    @Override
+    public Text displayName() {
+        return Text.literal("Check Lands");
+    }
+
+    @Override
+    public ItemStack icon() {
+        return new ItemStack(Items.CAMPFIRE);
+    }
+
+    @Override
+    public List<Text> description() {
+        return List.of(
+                Text.literal("Check the lands and ranks for one or more players."),
+                Text.literal("Separate multiple IGNs with spaces.")
+        );
+    }
+
+    @Override
+    public void openScreen(MinecraftClient client, Screen parent) {
+        client.setScreen(new CheckLandsScreen(parent, this));
     }
 
     @Override
@@ -47,10 +74,7 @@ public final class CheckLandsModule extends DMLSModule {
                         .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString())
                                 .executes(context -> {
                                     MinecraftClient client = context.getSource().getClient();
-                                    if (!hasRequiredRank(client)) {
-                                        return 0;
-                                    }
-                                    start(client, StringArgumentType.getString(context, "igns"));
+                                    submit(client, StringArgumentType.getString(context, "igns"));
                                     return 1;
                                 }))
         ));
@@ -65,7 +89,11 @@ public final class CheckLandsModule extends DMLSModule {
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> handleServerMessage(message));
     }
 
-    private void start(MinecraftClient client, String input) {
+    /** Starts a single or batch land check. The command and GUI both call this method. */
+    public void submit(MinecraftClient client, String input) {
+        if (!hasRequiredRank(client)) {
+            return;
+        }
         List<String> igns = new ArrayList<>();
         for (String ign : input.trim().split("\\s+")) {
             if (!ign.isEmpty() && USERNAME.matcher(ign).matches() && igns.stream().noneMatch(ign::equalsIgnoreCase)) {
@@ -360,7 +388,6 @@ public final class CheckLandsModule extends DMLSModule {
         private String currentClaim;
         private MenuCommandQuery activeQuery;
         private int totalClaims;
-        private int claimIndex;
 
         private CheckSession(String ign) {
             this.ign = ign;
@@ -429,8 +456,6 @@ public final class CheckLandsModule extends DMLSModule {
                 return;
             }
 
-            claimIndex++;
-            ChatUtils.sendClientMessage(client, PREFIX + "Checking §6" + currentClaim + "§7 §8(" + claimIndex + "/" + totalClaims + ")");
             activeQuery = new MenuCommandQuery("la info " + currentClaim, currentClaim, MENU_TIMEOUT_TICKS, PLAYER_LIST_SLOT);
             activeQuery.start(client);
             stage = Stage.WAITING_FOR_INFO;

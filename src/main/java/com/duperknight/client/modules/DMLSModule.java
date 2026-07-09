@@ -3,7 +3,11 @@ package com.duperknight.client.modules;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.item.ItemStack;
+import net.minecraft.text.Text;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -33,6 +37,18 @@ public abstract class DMLSModule {
         return minimumStaffRank;
     }
 
+    /** The name displayed on the DMLS home menu. */
+    public abstract Text displayName();
+
+    /** The icon displayed on the DMLS home menu. */
+    public abstract ItemStack icon();
+
+    /** The description displayed at the top of this module's screen. */
+    public abstract List<Text> description();
+
+    /** Opens this module's screen, returning to the supplied DMLS home screen. */
+    public abstract void openScreen(MinecraftClient client, Screen parent);
+
     /**
      * Checks if the selected staff rank meets the minimum rank of this module.
      * Sends a chat message if it doesn't.
@@ -50,6 +66,11 @@ public abstract class DMLSModule {
                 + "§r§7 or higher, but your rank is set to " + currentRank.displayName()
                 + "§r§7. Change it with §6/dmls rank <rank>§7.");
         return false;
+    }
+
+    /** Returns whether the selected staff rank may use this module without producing chat output. */
+    public final boolean isAvailableToSelectedRank() {
+        return DMLSConfig.staffRank().isAtLeast(minimumStaffRank);
     }
 
     /**

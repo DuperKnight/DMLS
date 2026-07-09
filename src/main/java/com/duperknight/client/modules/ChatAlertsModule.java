@@ -4,10 +4,16 @@ import com.duperknight.client.utils.AlertWordlist;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
+import com.duperknight.client.gui.ChatAlertsScreen;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+
+import java.util.List;
 
 public final class ChatAlertsModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - Alerts§8] §7";
@@ -15,6 +21,26 @@ public final class ChatAlertsModule extends DMLSModule {
 
     public ChatAlertsModule() {
         super(StaffRank.HELPER);
+    }
+
+    @Override
+    public Text displayName() {
+        return Text.literal("Chat Alerts");
+    }
+
+    @Override
+    public ItemStack icon() {
+        return new ItemStack(Items.BELL);
+    }
+
+    @Override
+    public List<Text> description() {
+        return List.of(Text.literal("Receive an alert when a configured word appears in chat."));
+    }
+
+    @Override
+    public void openScreen(MinecraftClient client, Screen parent) {
+        client.setScreen(new ChatAlertsScreen(parent, this));
     }
 
     @Override

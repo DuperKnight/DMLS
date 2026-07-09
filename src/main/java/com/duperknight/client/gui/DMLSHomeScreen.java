@@ -1,0 +1,220 @@
+package com.duperknight.client.gui;
+
+import com.duperknight.client.modules.DMLSModule;
+import net.minecraft.client.gui.Click;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.item.ItemStack;
+import net.minecraft.text.OrderedText;
+import net.minecraft.text.Text;
+
+import java.util.List;
+
+/** The registry-driven DMLS module picker. */
+public final class DMLSHomeScreen extends DMLSMenuScreen {
+    private static final int COLUMNS = 3;
+    private static final int CARD_GAP = 18;
+    private static final int CARD_MARGIN = 24;
+    private static final int MAX_CARD_SIZE = 120;
+
+    private final List<DMLSModule> registeredModules;
+    private List<DMLSModule> visibleModules = List.of();
+    private int scrollOffset;
+    private int maxScroll;
+    private boolean draggingScrollbar;
+
+    public DMLSHomeScreen(List<DMLSModule> registeredModules) {
+        this(registeredModules, null);
+    }
+
+    public DMLSHomeScreen(List<DMLSModule> registeredModules, Screen parent) {
+        super(Text.literal("Duper's Mod for Lazy Staff"), parent);
+        this.registeredModules = List.copyOf(registeredModules);
+    }
+
+    @Override
+    protected void init() {
+        addDrawableChild(ButtonWidget.builder(Text.literal("Mod Options..."), button -> client.setScreen(new DMLSOptionsScreen(this)))
+                .dimensions(leftPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Exit"), button -> close())
+                .dimensions(rightPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+    }
+
+    @Override
+    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        renderMenuBackground(context);
+        visibleModules = registeredModules.stream().filter(DMLSModule::isAvailableToSelectedRank).toList();
+        GridLayout layout = layoutFor(visibleModules.size());
+        scrollOffset = Math.min(scrollOffset, maxScroll);
+
+        context.enableScissor(layout.viewportX(), layout.viewportY(), layout.viewportRight(), layout.viewportBottom());
+        for (int index = 0; index < visibleModules.size(); index++) {
+            renderCard(context, layout, index, visibleModules.get(index), mouseX, mouseY);
+        }
+        context.disableScissor();
+
+        if (visibleModules.isEmpty()) {
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("No modules are available for your selected rank."),
+                    width / 2, layout.viewportY() + layout.viewportHeight() / 2 - 4, 0xFFAAAAAA);
+        }
+        if (layout.scrollable()) {
+            renderScrollbar(context, layout);
+        }
+
+        super.render(context, mouseX, mouseY, delta);
+    }
+
+    private void renderCard(DrawContext context, GridLayout layout, int index, DMLSModule module, int mouseX, int mouseY) {
+        int cardX = layout.cardX(index % COLUMNS);
+        int cardY = layout.viewportY() + (index / COLUMNS) * (layout.cardSize() + CARD_GAP) - scrollOffset;
+        boolean hovered = mouseX >= cardX && mouseX < cardX + layout.cardSize()
+                && mouseY >= cardY && mouseY < cardY + layout.cardSize()
+                && mouseY >= layout.viewportY() && mouseY < layout.viewportBottom();
+        context.fill(cardX, cardY, cardX + layout.cardSize(), cardY + layout.cardSize(), hovered ? 0xB8202020 : 0xA8000000);
+        context.drawStrokedRectangle(cardX, cardY, layout.cardSize(), layout.cardSize(), hovered ? 0xFFFFFFFF : 0xFFAAAAAA);
+
+        ItemStack icon = module.icon();
+        float iconScale = 1.5F;
+        int iconY = cardY + layout.cardSize() / 2 - 31;
+        context.getMatrices().pushMatrix();
+        context.getMatrices().translate(cardX + layout.cardSize() / 2.0F - 12, iconY);
+        context.getMatrices().scale(iconScale, iconScale);
+        context.drawItem(icon, 0, 0);
+        context.getMatrices().popMatrix();
+
+        float labelScale = 1.25F;
+        List<OrderedText> lines = textRenderer.wrapLines(module.displayName(), (int) ((layout.cardSize() - 14) / labelScale));
+        int labelY = iconY + 35;
+        for (OrderedText line : lines) {
+            context.getMatrices().pushMatrix();
+            context.getMatrices().translate(cardX + layout.cardSize() / 2.0F, labelY);
+            context.getMatrices().scale(labelScale, labelScale);
+            context.drawCenteredTextWithShadow(textRenderer, line, 0, 0, 0xFFFFFFFF);
+            context.getMatrices().popMatrix();
+            labelY += 12;
+        }
+    }
+
+    private void renderScrollbar(DrawContext context, GridLayout layout) {
+        int trackX = layout.viewportRight() + 7;
+        int thumbHeight = scrollbarThumbHeight(layout);
+        int thumbY = layout.viewportY() + scrollbarThumbOffset(layout, thumbHeight);
+        context.fill(trackX, layout.viewportY(), trackX + 6, layout.viewportBottom(), 0x70000000);
+        context.fill(trackX, thumbY, trackX + 6, thumbY + thumbHeight, 0xFFC0C0C0);
+    }
+
+    @Override
+    public boolean mouseClicked(Click click, boolean doubled) {
+        GridLayout layout = layoutFor(visibleModules.size());
+        if (layout.scrollable() && isOverScrollbar(layout, click.x(), click.y())) {
+            draggingScrollbar = true;
+            updateScrollFromMouse(layout, click.y());
+            return true;
+        }
+
+        if (click.button() == 0 && click.y() >= layout.viewportY() && click.y() < layout.viewportBottom()) {
+            for (int index = 0; index < visibleModules.size(); index++) {
+                int cardX = layout.cardX(index % COLUMNS);
+                int cardY = layout.viewportY() + (index / COLUMNS) * (layout.cardSize() + CARD_GAP) - scrollOffset;
+                if (click.x() >= cardX && click.x() < cardX + layout.cardSize()
+                        && click.y() >= cardY && click.y() < cardY + layout.cardSize()) {
+                    visibleModules.get(index).openScreen(client, this);
+                    return true;
+                }
+            }
+        }
+        return super.mouseClicked(click, doubled);
+    }
+
+    @Override
+    public boolean mouseReleased(Click click) {
+        draggingScrollbar = false;
+        return super.mouseReleased(click);
+    }
+
+    @Override
+    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+        if (draggingScrollbar) {
+            GridLayout layout = layoutFor(visibleModules.size());
+            int thumbHeight = scrollbarThumbHeight(layout);
+            int track = Math.max(1, layout.viewportHeight() - thumbHeight);
+            scrollOffset = Math.clamp(scrollOffset + (int) Math.round(deltaY * maxScroll / track), 0, maxScroll);
+            return true;
+        }
+        return super.mouseDragged(click, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        GridLayout layout = layoutFor(visibleModules.size());
+        if (layout.scrollable() && mouseX >= layout.panelX() && mouseX < layout.panelX() + layout.panelWidth()
+                && mouseY >= layout.viewportY() && mouseY < layout.viewportBottom()) {
+            scrollOffset = Math.clamp(scrollOffset - (int) (verticalAmount * 24), 0, maxScroll);
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    private GridLayout layoutFor(int moduleCount) {
+        int panelWidth = Math.clamp(width - 32, 300, 470);
+        int panelX = (width - panelWidth) / 2;
+        int viewportY = 104;
+        int viewportHeight = Math.max(80, height - viewportY - 66);
+        int cardAreaWidth = panelWidth - CARD_MARGIN * 2;
+        int cardSize = Math.clamp((cardAreaWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS, 70, MAX_CARD_SIZE);
+        int rows = (moduleCount + COLUMNS - 1) / COLUMNS;
+        int contentHeight = rows == 0 ? 0 : rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
+        maxScroll = Math.max(0, contentHeight - viewportHeight);
+        boolean scrollable = maxScroll > 0;
+        int viewportWidth = panelWidth - CARD_MARGIN * 2 - (scrollable ? 14 : 0);
+        cardSize = Math.clamp(cardSize, 70, (viewportWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS);
+        contentHeight = rows == 0 ? 0 : rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
+        maxScroll = Math.max(0, contentHeight - viewportHeight);
+        if (maxScroll == 0) {
+            scrollable = false;
+            viewportWidth = panelWidth - CARD_MARGIN * 2;
+            cardSize = Math.clamp((viewportWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS, 70, MAX_CARD_SIZE);
+        }
+        return new GridLayout(panelX, panelWidth, panelX + CARD_MARGIN, viewportY, viewportWidth, viewportHeight, cardSize, scrollable);
+    }
+
+    private int scrollbarThumbHeight(GridLayout layout) {
+        int contentHeight = layout.viewportHeight() + maxScroll;
+        return Math.max(18, layout.viewportHeight() * layout.viewportHeight() / Math.max(1, contentHeight));
+    }
+
+    private int scrollbarThumbOffset(GridLayout layout, int thumbHeight) {
+        int track = layout.viewportHeight() - thumbHeight;
+        return maxScroll == 0 ? 0 : scrollOffset * track / maxScroll;
+    }
+
+    private boolean isOverScrollbar(GridLayout layout, double x, double y) {
+        return x >= layout.viewportRight() + 4 && x < layout.viewportRight() + 12
+                && y >= layout.viewportY() && y < layout.viewportBottom();
+    }
+
+    private void updateScrollFromMouse(GridLayout layout, double mouseY) {
+        int thumbHeight = scrollbarThumbHeight(layout);
+        int track = Math.max(1, layout.viewportHeight() - thumbHeight);
+        double relative = Math.clamp((int) (mouseY - layout.viewportY() - thumbHeight / 2.0), 0, track);
+        scrollOffset = Math.clamp((int) Math.round(relative * maxScroll / track), 0, maxScroll);
+    }
+
+    private record GridLayout(int panelX, int panelWidth, int viewportX, int viewportY, int viewportWidth,
+                              int viewportHeight, int cardSize, boolean scrollable) {
+        int viewportRight() {
+            return viewportX + viewportWidth;
+        }
+
+        int viewportBottom() {
+            return viewportY + viewportHeight;
+        }
+
+        int cardX(int column) {
+            int gridWidth = cardSize * COLUMNS + CARD_GAP * (COLUMNS - 1);
+            return viewportX + (viewportWidth - gridWidth) / 2 + column * (cardSize + CARD_GAP);
+        }
+    }
+
+}

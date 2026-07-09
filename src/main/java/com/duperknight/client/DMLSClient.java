@@ -1,7 +1,7 @@
 package com.duperknight.client;
 
 import com.duperknight.DMLS;
-import com.duperknight.client.gui.DMLSConfigScreen;
+import com.duperknight.client.gui.DMLSHomeScreen;
 import com.duperknight.client.modules.ChatAlertsModule;
 import com.duperknight.client.modules.CheckLandsModule;
 import com.duperknight.client.modules.DMLSModule;
@@ -12,8 +12,13 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.command.CommandSource;
+import net.minecraft.util.Identifier;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,7 +26,7 @@ import java.util.Optional;
 public class DMLSClient implements ClientModInitializer {
     private static final String PREFIX = "§8[§6DMLS§8] §7";
 
-    private final List<DMLSModule> modules = List.of(
+    private static final List<DMLSModule> MODULES = List.of(
             new CheckLandsModule(),
             new ChatAlertsModule()
     );
@@ -30,15 +35,18 @@ public class DMLSClient implements ClientModInitializer {
     public void onInitializeClient() {
         DMLS.LOGGER.info("Initializing DMLS client, you are a lazy staff member!");
         registerDmlsCommand();
-        modules.forEach(DMLSModule::register);
+        registerMenuKeybind();
+        MODULES.forEach(DMLSModule::register);
+    }
+
+    public static List<DMLSModule> modules() {
+        return MODULES;
     }
 
     private void registerDmlsCommand() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
                 ClientCommandManager.literal("dmls")
-                        .executes(context -> openConfigScreen(context.getSource().getClient()))
-                        .then(ClientCommandManager.literal("config")
-                                .executes(context -> openConfigScreen(context.getSource().getClient())))
+                        .executes(context -> openHomeScreen(context.getSource().getClient()))
                         .then(ClientCommandManager.literal("rank")
                                 .executes(context -> {
                                     ChatUtils.sendClientMessage(context.getSource().getClient(),
@@ -84,9 +92,23 @@ public class DMLSClient implements ClientModInitializer {
         );
     }
 
-    private int openConfigScreen(MinecraftClient client) {
+    private void registerMenuKeybind() {
+        KeyBinding menuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.dmls.open_menu",
+                InputUtil.Type.KEYSYM,
+                InputUtil.UNKNOWN_KEY.getCode(),
+                KeyBinding.Category.create(Identifier.of("dmls", "dmls"))));
+
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            while (menuKey.wasPressed()) {
+                openHomeScreen(client);
+            }
+        });
+    }
+
+    private int openHomeScreen(MinecraftClient client) {
         // next tick, otherwise the closing chat screen overrides it
-        client.send(() -> client.setScreen(new DMLSConfigScreen(null)));
+        client.send(() -> client.setScreen(new DMLSHomeScreen(MODULES)));
         return 1;
     }
 
