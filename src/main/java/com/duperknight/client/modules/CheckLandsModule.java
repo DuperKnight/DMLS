@@ -1,21 +1,18 @@
-package com.duperknight.client;
+package com.duperknight.client.modules;
 
+import com.duperknight.client.utils.ChatUtils;
+import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.ScreenUtils;
+import com.duperknight.client.utils.ScreenUtils.ScreenSnapshot;
+import com.duperknight.client.utils.TooltipUtils;
+import com.duperknight.client.utils.TooltipUtils.TooltipLine;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.hud.ChatHud;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.text.Style;
 import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
-import net.minecraft.util.Formatting;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -24,23 +21,19 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Queue;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public final class CheckLandsCommand {
-    private static final String PREFIX = "§8[§6DMLS - CheckLands§8] §7";
-    private static final int LAND_LIST_SLOT = slotIndex(6, 3);
-    private static final int PLAYER_LIST_SLOT = slotIndex(4, 2);
+public final class CheckLandsModule extends DMLSModule {
+    private static final String PREFIX = "\u00A78[\u00A76DMLS - CheckLands\u00A78] \u00A77";
+    private static final int LAND_LIST_SLOT = ScreenUtils.slotIndex(6, 3);
+    private static final int PLAYER_LIST_SLOT = ScreenUtils.slotIndex(4, 2);
     private static final int MENU_TIMEOUT_TICKS = 20 * 30;
-    private static final Pattern FORMATTING_CODE = Pattern.compile("§.");
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
 
-    private static CheckSession activeSession;
+    private CheckSession activeSession;
 
-    private CheckLandsCommand() {
-    }
-
-    public static void register() {
+    @Override
+    public void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
                 ClientCommandManager.literal("checklands")
                         .then(ClientCommandManager.argument("ign", StringArgumentType.word())
@@ -60,127 +53,19 @@ public final class CheckLandsCommand {
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> handleServerMessage(message));
     }
 
-    private static void start(MinecraftClient client, String ign) {
+    private void start(MinecraftClient client, String ign) {
         if (activeSession != null) {
-            activeSession.cancel(client, "Started a new check for §6" + ign + "§7.");
+            activeSession.cancel(client, "Started a new check for \u00A76" + ign + "\u00A77.");
         }
 
         activeSession = new CheckSession(ign);
         activeSession.start(client);
     }
 
-    private static void handleServerMessage(Text message) {
+    private void handleServerMessage(Text message) {
         if (activeSession != null) {
-            activeSession.handleServerMessage(cleanLine(message.getString()));
+            activeSession.handleServerMessage(ChatUtils.cleanLine(message.getString()));
         }
-    }
-
-    private static int slotIndex(int column, int row) {
-        return (row - 1) * 9 + (column - 1);
-    }
-
-    // DSST left me paranoid with all the issues it had when the staff member left the server while the request was running :(
-    private static boolean isNotConnected(MinecraftClient client) {
-        return client == null
-                || client.player == null
-                || client.world == null
-                || client.getNetworkHandler() == null
-                || !client.getNetworkHandler().isConnectionOpen();
-    }
-
-    private static void sendCommand(MinecraftClient client, String command) {
-        if (client.getNetworkHandler() != null) {
-            client.getNetworkHandler().sendChatCommand(command);
-        }
-    }
-
-    private static void sendClientMessage(MinecraftClient client, String message) {
-        if (client != null && client.player != null) {
-            client.player.sendMessage(Text.literal(message), false);
-        }
-    }
-
-    private static void closeHandledScreen(MinecraftClient client) {
-        if (client != null && client.player != null && client.currentScreen instanceof HandledScreen<?>) {
-            client.player.closeHandledScreen();
-        }
-    }
-
-    private static Optional<ScreenSnapshot> readSlot(MinecraftClient client, int slotIndex, String expectedTitle, int previousSyncId, int waitTicks) {
-        if (!(client.currentScreen instanceof HandledScreen<?> handledScreen)) {
-            return Optional.empty();
-        }
-
-        ScreenHandler handler = handledScreen.getScreenHandler();
-        if (handler.slots.size() <= slotIndex) {
-            return Optional.empty();
-        }
-
-        String title = cleanLine(client.currentScreen.getTitle().getString());
-        if (!title.equalsIgnoreCase(expectedTitle)) {
-            return Optional.empty();
-        }
-
-        if (handler.syncId == previousSyncId && waitTicks < 20) {
-            return Optional.empty();
-        }
-
-        Slot slot = handler.getSlot(slotIndex);
-        if (!slot.hasStack()) {
-            return Optional.empty();
-        }
-
-        ItemStack stack = slot.getStack();
-        if (stack.isEmpty()) {
-            return Optional.empty();
-        }
-
-        List<TooltipLine> tooltip = Screen.getTooltipFromItem(client, stack)
-                .stream()
-                .map(CheckLandsCommand::toTooltipLine)
-                .filter(line -> !line.text().isEmpty())
-                .toList();
-
-        return Optional.of(new ScreenSnapshot(title, tooltip));
-    }
-
-    private static TooltipLine toTooltipLine(Text text) {
-        List<TooltipSegment> segments = new ArrayList<>();
-        text.visit((style, value) -> {
-            String cleaned = cleanSegment(value);
-            if (!cleaned.isEmpty()) {
-                segments.add(new TooltipSegment(cleaned, style));
-            }
-            return Optional.empty();
-        }, Style.EMPTY);
-
-        StringBuilder plainText = new StringBuilder();
-        for (TooltipSegment segment : segments) {
-            plainText.append(segment.text());
-        }
-
-        return new TooltipLine(plainText.toString().trim(), segments);
-    }
-
-    private static String cleanLine(String line) {
-        return FORMATTING_CODE.matcher(line).replaceAll("").trim();
-    }
-
-    private static String cleanSegment(String line) {
-        return FORMATTING_CODE.matcher(line).replaceAll("");
-    }
-
-    private static String stripListMarker(String line) {
-        String stripped = line.trim();
-        if (stripped.startsWith("-")) {
-            stripped = stripped.substring(1).trim();
-        }
-        return stripped;
-    }
-
-    private static boolean isTooltipFooter(String line) {
-        String lower = line.toLowerCase(Locale.ROOT);
-        return lower.startsWith("minecraft:") || lower.contains(" component");
     }
 
     private static Optional<List<String>> parseLands(List<TooltipLine> tooltip) {
@@ -188,14 +73,14 @@ public final class CheckLandsCommand {
         boolean inLands = false;
 
         for (TooltipLine line : tooltip) {
-            String stripped = stripListMarker(line.text());
+            String stripped = TooltipUtils.stripListMarker(line.text());
             String lower = stripped.toLowerCase(Locale.ROOT);
             if (!inLands) {
                 inLands = lower.startsWith("lands");
                 continue;
             }
 
-            if (isTooltipFooter(stripped)) {
+            if (TooltipUtils.isTooltipFooter(stripped)) {
                 continue;
             }
 
@@ -221,14 +106,14 @@ public final class CheckLandsCommand {
         boolean hasMorePlayers = false;
 
         for (TooltipLine line : tooltip) {
-            String stripped = stripListMarker(line.text());
+            String stripped = TooltipUtils.stripListMarker(line.text());
             String lower = stripped.toLowerCase(Locale.ROOT);
             if (!inPlayers) {
                 inPlayers = lower.startsWith("players");
                 continue;
             }
 
-            if (isTooltipFooter(stripped)) {
+            if (TooltipUtils.isTooltipFooter(stripped)) {
                 continue;
             }
 
@@ -237,7 +122,7 @@ public final class CheckLandsCommand {
                 continue;
             }
 
-            Optional<String> parsedPlayerName = line.grayUsername().or(() -> lastUsername(stripped));
+            Optional<String> parsedPlayerName = line.grayUsername(USERNAME).or(() -> TooltipUtils.lastMatch(stripped, USERNAME));
             if (parsedPlayerName.isEmpty()) {
                 continue;
             }
@@ -344,96 +229,6 @@ public final class CheckLandsCommand {
         }
     }
 
-    private static Optional<String> lastUsername(String text) {
-        Matcher matcher = USERNAME.matcher(text);
-        String lastMatch = null;
-        while (matcher.find()) {
-            lastMatch = matcher.group();
-        }
-        return Optional.ofNullable(lastMatch);
-    }
-
-    private record ScreenSnapshot(String title, List<TooltipLine> tooltip) {
-    }
-
-    private record TooltipLine(String text, List<TooltipSegment> segments) {
-        private Optional<String> grayUsername() {
-            for (int i = segments.size() - 1; i >= 0; i--) {
-                TooltipSegment segment = segments.get(i);
-                if (!segment.isGray()) {
-                    continue;
-                }
-
-                Optional<String> username = lastUsername(segment.text());
-                if (username.isPresent()) {
-                    return username;
-                }
-            }
-
-            return Optional.empty();
-        }
-
-        private Optional<String> formattedRoleBefore(String playerName) {
-            int playerNameIndex = text.lastIndexOf(playerName);
-            if (playerNameIndex < 0) {
-                return Optional.empty();
-            }
-
-            String role = stripListMarker(text.substring(0, playerNameIndex)).trim();
-            if (role.isEmpty()) {
-                return Optional.empty();
-            }
-
-            Style roleStyle = Style.EMPTY;
-            for (TooltipSegment segment : segments) {
-                if (segment.isGray() && segment.text().contains(playerName)) {
-                    break;
-                }
-                if (!segment.isGray() && !segment.text().isBlank()) {
-                    roleStyle = segment.style();
-                }
-            }
-
-            return Optional.of(stylePrefix(roleStyle) + role);
-        }
-    }
-
-    private record TooltipSegment(String text, Style style) {
-        private static final TextColor GRAY = TextColor.fromFormatting(Formatting.GRAY);
-
-        private boolean isGray() {
-            return GRAY.equals(style.getColor());
-        }
-    }
-
-    private static String stylePrefix(Style style) {
-        StringBuilder prefix = new StringBuilder();
-        if (style.getColor() != null) {
-            for (Formatting formatting : Formatting.values()) {
-                if (formatting.isColor() && style.getColor().equals(TextColor.fromFormatting(formatting))) {
-                    prefix.append('§').append(formatting.getCode());
-                    break;
-                }
-            }
-        }
-        if (style.isBold()) {
-            prefix.append("§l");
-        }
-        if (style.isItalic()) {
-            prefix.append("§o");
-        }
-        if (style.isUnderlined()) {
-            prefix.append("§n");
-        }
-        if (style.isStrikethrough()) {
-            prefix.append("§m");
-        }
-        if (style.isObfuscated()) {
-            prefix.append("§k");
-        }
-        return prefix.toString();
-    }
-
     private enum Stage {
         WAITING_FOR_LANDS,
         SENDING_NEXT_INFO_COMMAND,
@@ -513,7 +308,7 @@ public final class CheckLandsCommand {
                 .orElseGet(() -> new ClaimResult(claim, 1, false));
     }
 
-    private static final class CheckSession {
+    private final class CheckSession {
         private final String ign;
         private final Queue<String> remainingClaims = new ArrayDeque<>();
         private final List<String> ownedClaims = new ArrayList<>();
@@ -531,13 +326,13 @@ public final class CheckLandsCommand {
         }
 
         private void start(MinecraftClient client) {
-            sendClientMessage(client, PREFIX + "Checking lands for §6" + ign + "§7...");
+            ChatUtils.sendClientMessage(client, PREFIX + "Checking lands for \u00A76" + ign + "\u00A77...");
             sendTrackedCommand(client, "la player " + ign);
             stage = Stage.WAITING_FOR_LANDS;
         }
 
         private void tick(MinecraftClient client) {
-            if (isNotConnected(client)) {
+            if (ClientUtils.isNotConnected(client)) {
                 activeSession = null;
                 return;
             }
@@ -566,7 +361,7 @@ public final class CheckLandsCommand {
 
         private void waitForLands(MinecraftClient client) {
             String expectedTitle = "Player " + ign;
-            Optional<ScreenSnapshot> snapshot = readSlot(client, LAND_LIST_SLOT, expectedTitle, previousSyncId, waitTicks);
+            Optional<ScreenSnapshot> snapshot = ScreenUtils.readSlot(client, LAND_LIST_SLOT, expectedTitle, previousSyncId, waitTicks);
             if (snapshot.isEmpty()) {
                 return;
             }
@@ -578,7 +373,7 @@ public final class CheckLandsCommand {
 
             List<String> lands = parsedLands.get();
             if (lands.isEmpty()) {
-                sendClientMessage(client, PREFIX + "§6" + ign + "§7 is not in any lands.");
+                ChatUtils.sendClientMessage(client, PREFIX + "\u00A76" + ign + "\u00A77 is not in any lands.");
                 finish(client);
                 return;
             }
@@ -601,7 +396,7 @@ public final class CheckLandsCommand {
         }
 
         private void waitForInfo(MinecraftClient client) {
-            Optional<ScreenSnapshot> snapshot = readSlot(client, PLAYER_LIST_SLOT, currentClaim, previousSyncId, waitTicks);
+            Optional<ScreenSnapshot> snapshot = ScreenUtils.readSlot(client, PLAYER_LIST_SLOT, currentClaim, previousSyncId, waitTicks);
             if (snapshot.isEmpty()) {
                 return;
             }
@@ -627,28 +422,21 @@ public final class CheckLandsCommand {
         }
 
         private void sendTrackedCommand(MinecraftClient client, String command) {
-            previousSyncId = currentSyncId(client);
+            previousSyncId = ScreenUtils.currentSyncId(client);
             waitTicks = 0;
-            sendCommand(client, command);
-        }
-
-        private int currentSyncId(MinecraftClient client) {
-            if (client.currentScreen instanceof HandledScreen<?> handledScreen) {
-                return handledScreen.getScreenHandler().syncId;
-            }
-            return -1;
+            ClientUtils.sendCommand(client, command);
         }
 
         private void report(MinecraftClient client) {
-            String header = PREFIX + "Player §6" + ign + "§7 ";
-            sendClientMessage(client, header + separatorForChatWidth(client, header));
-            sendClientMessage(client, "§4§lOwner§r§7: " + formatClaims(ownedClaims));
-            sendClientMessage(client, "§c§lAdmin§r§7: " + formatClaimResults(adminClaims));
+            String header = PREFIX + "Player \u00A76" + ign + "\u00A77 ";
+            ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
+            ChatUtils.sendClientMessage(client, "\u00A74\u00A7lOwner\u00A7r\u00A77: " + formatClaims(ownedClaims));
+            ChatUtils.sendClientMessage(client, "\u00A7c\u00A7lAdmin\u00A7r\u00A77: " + formatClaimResults(adminClaims));
             customRankClaims.stream()
                     .sorted(Comparator.comparingInt((RankClaims rank) -> rank.position).thenComparing(rank -> rank.rank, String.CASE_INSENSITIVE_ORDER))
-                    .forEach(rank -> sendClientMessage(client, rank.formattedRank + "§r§7 (" + ordinal(rank.position) + " position): " + formatClaimResults(rank.claims)));
-            sendClientMessage(client, "§e§lMember/Unknown§r§7: " + formatClaims(memberOrUnknownClaims));
-            sendClientMessage(client, "§7" + separatorForChatWidth(client, ""));
+                    .forEach(rank -> ChatUtils.sendClientMessage(client, rank.formattedRank + "\u00A7r\u00A77 (" + ordinal(rank.position) + " rank): " + formatClaimResults(rank.claims)));
+            ChatUtils.sendClientMessage(client, "\u00A7e\u00A7lMember/Unknown\u00A7r\u00A77: " + formatClaims(memberOrUnknownClaims));
+            ChatUtils.sendClientMessage(client, "\u00A77" + ChatUtils.separatorForChatWidth(client, ""));
         }
 
         private void addCustomRankClaim(RankAssignment rank, Optional<RankStats> stats, String claim) {
@@ -708,33 +496,25 @@ public final class CheckLandsCommand {
             };
         }
 
-        private String separatorForChatWidth(MinecraftClient client, String linePrefix) {
-            int chatWidth = ChatHud.getWidth(client.options.getChatWidth().getValue());
-            int prefixWidth = client.textRenderer.getWidth(FORMATTING_CODE.matcher(linePrefix).replaceAll(""));
-            int dashWidth = Math.max(1, client.textRenderer.getWidth("-"));
-            int dashCount = Math.max(3, (chatWidth - prefixWidth) / dashWidth);
-            return "-".repeat(dashCount);
-        }
-
         private String timeoutMessage() {
             if (stage == Stage.WAITING_FOR_INFO && currentClaim != null) {
-                return "Timed out waiting for §6/la info " + currentClaim + "§7. Stopping.";
+                return "Timed out waiting for \u00A76/la info " + currentClaim + "\u00A77. Stopping.";
             }
-            return "Timed out waiting for §6/la player " + ign + "§7. Stopping.";
+            return "Timed out waiting for \u00A76/la player " + ign + "\u00A77. Stopping.";
         }
 
         private void fail(MinecraftClient client, String reason) {
-            sendClientMessage(client, PREFIX + reason);
+            ChatUtils.sendClientMessage(client, PREFIX + reason);
             finish(client);
         }
 
         private void cancel(MinecraftClient client, String reason) {
-            sendClientMessage(client, PREFIX + reason);
+            ChatUtils.sendClientMessage(client, PREFIX + reason);
             finish(client);
         }
 
         private void finish(MinecraftClient client) {
-            closeHandledScreen(client);
+            ScreenUtils.closeHandledScreen(client);
             if (activeSession == this) {
                 activeSession = null;
             }
