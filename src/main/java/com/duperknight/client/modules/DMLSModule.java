@@ -1,12 +1,18 @@
 package com.duperknight.client.modules;
 
+import com.duperknight.client.utils.ChatUtils;
+import com.duperknight.client.utils.DMLSConfig;
+import net.minecraft.client.MinecraftClient;
+
 import java.util.Objects;
 
 /**
  * Represents a module in the DMLS client. Use this class to create new modules for the DMLS.
- * Each module has a minimum staff rank required to use it. While this is still not enforced, it will be in the future.
+ * Each module has a minimum staff rank required to use it, checked against the rank selected with /dmls rank.
  */
 public abstract class DMLSModule {
+    private static final String PREFIX = "§8[§6DMLS§8] §7";
+
     private final StaffRank minimumStaffRank;
 
     /**
@@ -25,6 +31,25 @@ public abstract class DMLSModule {
      */
     public StaffRank minimumStaffRank() {
         return minimumStaffRank;
+    }
+
+    /**
+     * Checks if the selected staff rank meets the minimum rank of this module.
+     * Sends a chat message if it doesn't.
+     *
+     * @param client the Minecraft client
+     * @return true if the selected rank is high enough
+     */
+    protected boolean hasRequiredRank(MinecraftClient client) {
+        StaffRank currentRank = DMLSConfig.staffRank();
+        if (currentRank.isAtLeast(minimumStaffRank)) {
+            return true;
+        }
+
+        ChatUtils.sendClientMessage(client, PREFIX + "This requires " + minimumStaffRank.displayName()
+                + "§r§7 or higher, but your rank is set to " + currentRank.displayName()
+                + "§r§7. Change it with §6/dmls rank <rank>§7.");
+        return false;
     }
 
     /**

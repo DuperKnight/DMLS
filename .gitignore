@@ -1,6 +1,25 @@
-# Project exclude paths
-/.gradle/
-/build/
-/build/classes/java/main/
-/run/
-/.idea/
+# Gradle
+.gradle/
+build/
+out/
+classes/
+
+# Fabric / Loom
+run/
+remappedSrc/
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+bin/
+.classpath
+.project
+.settings/
+eclipse/
+
+# OS
+.DS_Store
+Thumbs.db

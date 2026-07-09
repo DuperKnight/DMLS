@@ -17,11 +17,17 @@
     ],
     "main": [
       "com.duperknight.DMLS"
+    ],
+    "modmenu": [
+      "com.duperknight.client.gui.ModMenuIntegration"
     ]
   },
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric-api": "*",
     "minecraft": "${minecraft_version}"
+  },
+  "suggests": {
+    "modmenu": "*"
   }
 }

@@ -22,8 +22,18 @@ public final class ChatUtils {
      * @param message the message to send
      */
     public static void sendClientMessage(MinecraftClient client, String message) {
+        sendClientMessage(client, Text.literal(message));
+    }
+
+    /**
+     * Sends a text component to the client's chat.
+     *
+     * @param client the Minecraft client
+     * @param message the message to send
+     */
+    public static void sendClientMessage(MinecraftClient client, Text message) {
         if (client != null && client.player != null) {
-            client.player.sendMessage(Text.literal(message), false);
+            client.player.sendMessage(message, false);
         }
     }
 

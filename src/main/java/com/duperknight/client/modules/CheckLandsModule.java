@@ -12,6 +12,9 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 
 import java.util.ArrayDeque;
@@ -30,6 +33,7 @@ public final class CheckLandsModule extends DMLSModule {
     private static final int MENU_TIMEOUT_TICKS = 20 * 30;
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
 
+    private final Queue<String> pendingPlayers = new ArrayDeque<>();
     private CheckSession activeSession;
 
     public CheckLandsModule() {
@@ -40,9 +44,13 @@ public final class CheckLandsModule extends DMLSModule {
     public void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
                 ClientCommandManager.literal("checklands")
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word())
+                        .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString())
                                 .executes(context -> {
-                                    start(context.getSource().getClient(), StringArgumentType.getString(context, "ign"));
+                                    MinecraftClient client = context.getSource().getClient();
+                                    if (!hasRequiredRank(client)) {
+                                        return 0;
+                                    }
+                                    start(client, StringArgumentType.getString(context, "igns"));
                                     return 1;
                                 }))
         ));
@@ -57,12 +65,40 @@ public final class CheckLandsModule extends DMLSModule {
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> handleServerMessage(message));
     }
 
-    private void start(MinecraftClient client, String ign) {
-        if (activeSession != null) {
-            activeSession.cancel(client, "Started a new check for §6" + ign + "§7.");
+    private void start(MinecraftClient client, String input) {
+        List<String> igns = new ArrayList<>();
+        for (String ign : input.trim().split("\\s+")) {
+            if (!ign.isEmpty() && USERNAME.matcher(ign).matches() && igns.stream().noneMatch(ign::equalsIgnoreCase)) {
+                igns.add(ign);
+            }
         }
 
-        activeSession = new CheckSession(ign);
+        if (igns.isEmpty()) {
+            ChatUtils.sendClientMessage(client, PREFIX + "No valid usernames given.");
+            return;
+        }
+
+        pendingPlayers.clear();
+        pendingPlayers.addAll(igns);
+        if (igns.size() > 1) {
+            ChatUtils.sendClientMessage(client, PREFIX + "Queued §6" + igns.size() + "§7 players: §6" + String.join("§7, §6", igns) + "§7.");
+        }
+
+        if (activeSession != null) {
+            // cancelling advances into the new queue
+            activeSession.cancel(client, "Started a new check.");
+        } else {
+            advanceQueue(client);
+        }
+    }
+
+    private void advanceQueue(MinecraftClient client) {
+        String next = pendingPlayers.poll();
+        if (next == null) {
+            return;
+        }
+
+        activeSession = new CheckSession(next);
         activeSession.start(client);
     }
 
@@ -323,6 +359,8 @@ public final class CheckLandsModule extends DMLSModule {
         private Stage stage = Stage.WAITING_FOR_LANDS;
         private String currentClaim;
         private MenuCommandQuery activeQuery;
+        private int totalClaims;
+        private int claimIndex;
 
         private CheckSession(String ign) {
             this.ign = ign;
@@ -337,6 +375,7 @@ public final class CheckLandsModule extends DMLSModule {
 
         private void tick(MinecraftClient client) {
             if (ClientUtils.isNotConnected(client)) {
+                pendingPlayers.clear();
                 activeSession = null;
                 return;
             }
@@ -353,7 +392,7 @@ public final class CheckLandsModule extends DMLSModule {
             if (lowerMessage.startsWith("lands:")
                     && lowerMessage.contains("no player with the name")
                     && lowerMessage.contains(ign.toLowerCase(Locale.ROOT))) {
-                activeSession = null;
+                finish(MinecraftClient.getInstance());
             }
         }
 
@@ -376,6 +415,9 @@ public final class CheckLandsModule extends DMLSModule {
             }
 
             remainingClaims.addAll(lands);
+            totalClaims = lands.size();
+            ChatUtils.sendClientMessage(client, PREFIX + "Found §6" + totalClaims + "§7 land" + (totalClaims == 1 ? "" : "s")
+                    + " for §6" + ign + "§7.");
             stage = Stage.SENDING_NEXT_INFO_COMMAND;
         }
 
@@ -387,6 +429,8 @@ public final class CheckLandsModule extends DMLSModule {
                 return;
             }
 
+            claimIndex++;
+            ChatUtils.sendClientMessage(client, PREFIX + "Checking §6" + currentClaim + "§7 §8(" + claimIndex + "/" + totalClaims + ")");
             activeQuery = new MenuCommandQuery("la info " + currentClaim, currentClaim, MENU_TIMEOUT_TICKS, PLAYER_LIST_SLOT);
             activeQuery.start(client);
             stage = Stage.WAITING_FOR_INFO;
@@ -440,12 +484,13 @@ public final class CheckLandsModule extends DMLSModule {
         private void report(MinecraftClient client) {
             String header = PREFIX + "Player §6" + ign + "§7 ";
             ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
-            ChatUtils.sendClientMessage(client, "§4§lOwner§r§7: " + formatClaims(ownedClaims));
-            ChatUtils.sendClientMessage(client, "§c§lAdmin§r§7: " + formatClaimResults(adminClaims));
+            ChatUtils.sendClientMessage(client, Text.literal("§4§lOwner§r§7: ").append(claimsText(ownedClaims)));
+            ChatUtils.sendClientMessage(client, Text.literal("§c§lAdmin§r§7: ").append(claimResultsText(adminClaims)));
             customRankClaims.stream()
                     .sorted(Comparator.comparingInt((RankClaims rank) -> rank.position).thenComparing(rank -> rank.rank, String.CASE_INSENSITIVE_ORDER))
-                    .forEach(rank -> ChatUtils.sendClientMessage(client, rank.formattedRank + "§r§7 (" + ordinal(rank.position) + " rank): " + formatClaimResults(rank.claims)));
-            ChatUtils.sendClientMessage(client, "§e§lMember/Unknown§r§7: " + formatClaims(memberOrUnknownClaims));
+                    .forEach(rank -> ChatUtils.sendClientMessage(client,
+                            Text.literal(rank.formattedRank + "§r§7 (" + ordinal(rank.position) + " rank): ").append(claimResultsText(rank.claims))));
+            ChatUtils.sendClientMessage(client, Text.literal("§e§lMember/Unknown§r§7: ").append(claimsText(memberOrUnknownClaims)));
             ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         }
 
@@ -462,20 +507,42 @@ public final class CheckLandsModule extends DMLSModule {
             customRankClaims.add(claims);
         }
 
-        private String formatClaims(List<String> claims) {
-            return claims.isEmpty() ? "None" : String.join(", ", claims);
+        private MutableText claimsText(List<String> claims) {
+            if (claims.isEmpty()) {
+                return Text.literal("None");
+            }
+
+            MutableText text = Text.literal("");
+            for (int i = 0; i < claims.size(); i++) {
+                if (i > 0) {
+                    text.append("§7, ");
+                }
+                text.append(clickableClaim(claims.get(i)));
+            }
+            return text;
         }
 
-        private String formatClaimResults(List<ClaimResult> claims) {
+        private MutableText claimResultsText(List<ClaimResult> claims) {
             if (claims.isEmpty()) {
-                return "None";
+                return Text.literal("None");
             }
 
-            List<String> formattedClaims = new ArrayList<>();
-            for (ClaimResult claim : claims) {
-                formattedClaims.add(claim.claim() + " " + countSuffix(claim));
+            MutableText text = Text.literal("");
+            for (int i = 0; i < claims.size(); i++) {
+                ClaimResult claim = claims.get(i);
+                if (i > 0) {
+                    text.append("§7, ");
+                }
+                text.append(clickableClaim(claim.claim()));
+                text.append("§7 " + countSuffix(claim));
             }
-            return String.join(", ", formattedClaims);
+            return text;
+        }
+
+        private MutableText clickableClaim(String claim) {
+            return Text.literal("§6" + claim).styled(style -> style
+                    .withClickEvent(new ClickEvent.RunCommand("/la info " + claim))
+                    .withHoverEvent(new HoverEvent.ShowText(Text.literal("§7Click to run §6/la info " + claim))));
         }
 
         private Optional<RankStats> findRankStats(List<RankStats> stats, String rank, int position) {
@@ -527,6 +594,7 @@ public final class CheckLandsModule extends DMLSModule {
             ScreenUtils.closeHandledScreen(client);
             if (activeSession == this) {
                 activeSession = null;
+                advanceQueue(client);
             }
         }
     }
