@@ -7,7 +7,7 @@ import net.minecraft.text.Text;
 import java.util.regex.Pattern;
 
 public final class ChatUtils {
-    private static final Pattern FORMATTING_CODE = Pattern.compile("\u00A7.");
+    private static final Pattern FORMATTING_CODE = Pattern.compile("§.");
 
     private ChatUtils() {
     }

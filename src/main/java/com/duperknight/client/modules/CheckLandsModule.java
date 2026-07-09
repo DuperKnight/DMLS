@@ -24,13 +24,17 @@ import java.util.Queue;
 import java.util.regex.Pattern;
 
 public final class CheckLandsModule extends DMLSModule {
-    private static final String PREFIX = "\u00A78[\u00A76DMLS - CheckLands\u00A78] \u00A77";
+    private static final String PREFIX = "§8[§6DMLS - CheckLands§8] §7";
     private static final int LAND_LIST_SLOT = ScreenUtils.slotIndex(6, 3);
     private static final int PLAYER_LIST_SLOT = ScreenUtils.slotIndex(4, 2);
     private static final int MENU_TIMEOUT_TICKS = 20 * 30;
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
 
     private CheckSession activeSession;
+
+    public CheckLandsModule() {
+        super(StaffRank.HELPER);
+    }
 
     @Override
     public void register() {
@@ -55,7 +59,7 @@ public final class CheckLandsModule extends DMLSModule {
 
     private void start(MinecraftClient client, String ign) {
         if (activeSession != null) {
-            activeSession.cancel(client, "Started a new check for \u00A76" + ign + "\u00A77.");
+            activeSession.cancel(client, "Started a new check for §6" + ign + "§7.");
         }
 
         activeSession = new CheckSession(ign);
@@ -326,7 +330,7 @@ public final class CheckLandsModule extends DMLSModule {
         }
 
         private void start(MinecraftClient client) {
-            ChatUtils.sendClientMessage(client, PREFIX + "Checking lands for \u00A76" + ign + "\u00A77...");
+            ChatUtils.sendClientMessage(client, PREFIX + "Checking lands for §6" + ign + "§7...");
             sendTrackedCommand(client, "la player " + ign);
             stage = Stage.WAITING_FOR_LANDS;
         }
@@ -373,7 +377,7 @@ public final class CheckLandsModule extends DMLSModule {
 
             List<String> lands = parsedLands.get();
             if (lands.isEmpty()) {
-                ChatUtils.sendClientMessage(client, PREFIX + "\u00A76" + ign + "\u00A77 is not in any lands.");
+                ChatUtils.sendClientMessage(client, PREFIX + "§6" + ign + "§7 is not in any lands.");
                 finish(client);
                 return;
             }
@@ -428,15 +432,15 @@ public final class CheckLandsModule extends DMLSModule {
         }
 
         private void report(MinecraftClient client) {
-            String header = PREFIX + "Player \u00A76" + ign + "\u00A77 ";
+            String header = PREFIX + "Player §6" + ign + "§7 ";
             ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
-            ChatUtils.sendClientMessage(client, "\u00A74\u00A7lOwner\u00A7r\u00A77: " + formatClaims(ownedClaims));
-            ChatUtils.sendClientMessage(client, "\u00A7c\u00A7lAdmin\u00A7r\u00A77: " + formatClaimResults(adminClaims));
+            ChatUtils.sendClientMessage(client, "§4§lOwner§r§7: " + formatClaims(ownedClaims));
+            ChatUtils.sendClientMessage(client, "§c§lAdmin§r§7: " + formatClaimResults(adminClaims));
             customRankClaims.stream()
                     .sorted(Comparator.comparingInt((RankClaims rank) -> rank.position).thenComparing(rank -> rank.rank, String.CASE_INSENSITIVE_ORDER))
-                    .forEach(rank -> ChatUtils.sendClientMessage(client, rank.formattedRank + "\u00A7r\u00A77 (" + ordinal(rank.position) + " rank): " + formatClaimResults(rank.claims)));
-            ChatUtils.sendClientMessage(client, "\u00A7e\u00A7lMember/Unknown\u00A7r\u00A77: " + formatClaims(memberOrUnknownClaims));
-            ChatUtils.sendClientMessage(client, "\u00A77" + ChatUtils.separatorForChatWidth(client, ""));
+                    .forEach(rank -> ChatUtils.sendClientMessage(client, rank.formattedRank + "§r§7 (" + ordinal(rank.position) + " rank): " + formatClaimResults(rank.claims)));
+            ChatUtils.sendClientMessage(client, "§e§lMember/Unknown§r§7: " + formatClaims(memberOrUnknownClaims));
+            ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         }
 
         private void addCustomRankClaim(RankAssignment rank, Optional<RankStats> stats, String claim) {
@@ -498,9 +502,9 @@ public final class CheckLandsModule extends DMLSModule {
 
         private String timeoutMessage() {
             if (stage == Stage.WAITING_FOR_INFO && currentClaim != null) {
-                return "Timed out waiting for \u00A76/la info " + currentClaim + "\u00A77. Stopping.";
+                return "Timed out waiting for §6/la info " + currentClaim + "§7. Stopping.";
             }
-            return "Timed out waiting for \u00A76/la player " + ign + "\u00A77. Stopping.";
+            return "Timed out waiting for §6/la player " + ign + "§7. Stopping.";
         }
 
         private void fail(MinecraftClient client, String reason) {

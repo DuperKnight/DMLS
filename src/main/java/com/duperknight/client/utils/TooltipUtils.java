@@ -61,25 +61,25 @@ public final class TooltipUtils {
         if (style.getColor() != null) {
             for (Formatting formatting : Formatting.values()) {
                 if (formatting.isColor() && style.getColor().equals(TextColor.fromFormatting(formatting))) {
-                    prefix.append('\u00A7').append(formatting.getCode());
+                    prefix.append('§').append(formatting.getCode());
                     break;
                 }
             }
         }
         if (style.isBold()) {
-            prefix.append("\u00A7l");
+            prefix.append("§l");
         }
         if (style.isItalic()) {
-            prefix.append("\u00A7o");
+            prefix.append("§o");
         }
         if (style.isUnderlined()) {
-            prefix.append("\u00A7n");
+            prefix.append("§n");
         }
         if (style.isStrikethrough()) {
-            prefix.append("\u00A7m");
+            prefix.append("§m");
         }
         if (style.isObfuscated()) {
-            prefix.append("\u00A7k");
+            prefix.append("§k");
         }
         return prefix.toString();
     }
