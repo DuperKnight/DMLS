@@ -10,20 +10,40 @@ import net.minecraft.screen.slot.Slot;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Utility methods for interacting with the Minecraft screen and inventory.
+ */
 public final class ScreenUtils {
     private ScreenUtils() {
     }
 
+    /**
+     * Converts a slot position (column, row) to an index in the inventory.
+     * @param column 1-based column index
+     * @param row 1-based row index
+     * @return the slot index
+     */
     public static int slotIndex(int column, int row) {
         return (row - 1) * 9 + (column - 1);
     }
 
+    /**
+     * Closes the current screen if it's a {@link HandledScreen}.
+     *
+     * @param client the Minecraft client
+     */
     public static void closeHandledScreen(MinecraftClient client) {
         if (client != null && client.player != null && client.currentScreen instanceof HandledScreen<?>) {
             client.player.closeHandledScreen();
         }
     }
 
+    /**
+     * Gets the sync ID of the current screen if it's a {@link HandledScreen}.
+     *
+     * @param client the Minecraft client
+     * @return the sync ID, or -1 if not applicable
+     */
     public static int currentSyncId(MinecraftClient client) {
         if (client.currentScreen instanceof HandledScreen<?> handledScreen) {
             return handledScreen.getScreenHandler().syncId;
@@ -31,6 +51,16 @@ public final class ScreenUtils {
         return -1;
     }
 
+    /**
+     * Reads the contents of a slot in the current screen.
+     *
+     * @param client the Minecraft client
+     * @param slotIndex 0-based slot index
+     * @param expectedTitle the expected title of the screen
+     * @param previousSyncId the previous sync ID of the screen
+     * @param waitTicks the number of ticks since the last sync
+     * @return the slot contents, if available
+     */
     public static Optional<ScreenSnapshot> readSlot(MinecraftClient client, int slotIndex, String expectedTitle, int previousSyncId, int waitTicks) {
         if (!(client.currentScreen instanceof HandledScreen<?> handledScreen)) {
             return Optional.empty();
@@ -69,6 +99,11 @@ public final class ScreenUtils {
         return Optional.of(new ScreenSnapshot(title, tooltip));
     }
 
+    /**
+     * Represents a snapshot of the current screen.
+     * @param title
+     * @param tooltip
+     */
     public record ScreenSnapshot(String title, List<TooltipUtils.TooltipLine> tooltip) {
     }
 }

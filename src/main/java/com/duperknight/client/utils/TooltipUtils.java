@@ -12,10 +12,19 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Utility methods for interacting with the Minecraft tooltips.
+ */
 public final class TooltipUtils {
     private TooltipUtils() {
     }
 
+    /**
+     * Converts a Text object to a TooltipLine.
+     *
+     * @param text the Text object to convert
+     * @return the resulting TooltipLine
+     */
     public static TooltipLine toTooltipLine(Text text) {
         List<TooltipSegment> segments = new ArrayList<>();
         text.visit((style, value) -> {
@@ -34,6 +43,12 @@ public final class TooltipUtils {
         return new TooltipLine(plainText.toString().trim(), segments);
     }
 
+    /**
+     * Strips the list marker from the beginning of a line if it exists.
+     *
+     * @param line the line to strip the marker from
+     * @return the stripped line
+     */
     public static String stripListMarker(String line) {
         String stripped = line.trim();
         if (stripped.startsWith("-")) {
@@ -42,11 +57,24 @@ public final class TooltipUtils {
         return stripped;
     }
 
+    /**
+     * Checks if a line is a footer line in a tooltip.
+     *
+     * @param line the line to check
+     * @return true if the line is a footer line, false otherwise
+     */
     public static boolean isTooltipFooter(String line) {
         String lower = line.toLowerCase(Locale.ROOT);
         return lower.startsWith("minecraft:") || lower.contains(" component");
     }
 
+    /**
+     * Finds the last match of a pattern in a given text.
+     *
+     * @param text the text to search in
+     * @param pattern the pattern to match
+     * @return the last match, or an empty Optional if no match is found
+     */
     public static Optional<String> lastMatch(String text, Pattern pattern) {
         Matcher matcher = pattern.matcher(text);
         String lastMatch = null;
@@ -56,6 +84,13 @@ public final class TooltipUtils {
         return Optional.ofNullable(lastMatch);
     }
 
+    /**
+     * Returns a string representing the style prefix for a given style.
+     * This is used to format the text in the tooltip.
+     *
+     * @param style the style to generate the prefix for
+     * @return the style prefix string
+     */
     public static String stylePrefix(Style style) {
         StringBuilder prefix = new StringBuilder();
         if (style.getColor() != null) {
@@ -84,6 +119,12 @@ public final class TooltipUtils {
         return prefix.toString();
     }
 
+    /**
+     * Represents a line in a tooltip.
+     *
+     * @param text the text of the tooltip line
+     * @param segments the segments of the tooltip line
+     */
     public record TooltipLine(String text, List<TooltipSegment> segments) {
         public Optional<String> grayUsername(Pattern usernamePattern) {
             for (int i = segments.size() - 1; i >= 0; i--) {
@@ -126,11 +167,17 @@ public final class TooltipUtils {
         }
     }
 
+    /**
+     * Represents a segment of text in a tooltip line.
+     *
+     * @param text the text of the tooltip segment
+     * @param style the style of the tooltip segment
+     */
     public record TooltipSegment(String text, Style style) {
         private static final TextColor GRAY = TextColor.fromFormatting(Formatting.GRAY);
 
         public boolean isGray() {
-            return GRAY.equals(style.getColor());
+            return java.util.Objects.equals(style.getColor(), GRAY);
         }
     }
 }
