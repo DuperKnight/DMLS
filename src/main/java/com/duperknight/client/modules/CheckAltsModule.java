@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 public final class CheckAltsModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - CheckAlts§8] §7";
     private static final int ALTS_TIMEOUT_TICKS = 20 * 10;
+    private static final int ALTS_OUTPUT_QUIET_TICKS = 10;
     private static final int HISTORY_WINDOW_TICKS = 20 * 3;
     private static final int MAX_ACCOUNTS = 10;
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
@@ -64,7 +65,7 @@ public final class CheckAltsModule extends DMLSModule {
     @Override
     public void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-                ClientCommandManager.literal("checkalts")
+                ClientCommandManager.literal("dmlsalts")
                         .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                 .executes(context -> {
                                     submit(context.getSource().getClient(), StringArgumentType.getString(context, "ign").trim());
@@ -141,6 +142,9 @@ public final class CheckAltsModule extends DMLSModule {
         private PunishmentStats currentStats;
         private int waitTicks;
         private boolean altsParsed;
+        private boolean readingAltsList;
+        private int altsListQuietTicks;
+        private final List<String> collectedAlts = new ArrayList<>();
 
         private CheckSession(String ign) {
             this.ign = ign;
@@ -160,7 +164,9 @@ public final class CheckAltsModule extends DMLSModule {
             waitTicks++;
             switch (stage) {
                 case WAITING_FOR_ALTS -> {
-                    if (waitTicks > ALTS_TIMEOUT_TICKS) {
+                    if (readingAltsList && ++altsListQuietTicks > ALTS_OUTPUT_QUIET_TICKS) {
+                        finishAltsList(client);
+                    } else if (!readingAltsList && waitTicks > ALTS_TIMEOUT_TICKS) {
                         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.read_failed", ign);
                         beginHistoryChecks(client, List.of());
                     }
@@ -183,14 +189,36 @@ public final class CheckAltsModule extends DMLSModule {
 
         private void handleAltsMessage(String message) {
             String lower = message.toLowerCase(Locale.ROOT);
-            if (!lower.contains(ign.toLowerCase(Locale.ROOT))) {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (lower.contains(ign.toLowerCase(Locale.ROOT))
+                    && (lower.contains("no known alts") || lower.contains("no alts") || lower.contains("no other accounts"))) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.no_alts", ign);
+                beginHistoryChecks(client, List.of());
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (lower.contains("no known alts") || lower.contains("no alts") || lower.contains("no other accounts")) {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.no_alts", ign);
-                beginHistoryChecks(client, List.of());
+            // The server's /alts command prints a status legend followed by one
+            // username per chat line instead of a single "Alts: ..." line.
+            if (isAltsStatusHeader(lower)) {
+                readingAltsList = true;
+                altsListQuietTicks = 0;
+                return;
+            }
+
+            if (readingAltsList) {
+                Matcher account = USERNAME.matcher(message);
+                if (account.matches()) {
+                    altsListQuietTicks = 0;
+                    String name = account.group();
+                    if (!name.equalsIgnoreCase(ign)
+                            && collectedAlts.stream().noneMatch(name::equalsIgnoreCase)) {
+                        collectedAlts.add(name);
+                    }
+                }
+                return;
+            }
+
+            if (!lower.contains(ign.toLowerCase(Locale.ROOT))) {
                 return;
             }
 
@@ -211,6 +239,28 @@ public final class CheckAltsModule extends DMLSModule {
             if (alts.isEmpty()) {
                 return;
             }
+
+            announceAltsAndBeginHistory(client, alts);
+        }
+
+        private boolean isAltsStatusHeader(String lower) {
+            return lower.contains("[online]")
+                    && lower.contains("[offline]")
+                    && lower.contains("[banned]")
+                    && lower.contains("[ipbanned]");
+        }
+
+        private void finishAltsList(MinecraftClient client) {
+            if (collectedAlts.isEmpty()) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.no_alts", ign);
+                beginHistoryChecks(client, List.of());
+                return;
+            }
+
+            announceAltsAndBeginHistory(client, new ArrayList<>(collectedAlts));
+        }
+
+        private void announceAltsAndBeginHistory(MinecraftClient client, List<String> alts) {
 
             if (alts.size() > MAX_ACCOUNTS - 1) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.found_limited", alts.size(), MAX_ACCOUNTS - 1);

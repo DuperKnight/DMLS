@@ -153,7 +153,7 @@ public class DMLSClient implements ClientModInitializer {
         ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
         helpLine(client, "/checklands <ign...>", Text.translatable("dmls.help.checklands"));
         helpLine(client, "/checkmembers <land>", Text.translatable("dmls.help.checkmembers"));
-        helpLine(client, "/checkalts <ign>", Text.translatable("dmls.help.checkalts", StaffRank.MODERATOR.displayName()));
+        helpLine(client, "/dmlsalts <ign>", Text.translatable("dmls.help.checkalts", StaffRank.MODERATOR.displayName()));
         helpLine(client, "/xray <ign>", Text.translatable("dmls.help.xray", StaffRank.SENIOR_MODERATOR.displayName()));
         helpLine(client, "/prefixlazy <ign> <limit> <prefixid> <prefixtext>", Text.translatable("dmls.help.prefix", StaffRank.SUPPORT.displayName()));
         helpLine(client, "/donorpet <ign> <pet>", Text.translatable("dmls.help.donorpet", StaffRank.ADMIN.displayName()));
