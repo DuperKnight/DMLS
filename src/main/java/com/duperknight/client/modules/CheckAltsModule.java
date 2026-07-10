@@ -32,6 +32,8 @@ public final class CheckAltsModule extends DMLSModule {
     private static final int HISTORY_WINDOW_TICKS = 20 * 3;
     private static final int MAX_ACCOUNTS = 10;
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
+    private static final Pattern USERNAME_LIST = Pattern.compile(
+            "[A-Za-z0-9_]{3,16}(?:\\s*,\\s*[A-Za-z0-9_]{3,16})*");
 
     private CheckSession activeSession;
 
@@ -107,8 +109,15 @@ public final class CheckAltsModule extends DMLSModule {
     }
 
     private void handleServerMessage(String message) {
+        String cleanMessage = ChatUtils.cleanLine(message);
+        // ClientPlayerEntity#sendMessage also fires the GAME receive event. Ignore
+        // DMLS output so status messages cannot be parsed recursively as server output.
+        if (cleanMessage.startsWith("[DMLS")) {
+            return;
+        }
+
         if (activeSession != null) {
-            activeSession.handleServerMessage(ChatUtils.cleanLine(message));
+            activeSession.handleServerMessage(cleanMessage);
         }
     }
 
@@ -206,13 +215,15 @@ public final class CheckAltsModule extends DMLSModule {
             }
 
             if (readingAltsList) {
-                Matcher account = USERNAME.matcher(message);
-                if (account.matches()) {
+                if (USERNAME_LIST.matcher(message).matches()) {
                     altsListQuietTicks = 0;
-                    String name = account.group();
-                    if (!name.equalsIgnoreCase(ign)
-                            && collectedAlts.stream().noneMatch(name::equalsIgnoreCase)) {
-                        collectedAlts.add(name);
+                    Matcher accounts = USERNAME.matcher(message);
+                    while (accounts.find()) {
+                        String name = accounts.group();
+                        if (!name.equalsIgnoreCase(ign)
+                                && collectedAlts.stream().noneMatch(name::equalsIgnoreCase)) {
+                            collectedAlts.add(name);
+                        }
                     }
                 }
                 return;
@@ -301,8 +312,11 @@ public final class CheckAltsModule extends DMLSModule {
         private void sendNextHistoryCommand(MinecraftClient client) {
             String next = remainingAccounts.poll();
             if (next == null) {
-                report(client);
+                // End the session before printing the report. Client-side chat
+                // messages fire the receive event too, and result text such as
+                // "Mutes: 1" must not be counted against the last account.
                 finish();
+                report(client);
                 return;
             }
 
