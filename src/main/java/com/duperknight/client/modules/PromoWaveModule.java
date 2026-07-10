@@ -23,7 +23,9 @@ import java.util.regex.Pattern;
 
 public final class PromoWaveModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - PromoWave§8] §7";
-    private static final int COMMAND_DELAY_TICKS = 20;
+    // LuckPerms silently ignores commands that arrive too quickly ("is spamming LuckPerms commands"),
+    // so leave a generous gap between them.
+    private static final int COMMAND_DELAY_TICKS = 20 * 3;
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
     private static final Map<String, List<String>> RANK_COMMANDS = new LinkedHashMap<>();
 
