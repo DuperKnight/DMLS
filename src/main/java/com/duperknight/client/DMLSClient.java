@@ -8,6 +8,7 @@ import com.duperknight.client.modules.CheckLandsModule;
 import com.duperknight.client.modules.CheckMembersModule;
 import com.duperknight.client.modules.DMLSModule;
 import com.duperknight.client.modules.StaffRank;
+import com.duperknight.client.modules.XrayRollbackModule;
 import com.duperknight.client.utils.CannedReplies;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
@@ -39,6 +40,7 @@ public class DMLSClient implements ClientModInitializer {
             new CheckLandsModule(),
             new CheckMembersModule(),
             new CheckAltsModule(),
+            new XrayRollbackModule(),
             new ChatAlertsModule()
     );
 
@@ -143,6 +145,7 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/checklands <ign...>", "Checks which lands the given players are in and their rank in each. Multiple names are checked one after another.");
         helpLine(client, "/checkmembers <land>", "Lists all members of a land grouped by rank. Click a name to run /checklands on them.");
         helpLine(client, "/checkalts <ign>", "Runs /alts and then /history on every found account, with a punishment summary. Requires Moderator.");
+        helpLine(client, "/xray <ign>", "Rolls back a confirmed xrayer's ores (30d) and containers (7d), then checks their balance. Requires Sr Mod.");
         helpLine(client, "/dmls rank [rank]", "Shows or sets your staff rank, which decides what DMLS features you can use.");
         helpLine(client, "/dmls alerts [on|off|reload]", "Shows or toggles chat alerts. Words are configured in config/dmls-alerts.txt.");
         helpLine(client, "/dmls say [reply]", "Sends a pre-written staff reply in chat.");
