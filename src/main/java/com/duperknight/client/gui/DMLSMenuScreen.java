@@ -3,25 +3,36 @@ package com.duperknight.client.gui;
 import com.duperknight.DMLS;
 import com.duperknight.client.modules.DMLSModule;
 import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** Shared in-game menu chrome used by every DMLS screen. */
 abstract class DMLSMenuScreen extends Screen {
+    protected static final float UI_SCALE = 0.85F;
     private static final Identifier LOGO = Identifier.of(DMLS.MOD_ID.toLowerCase(), "logo.png");
     private static final int LOGO_TEXTURE_WIDTH = 2040;
     private static final int LOGO_TEXTURE_HEIGHT = 400;
-    protected static final int HEADER_HEIGHT = 80;
-    protected static final int FOOTER_TOP_OFFSET = 55;
-    private static final int PAIRED_BUTTON_MARGIN = 16;
-    private static final int MAX_PAIRED_BUTTON_WIDTH = 250;
+    protected static final int HEADER_HEIGHT = scaled(80);
+    protected static final int FOOTER_TOP_OFFSET = scaled(55);
+    protected static final int STANDARD_BUTTON_HEIGHT = 20;
+    private static final int PAIRED_BUTTON_MARGIN = scaled(16);
+    private static final int MAX_PAIRED_BUTTON_WIDTH = scaled(250);
 
     protected final Screen parent;
+    private final List<ScrollableWidget> scrollableWidgets = new ArrayList<>();
+    private int contentViewportTop;
+    private int contentViewportBottom;
+    private int contentScrollOffset;
+    private int maxContentScroll;
+    private boolean draggingContentScrollbar;
 
     protected DMLSMenuScreen(Text title, Screen parent) {
         super(title);
@@ -33,10 +44,10 @@ abstract class DMLSMenuScreen extends Screen {
         context.fill(0, 0, width, HEADER_HEIGHT, 0x20000000);
         context.fill(0, HEADER_HEIGHT - 1, width, HEADER_HEIGHT + 1, 0xFF8A8A8A);
 
-        int logoWidth = Math.clamp(width - 32, 160, 205);
+        int logoWidth = Math.clamp(width - scaled(32), scaled(160), scaled(205));
         int logoHeight = Math.max(1, logoWidth * LOGO_TEXTURE_HEIGHT / LOGO_TEXTURE_WIDTH);
         int logoX = (width - logoWidth) / 2;
-        int logoY = 22;
+        int logoY = scaled(22);
         context.drawTexture(RenderPipelines.GUI_TEXTURED, LOGO, logoX, logoY, 0.0F, 0.0F,
                 logoWidth, logoHeight, LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT,
                 LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT);
@@ -53,20 +64,128 @@ abstract class DMLSMenuScreen extends Screen {
 
     /** Renders the standard title and description block for a module screen. */
     protected void renderModuleHeader(DrawContext context, DMLSModule module) {
-        int descriptionY = HEADER_HEIGHT + 34;
-        int descriptionWidth = Math.min(360, width - 32);
-        List<OrderedText> wrappedLines = module.description().stream()
-                .flatMap(line -> textRenderer.wrapLines(line, descriptionWidth - 16).stream())
-                .toList();
-        int descriptionHeight = Math.max(48, wrappedLines.size() * 12 + 20);
-        context.drawCenteredTextWithShadow(textRenderer, module.displayName(), width / 2, HEADER_HEIGHT + 16, 0xFFFFFFFF);
+        int descriptionY = HEADER_HEIGHT + scaled(34);
+        int descriptionWidth = Math.min(scaled(360), width - scaled(32));
+        List<OrderedText> wrappedLines = wrappedDescription(module, descriptionWidth);
+        int lineSpacing = scaled(12);
+        int descriptionHeight = descriptionHeight(wrappedLines.size());
+        context.drawCenteredTextWithShadow(textRenderer, module.displayName(), width / 2, HEADER_HEIGHT + scaled(16), 0xFFFFFFFF);
         renderPanel(context, width / 2 - descriptionWidth / 2, descriptionY, descriptionWidth, descriptionHeight);
 
-        int lineY = descriptionY + (descriptionHeight - wrappedLines.size() * 10) / 2;
+        int lineY = descriptionY + (descriptionHeight - wrappedLines.size() * scaled(10)) / 2;
         for (OrderedText line : wrappedLines) {
             context.drawCenteredTextWithShadow(textRenderer, line, width / 2, lineY, 0xFFDDDDDD);
-            lineY += 12;
+            lineY += lineSpacing;
         }
+    }
+
+    /** Sets up a naturally spaced module form that can scroll without moving its footer buttons. */
+    protected void configureScrollableContent(DMLSModule module, int contentHeight) {
+        scrollableWidgets.clear();
+        int descriptionWidth = Math.min(scaled(360), width - scaled(32));
+        int descriptionBottom = HEADER_HEIGHT + scaled(34)
+                + descriptionHeight(wrappedDescription(module, descriptionWidth).size());
+        contentViewportTop = descriptionBottom + scaled(10);
+        contentViewportBottom = Math.max(contentViewportTop + 1, height - FOOTER_TOP_OFFSET - scaled(8));
+        maxContentScroll = Math.max(0, contentHeight - (contentViewportBottom - contentViewportTop));
+        contentScrollOffset = Math.clamp(contentScrollOffset, 0, maxContentScroll);
+    }
+
+    protected int contentY(int offset) {
+        return contentViewportTop + offset - contentScrollOffset;
+    }
+
+    protected <T extends ClickableWidget> T addScrollableChild(T widget, int offset) {
+        scrollableWidgets.add(new ScrollableWidget(widget, offset));
+        T child = addDrawableChild(widget);
+        updateScrollableWidgets();
+        return child;
+    }
+
+    protected boolean isContentVisible(int y, int elementHeight) {
+        return y >= contentViewportTop && y + elementHeight <= contentViewportBottom;
+    }
+
+    private List<OrderedText> wrappedDescription(DMLSModule module, int descriptionWidth) {
+        return module.description().stream()
+                .flatMap(line -> textRenderer.wrapLines(line, descriptionWidth - scaled(16)).stream())
+                .toList();
+    }
+
+    private int descriptionHeight(int lineCount) {
+        return Math.max(scaled(48), lineCount * scaled(12) + scaled(20));
+    }
+
+    private void updateScrollableWidgets() {
+        for (ScrollableWidget entry : scrollableWidgets) {
+            ClickableWidget widget = entry.widget();
+            widget.setY(contentY(entry.offset()));
+            widget.visible = isContentVisible(widget.getY(), widget.getHeight());
+        }
+    }
+
+    @Override
+    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        super.render(context, mouseX, mouseY, delta);
+        if (maxContentScroll > 0) {
+            int trackX = contentScrollbarX();
+            int viewportHeight = contentViewportBottom - contentViewportTop;
+            int thumbHeight = Math.max(scaled(18), viewportHeight * viewportHeight / (viewportHeight + maxContentScroll));
+            int thumbY = contentViewportTop + contentScrollOffset * (viewportHeight - thumbHeight) / maxContentScroll;
+            context.fill(trackX, contentViewportTop, trackX + scaled(5), contentViewportBottom, 0x70000000);
+            context.fill(trackX, thumbY, trackX + scaled(5), thumbY + thumbHeight, 0xFFC0C0C0);
+        }
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (maxContentScroll > 0 && mouseY >= contentViewportTop && mouseY < contentViewportBottom) {
+            contentScrollOffset = Math.clamp(contentScrollOffset - (int) (verticalAmount * scaled(24)), 0, maxContentScroll);
+            updateScrollableWidgets();
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    @Override
+    public boolean mouseClicked(Click click, boolean doubled) {
+        if (maxContentScroll > 0 && click.button() == 0
+                && click.x() >= contentScrollbarX() - scaled(2) && click.x() < contentScrollbarX() + scaled(7)
+                && click.y() >= contentViewportTop && click.y() < contentViewportBottom) {
+            draggingContentScrollbar = true;
+            updateContentScrollFromMouse(click.y());
+            return true;
+        }
+        return super.mouseClicked(click, doubled);
+    }
+
+    @Override
+    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+        if (draggingContentScrollbar) {
+            updateContentScrollFromMouse(click.y());
+            return true;
+        }
+        return super.mouseDragged(click, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(Click click) {
+        draggingContentScrollbar = false;
+        return super.mouseReleased(click);
+    }
+
+    private int contentScrollbarX() {
+        int contentWidth = Math.min(scaled(360), width - scaled(48));
+        return width / 2 + contentWidth / 2 + scaled(7);
+    }
+
+    private void updateContentScrollFromMouse(double mouseY) {
+        int viewportHeight = contentViewportBottom - contentViewportTop;
+        int thumbHeight = Math.max(scaled(18), viewportHeight * viewportHeight / (viewportHeight + maxContentScroll));
+        int track = Math.max(1, viewportHeight - thumbHeight);
+        double relative = Math.clamp((int) (mouseY - contentViewportTop - thumbHeight / 2.0), 0, track);
+        contentScrollOffset = Math.clamp((int) Math.round(relative * maxContentScroll / track), 0, maxContentScroll);
+        updateScrollableWidgets();
     }
 
     protected int pairedButtonWidth() {
@@ -79,6 +198,17 @@ abstract class DMLSMenuScreen extends Screen {
 
     protected int rightPairedButtonX() {
         return width / 2 + PAIRED_BUTTON_MARGIN / 2;
+    }
+
+    protected int footerButtonY() {
+        return height - 31;
+    }
+
+    protected static int scaled(int value) {
+        return Math.round(value * UI_SCALE);
+    }
+
+    private record ScrollableWidget(ClickableWidget widget, int offset) {
     }
 
     @Override

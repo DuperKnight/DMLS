@@ -22,23 +22,28 @@ public final class ChatAlertsScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        int x = width / 2 - 100;
-        int y = height / 2 - 40;
-        addDrawableChild(CyclingButtonWidget.onOffBuilder(DMLSConfig.alertsEnabled())
-                .build(x, y, 200, 20, Text.literal("Chat Alerts"), (button, value) -> DMLSConfig.setAlertsEnabled(value)));
-        addDrawableChild(ButtonWidget.builder(Text.literal("Reload Alert Wordlist"), button -> {
+        configureScrollableContent(module, scaled(78));
+        int controlWidth = scaled(200);
+        int x = width / 2 - controlWidth / 2;
+        addScrollableChild(CyclingButtonWidget.onOffBuilder(DMLSConfig.alertsEnabled())
+                .build(x, contentY(0), controlWidth, STANDARD_BUTTON_HEIGHT, Text.literal("Chat Alerts"),
+                        (button, value) -> DMLSConfig.setAlertsEnabled(value)), 0);
+        addScrollableChild(ButtonWidget.builder(Text.literal("Reload Alert Wordlist"), button -> {
             ChatAlertsModule.reloadWordlist();
             wordlistStatus = wordlistStatusText();
-        }).dimensions(x, y + 28, 200, 20).build());
+        }).dimensions(x, contentY(scaled(30)), controlWidth, STANDARD_BUTTON_HEIGHT).build(), scaled(30));
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(width / 2 - 75, height - 31, 150, 20).build());
+                .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
-        context.drawCenteredTextWithShadow(textRenderer, wordlistStatus, width / 2, height / 2 + 55, 0xFFAAAAAA);
+        int statusY = contentY(scaled(62));
+        if (isContentVisible(statusY, textRenderer.fontHeight)) {
+            context.drawCenteredTextWithShadow(textRenderer, wordlistStatus, width / 2, statusY, 0xFFAAAAAA);
+        }
         super.render(context, mouseX, mouseY, delta);
     }
 

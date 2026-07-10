@@ -23,19 +23,20 @@ public final class XrayRollbackScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        int formWidth = Math.min(360, width - 48);
+        configureScrollableContent(module, scaled(82));
+        int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
-        ignField = addDrawableChild(new TextFieldWidget(textRenderer, formX, height / 2 - 4, formWidth, 20,
-                Text.literal("Player IGN")));
+        ignField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(14)), formWidth, STANDARD_BUTTON_HEIGHT,
+                Text.literal("Player IGN")), scaled(14));
         ignField.setMaxLength(16);
         ignField.setSuggestion("PlayerName");
         ignField.setChangedListener(value -> ignField.setSuggestion(value.isEmpty() ? "PlayerName" : null));
         setInitialFocus(ignField);
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(leftPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton = addDrawableChild(ButtonWidget.builder(Text.literal("Roll Back"), button -> submit())
-                .dimensions(rightPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton.active = !ClientUtils.isNotConnected(client);
     }
 
@@ -58,11 +59,18 @@ public final class XrayRollbackScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
-        context.drawTextWithShadow(textRenderer, Text.literal("Player IGN:"), ignField.getX(), height / 2 - 20, 0xFFCCCCCC);
-        context.drawCenteredTextWithShadow(textRenderer, Text.literal("This rolls back the player's blocks and containers, use with care."),
-                width / 2, height / 2 + 23, 0xFFFFAA00);
-        if (!validationMessage.getString().isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, height / 2 + 37, 0xFFFF5555);
+        int labelY = contentY(0);
+        if (isContentVisible(labelY, textRenderer.fontHeight)) {
+            context.drawTextWithShadow(textRenderer, Text.literal("Player IGN:"), ignField.getX(), labelY, 0xFFCCCCCC);
+        }
+        int warningY = contentY(scaled(48));
+        if (isContentVisible(warningY, textRenderer.fontHeight)) {
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("This rolls back the player's blocks and containers, use with care."),
+                    width / 2, warningY, 0xFFFFAA00);
+        }
+        int validationY = contentY(scaled(64));
+        if (!validationMessage.getString().isEmpty() && isContentVisible(validationY, textRenderer.fontHeight)) {
+            context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, validationY, 0xFFFF5555);
         }
         super.render(context, mouseX, mouseY, delta);
     }

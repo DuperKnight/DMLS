@@ -23,19 +23,20 @@ public final class CheckMembersScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        int formWidth = Math.min(360, width - 48);
+        configureScrollableContent(module, scaled(64));
+        int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
-        landField = addDrawableChild(new TextFieldWidget(textRenderer, formX, height / 2 - 4, formWidth, 20,
-                Text.literal("Land name")));
+        landField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(14)), formWidth, STANDARD_BUTTON_HEIGHT,
+                Text.literal("Land name")), scaled(14));
         landField.setMaxLength(64);
         landField.setSuggestion("LandName");
         landField.setChangedListener(value -> landField.setSuggestion(value.isEmpty() ? "LandName" : null));
         setInitialFocus(landField);
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(leftPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton = addDrawableChild(ButtonWidget.builder(Text.literal("Submit"), button -> submit())
-                .dimensions(rightPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton.active = !ClientUtils.isNotConnected(client);
     }
 
@@ -58,9 +59,13 @@ public final class CheckMembersScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
-        context.drawTextWithShadow(textRenderer, Text.literal("Land name:"), landField.getX(), height / 2 - 20, 0xFFCCCCCC);
-        if (!validationMessage.getString().isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, height / 2 + 23, 0xFFFF5555);
+        int labelY = contentY(0);
+        if (isContentVisible(labelY, textRenderer.fontHeight)) {
+            context.drawTextWithShadow(textRenderer, Text.literal("Land name:"), landField.getX(), labelY, 0xFFCCCCCC);
+        }
+        int validationY = contentY(scaled(48));
+        if (!validationMessage.getString().isEmpty() && isContentVisible(validationY, textRenderer.fontHeight)) {
+            context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, validationY, 0xFFFF5555);
         }
         super.render(context, mouseX, mouseY, delta);
     }

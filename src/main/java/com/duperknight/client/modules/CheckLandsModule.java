@@ -58,7 +58,7 @@ public final class CheckLandsModule extends DMLSModule {
     public List<Text> description() {
         return List.of(
                 Text.literal("Check the lands and ranks for one or more players."),
-                Text.literal("Separate multiple IGNs with spaces.")
+                Text.literal("Separate multiple IGNs with commas or spaces.")
         );
     }
 
@@ -95,7 +95,7 @@ public final class CheckLandsModule extends DMLSModule {
             return;
         }
         List<String> igns = new ArrayList<>();
-        for (String ign : input.trim().split("\\s+")) {
+        for (String ign : input.trim().split("[,\\s]+")) {
             if (!ign.isEmpty() && USERNAME.matcher(ign).matches() && igns.stream().noneMatch(ign::equalsIgnoreCase)) {
                 igns.add(ign);
             }

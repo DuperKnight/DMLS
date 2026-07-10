@@ -25,23 +25,25 @@ public final class DonorPetScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        int formWidth = Math.min(360, width - 48);
+        configureScrollableContent(module, scaled(94));
+        int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
-        ignField = addDrawableChild(new TextFieldWidget(textRenderer, formX, height / 2 - 4, formWidth, 20,
-                Text.literal("Player IGN")));
+        ignField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(14)), formWidth, STANDARD_BUTTON_HEIGHT,
+                Text.literal("Player IGN")), scaled(14));
         ignField.setMaxLength(16);
         ignField.setSuggestion("PlayerName");
         ignField.setChangedListener(value -> ignField.setSuggestion(value.isEmpty() ? "PlayerName" : null));
         setInitialFocus(ignField);
 
-        addDrawableChild(CyclingButtonWidget.builder((String value) -> Text.literal(value), pet)
+        addScrollableChild(CyclingButtonWidget.builder((String value) -> Text.literal(value), pet)
                 .values(DonorPetModule.pets())
-                .build(formX, height / 2 + 24, formWidth, 20, Text.literal("Pet"), (button, value) -> pet = value));
+                .build(formX, contentY(scaled(48)), formWidth, STANDARD_BUTTON_HEIGHT,
+                        Text.literal("Pet"), (button, value) -> pet = value), scaled(48));
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(leftPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton = addDrawableChild(ButtonWidget.builder(Text.literal("Give Pet"), button -> submit())
-                .dimensions(rightPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton.active = !ClientUtils.isNotConnected(client);
     }
 
@@ -64,9 +66,13 @@ public final class DonorPetScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
-        context.drawTextWithShadow(textRenderer, Text.literal("Player IGN:"), ignField.getX(), height / 2 - 20, 0xFFCCCCCC);
-        if (!validationMessage.getString().isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, height - 45, 0xFFFF5555);
+        int labelY = contentY(0);
+        if (isContentVisible(labelY, textRenderer.fontHeight)) {
+            context.drawTextWithShadow(textRenderer, Text.literal("Player IGN:"), ignField.getX(), labelY, 0xFFCCCCCC);
+        }
+        int validationY = contentY(scaled(80));
+        if (!validationMessage.getString().isEmpty() && isContentVisible(validationY, textRenderer.fontHeight)) {
+            context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, validationY, 0xFFFF5555);
         }
         super.render(context, mouseX, mouseY, delta);
     }

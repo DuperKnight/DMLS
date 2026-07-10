@@ -27,35 +27,38 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        int formWidth = Math.min(360, width - 48);
+        configureScrollableContent(module, scaled(164));
+        int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
-        int y = height / 2 - 46;
 
-        ignField = addDrawableChild(new TextFieldWidget(textRenderer, formX, y, formWidth, 20, Text.literal("Player IGN")));
+        ignField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(14)), formWidth,
+                STANDARD_BUTTON_HEIGHT, Text.literal("Player IGN")), scaled(14));
         ignField.setMaxLength(16);
         ignField.setSuggestion("PlayerName");
         ignField.setChangedListener(value -> ignField.setSuggestion(value.isEmpty() ? "PlayerName" : null));
         setInitialFocus(ignField);
 
-        prefixIdField = addDrawableChild(new TextFieldWidget(textRenderer, formX, y + 34, formWidth, 20, Text.literal("Prefix id")));
+        prefixIdField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(60)), formWidth,
+                STANDARD_BUTTON_HEIGHT, Text.literal("Prefix id")), scaled(60));
         prefixIdField.setMaxLength(64);
         prefixIdField.setSuggestion("prefixid");
         prefixIdField.setChangedListener(value -> prefixIdField.setSuggestion(value.isEmpty() ? "prefixid" : null));
 
-        hexCodeField = addDrawableChild(new TextFieldWidget(textRenderer, formX, y + 68, formWidth / 2 - 4, 20, Text.literal("Hex code")));
+        hexCodeField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(106)), formWidth / 2 - scaled(4),
+                STANDARD_BUTTON_HEIGHT, Text.literal("Hex code")), scaled(106));
         hexCodeField.setMaxLength(128);
         hexCodeField.setSuggestion("#FFAA00");
         hexCodeField.setChangedListener(value -> hexCodeField.setSuggestion(value.isEmpty() ? "#FFAA00" : null));
 
-        addDrawableChild(CyclingButtonWidget.builder((String value) -> Text.literal(value), limit)
+        addScrollableChild(CyclingButtonWidget.builder((String value) -> Text.literal(value), limit)
                 .values(PrefixCreateModule.LIMITS)
-                .build(formX + formWidth / 2 + 4, y + 68, formWidth / 2 - 4, 20,
-                        Text.literal("Player limit"), (button, value) -> limit = value));
+                .build(formX + formWidth / 2 + scaled(4), contentY(scaled(106)), formWidth / 2 - scaled(4),
+                        STANDARD_BUTTON_HEIGHT, Text.literal("Player limit"), (button, value) -> limit = value), scaled(106));
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(leftPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton = addDrawableChild(ButtonWidget.builder(Text.literal("Create"), button -> submit())
-                .dimensions(rightPairedButtonX(), height - 31, pairedButtonWidth(), 20).build());
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton.active = !ClientUtils.isNotConnected(client);
     }
 
@@ -77,12 +80,19 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
-        context.drawTextWithShadow(textRenderer, Text.literal("Player IGN:"), ignField.getX(), ignField.getY() - 12, 0xFFCCCCCC);
-        context.drawTextWithShadow(textRenderer, Text.literal("Prefix id:"), prefixIdField.getX(), prefixIdField.getY() - 12, 0xFFCCCCCC);
-        context.drawTextWithShadow(textRenderer, Text.literal("Hex code:"), hexCodeField.getX(), hexCodeField.getY() - 12, 0xFFCCCCCC);
-        if (!validationMessage.getString().isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, height - 45, 0xFFFF5555);
+        drawContentLabel(context, Text.literal("Player IGN:"), ignField.getX(), contentY(0));
+        drawContentLabel(context, Text.literal("Prefix id:"), prefixIdField.getX(), contentY(scaled(46)));
+        drawContentLabel(context, Text.literal("Hex code:"), hexCodeField.getX(), contentY(scaled(92)));
+        int validationY = contentY(scaled(150));
+        if (!validationMessage.getString().isEmpty() && isContentVisible(validationY, textRenderer.fontHeight)) {
+            context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, validationY, 0xFFFF5555);
         }
         super.render(context, mouseX, mouseY, delta);
+    }
+
+    private void drawContentLabel(DrawContext context, Text label, int x, int y) {
+        if (isContentVisible(y, textRenderer.fontHeight)) {
+            context.drawTextWithShadow(textRenderer, label, x, y, 0xFFCCCCCC);
+        }
     }
 }
