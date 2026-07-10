@@ -54,7 +54,7 @@ public final class PromoWaveScreen extends DMLSMenuScreen {
             return;
         }
         module.submit(client, rank, input);
-        close();
+        closeToGame();
     }
 
     @Override

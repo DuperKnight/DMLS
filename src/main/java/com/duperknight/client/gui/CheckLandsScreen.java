@@ -47,7 +47,7 @@ public final class CheckLandsScreen extends DMLSMenuScreen {
             return;
         }
         module.submit(client, input);
-        close();
+        closeToGame();
     }
 
     @Override

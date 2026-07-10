@@ -208,6 +208,11 @@ abstract class DMLSMenuScreen extends Screen {
         return Math.round(value * UI_SCALE);
     }
 
+    /** Closes the whole DMLS menu stack and returns directly to gameplay. */
+    protected void closeToGame() {
+        client.setScreen(null);
+    }
+
     private record ScrollableWidget(ClickableWidget widget, int offset) {
     }
 

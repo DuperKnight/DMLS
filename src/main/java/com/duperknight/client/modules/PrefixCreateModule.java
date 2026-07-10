@@ -3,6 +3,7 @@ package com.duperknight.client.modules;
 import com.duperknight.client.gui.PrefixCreateScreen;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.PrefixTextFormatter;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -15,10 +16,14 @@ import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 public final class PrefixCreateModule extends DMLSModule {
-    public static final List<String> LIMITS = List.of("10", "30");
+    public static final int MAX_COMMAND_LENGTH = 256;
+    public static final String CUSTOM_LIMIT = "Custom";
+    public static final List<String> LIMITS = List.of("10", "30", Integer.toString(Integer.MAX_VALUE), CUSTOM_LIMIT);
+    private static final List<String> COMMAND_LIMIT_SUGGESTIONS = LIMITS.stream().filter(limit -> !CUSTOM_LIMIT.equals(limit)).toList();
 
     private static final String PREFIX = "§8[§6DMLS - Prefix§8] §7";
     private static final int COMMAND_DELAY_TICKS = 20;
@@ -43,7 +48,7 @@ public final class PrefixCreateModule extends DMLSModule {
     @Override
     public List<Text> description() {
         return List.of(
-                Text.literal("Create a prefix and set its color, player limit"),
+                Text.literal("Create a formatted prefix, set its player limit"),
                 Text.literal("and manager in one go.")
         );
     }
@@ -59,16 +64,16 @@ public final class PrefixCreateModule extends DMLSModule {
                 ClientCommandManager.literal("prefixlazy")
                         .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                 .then(ClientCommandManager.argument("limit", StringArgumentType.word())
-                                        .suggests((context, builder) -> CommandSource.suggestMatching(LIMITS, builder))
+                                        .suggests((context, builder) -> CommandSource.suggestMatching(COMMAND_LIMIT_SUGGESTIONS, builder))
                                         .then(ClientCommandManager.argument("prefixid", StringArgumentType.word())
-                                                .then(ClientCommandManager.argument("hexcode", StringArgumentType.greedyString())
-                                                        .suggests((context, builder) -> CommandSource.suggestMatching(List.of("#"), builder))
+                                                .then(ClientCommandManager.argument("prefixtext", StringArgumentType.greedyString())
+                                                        .suggests((context, builder) -> CommandSource.suggestMatching(List.of("&a", "&#FFFFFF", "<green>"), builder))
                                                         .executes(context -> {
                                                             submit(context.getSource().getClient(),
                                                                     StringArgumentType.getString(context, "ign").trim(),
                                                                     StringArgumentType.getString(context, "limit").trim(),
                                                                     StringArgumentType.getString(context, "prefixid").trim(),
-                                                                    StringArgumentType.getString(context, "hexcode").trim());
+                                                                    StringArgumentType.getString(context, "prefixtext").trim());
                                                             return 1;
                                                         })))))
         ));
@@ -81,57 +86,104 @@ public final class PrefixCreateModule extends DMLSModule {
     }
 
     /** Starts the prefix creation. The command and GUI both call this method. */
-    public void submit(MinecraftClient client, String ign, String limit, String prefixId, String hexCode) {
+    public ValidationResult submit(MinecraftClient client, String ign, String limit, String prefixId, String prefixText) {
         if (!hasRequiredRank(client)) {
-            return;
+            return ValidationResult.error("You do not have the required staff rank.");
         }
 
-        if (!USERNAME.matcher(ign).matches()) {
-            ChatUtils.sendClientMessage(client, PREFIX + "No valid username given.");
-            return;
-        }
-
-        if (!LIMITS.contains(limit)) {
-            ChatUtils.sendClientMessage(client, PREFIX + "The player limit must be §610§7 or §630§7.");
-            return;
-        }
-
-        if (prefixId.isEmpty()) {
-            ChatUtils.sendClientMessage(client, PREFIX + "No prefix id given.");
-            return;
-        }
-
-        if (hexCode.isEmpty()) {
-            ChatUtils.sendClientMessage(client, PREFIX + "No hex code given.");
-            return;
+        ValidationResult validation = validate(ign, limit, prefixId, prefixText);
+        if (!validation.valid()) {
+            ChatUtils.sendClientMessage(client, PREFIX + validation.message());
+            return validation;
         }
 
         if (activeSession != null) {
-            ChatUtils.sendClientMessage(client, PREFIX + "A prefix creation is still running, wait for it to finish.");
-            return;
+            ValidationResult activeSessionError = ValidationResult.error("A prefix creation is still running, wait for it to finish.");
+            ChatUtils.sendClientMessage(client, PREFIX + activeSessionError.message());
+            return activeSessionError;
         }
 
-        activeSession = new CreateSession(ign, limit, prefixId, hexCode);
+        activeSession = new CreateSession(ign, validation.limit(), prefixId, prefixText);
         activeSession.start(client);
+        return ValidationResult.success(validation.limit());
+    }
+
+    public static ValidationResult validate(String ign, String limit, String prefixId, String prefixText) {
+        if (!USERNAME.matcher(ign).matches()) {
+            return ValidationResult.error("Enter a valid player IGN.");
+        }
+
+        Optional<String> resolvedLimit = resolveLimit(limit);
+        if (resolvedLimit.isEmpty()) {
+            return ValidationResult.error("The player limit must be a whole number from 1 to 2147483647.");
+        }
+
+        if (prefixId.isEmpty()) {
+            return ValidationResult.error("Enter a prefix ID.");
+        }
+
+        if (prefixText.isEmpty()) {
+            return ValidationResult.error("Enter prefix text.");
+        }
+
+        PrefixTextFormatter.ParseResult formattedPrefix = PrefixTextFormatter.parse(prefixText);
+        if (!formattedPrefix.valid()) {
+            return ValidationResult.error(formattedPrefix.error());
+        }
+
+        int commandLength = createCommand(prefixId, prefixText).length();
+        if (commandLength > MAX_COMMAND_LENGTH) {
+            return ValidationResult.error("The create command is " + commandLength + "/" + MAX_COMMAND_LENGTH
+                    + " characters. Ask an admin to create it via console, shorten the prefix ID, shorten the prefix text or colors, or try a more compact format.");
+        }
+
+        return ValidationResult.success(resolvedLimit.get());
+    }
+
+    public static Optional<String> resolveLimit(String limit) {
+        try {
+            int parsed = Integer.parseInt(limit);
+            return parsed > 0 ? Optional.of(Integer.toString(parsed)) : Optional.empty();
+        } catch (NumberFormatException exception) {
+            return Optional.empty();
+        }
+    }
+
+    public static String createCommand(String prefixId, String prefixText) {
+        return "prefix create %s %s".formatted(prefixId, prefixText);
+    }
+
+    public record ValidationResult(String limit, String message) {
+        public static ValidationResult success(String limit) {
+            return new ValidationResult(limit, "");
+        }
+
+        public static ValidationResult error(String message) {
+            return new ValidationResult("", message);
+        }
+
+        public boolean valid() {
+            return message.isEmpty();
+        }
     }
 
     private final class CreateSession {
         private final String ign;
         private final String limit;
         private final String prefixId;
-        private final String hexCode;
+        private final String prefixText;
         private final List<String> commands;
 
         private int commandIndex;
         private int waitTicks;
 
-        private CreateSession(String ign, String limit, String prefixId, String hexCode) {
+        private CreateSession(String ign, String limit, String prefixId, String prefixText) {
             this.ign = ign;
             this.limit = limit;
             this.prefixId = prefixId;
-            this.hexCode = hexCode;
+            this.prefixText = prefixText;
             this.commands = List.of(
-                    "prefix create %s %s".formatted(prefixId, hexCode),
+                    createCommand(prefixId, prefixText),
                     "prefix x setlimit %s %s".formatted(prefixId, limit),
                     "prefix x setmanager %s %s".formatted(prefixId, ign),
                     "prefix x info %s".formatted(prefixId)
@@ -166,8 +218,12 @@ public final class PrefixCreateModule extends DMLSModule {
         }
 
         private void report(MinecraftClient client) {
-            ChatUtils.sendClientMessage(client, PREFIX + "Created prefix §6" + prefixId + "§7 with color §6" + hexCode
-                    + "§7, player limit §6" + limit + "§7 and manager §6" + ign + "§7. Check the info above to confirm.");
+            PrefixTextFormatter.ParseResult formattedPrefix = PrefixTextFormatter.parse(prefixText);
+            Text displayedPrefix = formattedPrefix.valid() ? formattedPrefix.preview() : Text.literal(prefixText);
+            ChatUtils.sendClientMessage(client, Text.literal(PREFIX + "Created prefix \u00A76" + prefixId + "\u00A77 with text ")
+                    .append(displayedPrefix)
+                    .append(Text.literal("\u00A77, player limit \u00A76" + limit + "\u00A77 and manager \u00A76" + ign
+                            + "\u00A77. Check the info above to confirm.")));
         }
     }
 }

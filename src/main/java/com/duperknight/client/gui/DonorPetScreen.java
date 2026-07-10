@@ -54,7 +54,7 @@ public final class DonorPetScreen extends DMLSMenuScreen {
             return;
         }
         module.submit(client, input, pet);
-        close();
+        closeToGame();
     }
 
     @Override
