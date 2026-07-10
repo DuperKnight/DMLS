@@ -12,6 +12,7 @@
   "dmls.button.rollback": "Roll Back",
   "dmls.button.give_pet": "Give Pet",
   "dmls.message.no_modules": "No modules are available for your selected rank.",
+  "dmls.update.available": "DMLS update available: %s — please update the mod!",
   "dmls.option.on": "On",
   "dmls.option.off": "Off",
   "dmls.option.staff_rank": "Staff Rank",

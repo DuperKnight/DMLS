@@ -17,6 +17,7 @@ import com.duperknight.client.utils.CannedReplies;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
+import com.duperknight.client.utils.UpdateChecker;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.api.ClientModInitializer;
@@ -58,6 +59,7 @@ public class DMLSClient implements ClientModInitializer {
         DMLS.LOGGER.info("Initializing DMLS client, you are a lazy staff member!");
         registerDmlsCommand();
         registerMenuKeybind();
+        UpdateChecker.register();
         MODULES.forEach(DMLSModule::register);
     }
 
