@@ -1,5 +1,6 @@
 package com.duperknight.client.modules;
 
+import com.duperknight.client.gui.CheckAltsScreen;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -8,6 +9,9 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallba
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.MutableText;
@@ -35,16 +39,35 @@ public final class CheckAltsModule extends DMLSModule {
     }
 
     @Override
+    public Text displayName() {
+        return Text.literal("Check Alts");
+    }
+
+    @Override
+    public ItemStack icon() {
+        return new ItemStack(Items.NAME_TAG);
+    }
+
+    @Override
+    public List<Text> description() {
+        return List.of(
+                Text.literal("Run /alts and then /history on every found account."),
+                Text.literal("Ends with a punishment summary per account.")
+        );
+    }
+
+    @Override
+    public void openScreen(MinecraftClient client, Screen parent) {
+        client.setScreen(new CheckAltsScreen(parent, this));
+    }
+
+    @Override
     public void register() {
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
                 ClientCommandManager.literal("checkalts")
                         .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                 .executes(context -> {
-                                    MinecraftClient client = context.getSource().getClient();
-                                    if (!hasRequiredRank(client)) {
-                                        return 0;
-                                    }
-                                    start(client, StringArgumentType.getString(context, "ign"));
+                                    submit(context.getSource().getClient(), StringArgumentType.getString(context, "ign").trim());
                                     return 1;
                                 }))
         ));
@@ -57,6 +80,20 @@ public final class CheckAltsModule extends DMLSModule {
 
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> handleServerMessage(message.getString()));
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> handleServerMessage(message.getString()));
+    }
+
+    /** Starts an alt check for the given player. The command and GUI both call this method. */
+    public void submit(MinecraftClient client, String ign) {
+        if (!hasRequiredRank(client)) {
+            return;
+        }
+
+        if (!USERNAME.matcher(ign).matches()) {
+            ChatUtils.sendClientMessage(client, PREFIX + "No valid username given.");
+            return;
+        }
+
+        start(client, ign);
     }
 
     private void start(MinecraftClient client, String ign) {

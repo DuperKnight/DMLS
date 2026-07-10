@@ -1,5 +1,6 @@
 package com.duperknight.client.modules;
 
+import com.duperknight.client.gui.CheckMembersScreen;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.MenuCommandQuery;
@@ -11,6 +12,9 @@ import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.text.ClickEvent;
 import net.minecraft.text.HoverEvent;
 import net.minecraft.text.MutableText;
@@ -31,7 +35,30 @@ public final class CheckMembersModule extends DMLSModule {
     private CheckSession activeSession;
 
     public CheckMembersModule() {
-        super(StaffRank.HELPER);
+        super(StaffRank.MODERATOR);
+    }
+
+    @Override
+    public Text displayName() {
+        return Text.literal("Check Members");
+    }
+
+    @Override
+    public ItemStack icon() {
+        return new ItemStack(Items.PLAYER_HEAD);
+    }
+
+    @Override
+    public List<Text> description() {
+        return List.of(
+                Text.literal("List all members of a land grouped by rank."),
+                Text.literal("Click a name in the result to check their lands.")
+        );
+    }
+
+    @Override
+    public void openScreen(MinecraftClient client, Screen parent) {
+        client.setScreen(new CheckMembersScreen(parent, this));
     }
 
     @Override
@@ -40,11 +67,7 @@ public final class CheckMembersModule extends DMLSModule {
                 ClientCommandManager.literal("checkmembers")
                         .then(ClientCommandManager.argument("land", StringArgumentType.greedyString())
                                 .executes(context -> {
-                                    MinecraftClient client = context.getSource().getClient();
-                                    if (!hasRequiredRank(client)) {
-                                        return 0;
-                                    }
-                                    start(client, StringArgumentType.getString(context, "land").trim());
+                                    submit(context.getSource().getClient(), StringArgumentType.getString(context, "land").trim());
                                     return 1;
                                 }))
         ));
@@ -54,6 +77,20 @@ public final class CheckMembersModule extends DMLSModule {
                 activeSession.tick(client);
             }
         });
+    }
+
+    /** Starts a member check for the given land. The command and GUI both call this method. */
+    public void submit(MinecraftClient client, String land) {
+        if (!hasRequiredRank(client)) {
+            return;
+        }
+
+        if (land.isEmpty()) {
+            ChatUtils.sendClientMessage(client, PREFIX + "No land name given.");
+            return;
+        }
+
+        start(client, land);
     }
 
     private void start(MinecraftClient client, String land) {
