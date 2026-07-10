@@ -23,6 +23,7 @@ public final class XrayRollbackModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - Xray§8] §7";
     private static final int ROLLBACK_TIMEOUT_TICKS = 20 * 60;
     private static final int BALANCE_WAIT_TICKS = 20 * 2;
+    private static final int COMMAND_GAP_TICKS = 20 * 2;
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
 
     private static final List<Step> STEPS = List.of(
@@ -126,6 +127,7 @@ public final class XrayRollbackModule extends DMLSModule {
 
         private int stepIndex = -1;
         private int waitTicks;
+        private int postCompletionTicks;
         private boolean completionSeen;
 
         private RollbackSession(String ign) {
@@ -151,8 +153,11 @@ public final class XrayRollbackModule extends DMLSModule {
             Step step = STEPS.get(stepIndex);
             if (step.waitForCompletion()) {
                 if (completionSeen) {
-                    results.add("§a✔ §7" + step.label());
-                    nextStep(client);
+                    // small gap after the completion message before the next command
+                    if (postCompletionTicks++ >= COMMAND_GAP_TICKS) {
+                        results.add("§a✔ §7" + step.label());
+                        nextStep(client);
+                    }
                 } else if (waitTicks > ROLLBACK_TIMEOUT_TICKS) {
                     results.add("§e⚠ §7" + step.label() + " §8(no completion message, check manually)");
                     nextStep(client);
@@ -184,6 +189,7 @@ public final class XrayRollbackModule extends DMLSModule {
 
             Step step = STEPS.get(stepIndex);
             waitTicks = 0;
+            postCompletionTicks = 0;
             completionSeen = false;
             ChatUtils.sendClientMessage(client, PREFIX + "Step §6" + (stepIndex + 1) + "/" + STEPS.size() + "§7: " + step.label());
             ClientUtils.sendCommand(client, step.commandTemplate().formatted(ign));

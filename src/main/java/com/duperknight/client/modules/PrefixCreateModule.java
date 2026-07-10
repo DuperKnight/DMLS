@@ -21,7 +21,7 @@ public final class PrefixCreateModule extends DMLSModule {
     public static final List<String> LIMITS = List.of("10", "30");
 
     private static final String PREFIX = "§8[§6DMLS - Prefix§8] §7";
-    private static final int COMMAND_DELAY_TICKS = 20;
+    private static final int COMMAND_DELAY_TICKS = 20 * 2;
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
 
     private CreateSession activeSession;
