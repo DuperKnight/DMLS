@@ -5,6 +5,7 @@ import com.duperknight.client.gui.DMLSHomeScreen;
 import com.duperknight.client.modules.ActivityWaveModule;
 import com.duperknight.client.modules.AwayModule;
 import com.duperknight.client.modules.ChatAlertsModule;
+import com.duperknight.client.modules.ChatReplayModule;
 import com.duperknight.client.modules.CheckAltsModule;
 import com.duperknight.client.modules.CheckLandsModule;
 import com.duperknight.client.modules.CheckMembersModule;
@@ -60,7 +61,8 @@ public class DMLSClient implements ClientModInitializer {
             new ChatAlertsModule(),
             new ChatSpamMuteModule(),
             new AwayModule(),
-            new ActivityWaveModule()
+            new ActivityWaveModule(),
+            new ChatReplayModule()
     );
 
     @Override
@@ -160,6 +162,15 @@ public class DMLSClient implements ClientModInitializer {
                                 .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
                                     module(ActivityWaveModule.class).submit(context.getSource().getClient(),
                                             StringArgumentType.getString(context, "igns")); return 1;
+                                })))
+                        .then(ClientCommandManager.literal("chatlog")
+                                .executes(context -> {
+                                    module(ChatReplayModule.class).openScreenWithFilter(context.getSource().getClient(), "");
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.argument("filter", StringArgumentType.greedyString()).executes(context -> {
+                                    module(ChatReplayModule.class).openScreenWithFilter(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "filter")); return 1;
                                 })))
                         .then(ClientCommandManager.literal("brb")
                                 .executes(context -> {
@@ -263,6 +274,7 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls activity <ign1, ign2, ...>", Text.translatable("dmls.help.activity", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls rank [rank]", Text.translatable("dmls.help.rank"));
         helpLine(client, "/dmls alerts [on|off|reload]", Text.translatable("dmls.help.alerts"));
+        helpLine(client, "/dmls chatlog [filter]", Text.translatable("dmls.help.chatlog"));
         helpLine(client, "/dmls brb <duration|off>", Text.translatable("dmls.help.brb"));
         helpLine(client, "/dmls dnd <on|off>", Text.translatable("dmls.help.dnd"));
         helpLine(client, "/dmls say [reply]", Text.translatable("dmls.help.say"));

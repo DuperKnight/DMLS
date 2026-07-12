@@ -283,4 +283,10 @@
   ,"dmls.chat.demo.confirmed.many": "Confirmed demotion commands for %s players from %s: %s."
   ,"dmls.chat.demo.cancelled": "Demotion wave cancelled after %s/%s players; remaining commands were not sent."
   ,"dmls.help.demowave": "Removes the given staff rank from every listed player, for seasonal staff cleanup. Requires %s."
+  ,"dmls.module.chat_replay.name": "Chat Replay"
+  ,"dmls.module.chat_replay.description": "Scroll through the full session chat and filter it by player or text."
+  ,"dmls.field.filter": "Filter"
+  ,"dmls.placeholder.filter": "Player or text"
+  ,"dmls.screen.chat_replay.empty": "No chat captured yet this session."
+  ,"dmls.help.chatlog": "Opens a scrollable log of this session's chat with a player or text filter."
 }
