@@ -2,6 +2,7 @@ package com.duperknight.client;
 
 import com.duperknight.DMLS;
 import com.duperknight.client.gui.DMLSHomeScreen;
+import com.duperknight.client.modules.AwayModule;
 import com.duperknight.client.modules.ChatAlertsModule;
 import com.duperknight.client.modules.CheckAltsModule;
 import com.duperknight.client.modules.CheckLandsModule;
@@ -54,7 +55,8 @@ public class DMLSClient implements ClientModInitializer {
             new PromoWaveModule(),
             new UuidLookupModule(),
             new ChatAlertsModule(),
-                new ChatSpamMuteModule()
+            new ChatSpamMuteModule(),
+            new AwayModule()
     );
 
     @Override
@@ -144,6 +146,35 @@ public class DMLSClient implements ClientModInitializer {
                                             module(PromoWaveModule.class).submit(context.getSource().getClient(),
                                                     StringArgumentType.getString(context, "rank"), StringArgumentType.getString(context, "igns")); return 1;
                                         }))))
+                        .then(ClientCommandManager.literal("brb")
+                                .executes(context -> {
+                                    module(AwayModule.class).status(context.getSource().getClient());
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    module(AwayModule.class).disable(context.getSource().getClient());
+                                    return 1;
+                                }))
+                                .then(ClientCommandManager.argument("duration", StringArgumentType.word())
+                                        .suggests((context, builder) -> CommandSource.suggestMatching(List.of("5m", "15m", "30m", "1h"), builder))
+                                        .executes(context -> {
+                                            module(AwayModule.class).startBrb(context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "duration"));
+                                            return 1;
+                                        })))
+                        .then(ClientCommandManager.literal("dnd")
+                                .executes(context -> {
+                                    module(AwayModule.class).status(context.getSource().getClient());
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    module(AwayModule.class).setDnd(context.getSource().getClient(), true);
+                                    return 1;
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    module(AwayModule.class).setDnd(context.getSource().getClient(), false);
+                                    return 1;
+                                })))
                         .then(buildSayCommand())
                         .then(ClientCommandManager.literal("alerts")
                                 .executes(context -> {
@@ -215,6 +246,8 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls promowave <rank> <ign1, ign2, ...>", Text.translatable("dmls.help.promowave", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls rank [rank]", Text.translatable("dmls.help.rank"));
         helpLine(client, "/dmls alerts [on|off|reload]", Text.translatable("dmls.help.alerts"));
+        helpLine(client, "/dmls brb <duration|off>", Text.translatable("dmls.help.brb"));
+        helpLine(client, "/dmls dnd <on|off>", Text.translatable("dmls.help.dnd"));
         helpLine(client, "/dmls say [reply]", Text.translatable("dmls.help.say"));
         helpLine(client, "/dmls", Text.translatable("dmls.help.menu"));
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
