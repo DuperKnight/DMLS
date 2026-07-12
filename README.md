@@ -24,6 +24,9 @@ The canonical command root is `/dmls`:
 - `/dmls donorpet <ign> <pet>`
 - `/dmls promowave <rank> <ign...>`
 - `/dmls alerts [on|off|reload]`
+- `/dmls brb <duration|off>` — auto-replies to private messages while you are AFK, e.g. `5m`, `30s`, `1h`
+- `/dmls dnd <on|off>` — auto-replies that you are busy until turned off
+- `/dmls say [reply]`
 - `/dmls rank [rank]`
 - `/dmls help`
 
