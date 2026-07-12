@@ -2,6 +2,7 @@ package com.duperknight.client;
 
 import com.duperknight.DMLS;
 import com.duperknight.client.gui.DMLSHomeScreen;
+import com.duperknight.client.modules.ActivityWaveModule;
 import com.duperknight.client.modules.AwayModule;
 import com.duperknight.client.modules.ChatAlertsModule;
 import com.duperknight.client.modules.CheckAltsModule;
@@ -56,7 +57,8 @@ public class DMLSClient implements ClientModInitializer {
             new UuidLookupModule(),
             new ChatAlertsModule(),
             new ChatSpamMuteModule(),
-            new AwayModule()
+            new AwayModule(),
+            new ActivityWaveModule()
     );
 
     @Override
@@ -146,6 +148,11 @@ public class DMLSClient implements ClientModInitializer {
                                             module(PromoWaveModule.class).submit(context.getSource().getClient(),
                                                     StringArgumentType.getString(context, "rank"), StringArgumentType.getString(context, "igns")); return 1;
                                         }))))
+                        .then(ClientCommandManager.literal("activity")
+                                .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
+                                    module(ActivityWaveModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "igns")); return 1;
+                                })))
                         .then(ClientCommandManager.literal("brb")
                                 .executes(context -> {
                                     module(AwayModule.class).status(context.getSource().getClient());
@@ -244,6 +251,7 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls prefix <ign> <limit> <prefixid> <prefixtext>", Text.translatable("dmls.help.prefix", StaffRank.SUPPORT.displayName()));
         helpLine(client, "/dmls donorpet <ign> <pet>", Text.translatable("dmls.help.donorpet", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls promowave <rank> <ign1, ign2, ...>", Text.translatable("dmls.help.promowave", StaffRank.ADMIN.displayName()));
+        helpLine(client, "/dmls activity <ign1, ign2, ...>", Text.translatable("dmls.help.activity", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls rank [rank]", Text.translatable("dmls.help.rank"));
         helpLine(client, "/dmls alerts [on|off|reload]", Text.translatable("dmls.help.alerts"));
         helpLine(client, "/dmls brb <duration|off>", Text.translatable("dmls.help.brb"));
