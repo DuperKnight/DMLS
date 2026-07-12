@@ -108,7 +108,7 @@ public final class GreeterModule extends DMLSModule {
         }
 
         String name = parsedName.get();
-        if (name.equalsIgnoreCase(client.player.getGameProfile().getName())) {
+        if (name.equalsIgnoreCase(client.player.getName().getString())) {
             return;
         }
 

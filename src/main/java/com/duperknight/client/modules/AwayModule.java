@@ -223,7 +223,7 @@ public final class AwayModule extends DMLSModule {
         }
 
         String sender = parsedSender.get();
-        String ownName = client.player.getGameProfile().getName();
+        String ownName = client.player.getName().getString();
         if (sender.equalsIgnoreCase(ownName)) {
             return;
         }
