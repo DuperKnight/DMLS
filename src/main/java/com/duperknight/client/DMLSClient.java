@@ -15,6 +15,7 @@ import com.duperknight.client.modules.DMLSModule;
 import com.duperknight.client.modules.DemoWaveModule;
 import com.duperknight.client.modules.DonorPetModule;
 import com.duperknight.client.modules.GreeterModule;
+import com.duperknight.client.modules.GriefScanModule;
 import com.duperknight.client.modules.LocationsModule;
 import com.duperknight.client.modules.PrefixCreateModule;
 import com.duperknight.client.modules.PromoWaveModule;
@@ -70,7 +71,8 @@ public class DMLSClient implements ClientModInitializer {
             new GreeterModule(),
             new LocationsModule(),
             new CoreProtectBuilderModule(),
-            new ContainerScanModule()
+            new ContainerScanModule(),
+            new GriefScanModule()
     );
 
     @Override
@@ -176,6 +178,15 @@ public class DMLSClient implements ClientModInitializer {
                                         .then(ClientCommandManager.argument("time", StringArgumentType.word())
                                                 .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
                                                     module(ContainerScanModule.class).submit(context.getSource().getClient(),
+                                                            StringArgumentType.getString(context, "ign"),
+                                                            StringArgumentType.getString(context, "time"),
+                                                            StringArgumentType.getString(context, "radius")); return 1;
+                                                })))))
+                        .then(ClientCommandManager.literal("griefs")
+                                .then(ClientCommandManager.argument("ign", StringArgumentType.word())
+                                        .then(ClientCommandManager.argument("time", StringArgumentType.word())
+                                                .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
+                                                    module(GriefScanModule.class).submit(context.getSource().getClient(),
                                                             StringArgumentType.getString(context, "ign"),
                                                             StringArgumentType.getString(context, "time"),
                                                             StringArgumentType.getString(context, "radius")); return 1;
@@ -350,6 +361,7 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls loc <save|tp|del|list> [name]", Text.translatable("dmls.help.loc"));
         helpLine(client, "/dmls co", Text.translatable("dmls.help.co", StaffRank.SENIOR_MODERATOR.displayName()));
         helpLine(client, "/dmls containers <ign|*> <time> <radius>", Text.translatable("dmls.help.containers", StaffRank.MODERATOR.displayName()));
+        helpLine(client, "/dmls griefs <ign|*> <time> <radius>", Text.translatable("dmls.help.griefs", StaffRank.MODERATOR.displayName()));
         helpLine(client, "/dmls brb <duration|off>", Text.translatable("dmls.help.brb"));
         helpLine(client, "/dmls dnd <on|off>", Text.translatable("dmls.help.dnd"));
         helpLine(client, "/dmls say [reply]", Text.translatable("dmls.help.say"));
