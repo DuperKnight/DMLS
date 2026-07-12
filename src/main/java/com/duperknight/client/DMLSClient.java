@@ -19,6 +19,7 @@ import com.duperknight.client.modules.GriefScanModule;
 import com.duperknight.client.modules.LocationsModule;
 import com.duperknight.client.modules.PrefixCreateModule;
 import com.duperknight.client.modules.PromoWaveModule;
+import com.duperknight.client.modules.PunishmentHelperModule;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.modules.ChatSpamMuteModule;
 import com.duperknight.client.modules.XrayRollbackModule;
@@ -72,7 +73,8 @@ public class DMLSClient implements ClientModInitializer {
             new LocationsModule(),
             new CoreProtectBuilderModule(),
             new ContainerScanModule(),
-            new GriefScanModule()
+            new GriefScanModule(),
+            new PunishmentHelperModule()
     );
 
     @Override
@@ -194,6 +196,12 @@ public class DMLSClient implements ClientModInitializer {
                         .then(ClientCommandManager.literal("co")
                                 .executes(context -> {
                                     module(CoreProtectBuilderModule.class).openScreenDeferred(context.getSource().getClient());
+                                    return 1;
+                                }))
+                        .then(ClientCommandManager.literal("punish")
+                                .executes(context -> {
+                                    MinecraftClient client = context.getSource().getClient();
+                                    client.send(() -> client.setScreen(new com.duperknight.client.gui.PunishmentHelperScreen(null, module(PunishmentHelperModule.class))));
                                     return 1;
                                 }))
                         .then(ClientCommandManager.literal("greet")
@@ -359,6 +367,7 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls dryrun <on|off>", Text.translatable("dmls.help.dryrun", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls greet <ign>", Text.translatable("dmls.help.greet"));
         helpLine(client, "/dmls loc <save|tp|del|list> [name]", Text.translatable("dmls.help.loc"));
+        helpLine(client, "/dmls punish", Text.translatable("dmls.help.punish"));
         helpLine(client, "/dmls co", Text.translatable("dmls.help.co", StaffRank.SENIOR_MODERATOR.displayName()));
         helpLine(client, "/dmls containers <ign|*> <time> <radius>", Text.translatable("dmls.help.containers", StaffRank.MODERATOR.displayName()));
         helpLine(client, "/dmls griefs <ign|*> <time> <radius>", Text.translatable("dmls.help.griefs", StaffRank.MODERATOR.displayName()));
