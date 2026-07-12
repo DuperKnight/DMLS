@@ -23,6 +23,7 @@ The canonical command root is `/dmls`:
 - `/dmls prefix <ign> <limit> <prefixid> <prefixtext>`
 - `/dmls donorpet <ign> <pet>`
 - `/dmls promowave <rank> <ign...>`
+- `/dmls demowave <rank> <ign...>` — removes the given staff rank from every listed player
 - `/dmls activity <ign...>` — runs `/activity` for every listed staff member and summarizes the hours, sorted
 - `/dmls alerts [on|off|reload]`
 - `/dmls brb <duration|off>` — auto-replies to private messages while you are AFK, e.g. `5m`, `30s`, `1h`

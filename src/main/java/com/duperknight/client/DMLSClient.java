@@ -9,6 +9,7 @@ import com.duperknight.client.modules.CheckAltsModule;
 import com.duperknight.client.modules.CheckLandsModule;
 import com.duperknight.client.modules.CheckMembersModule;
 import com.duperknight.client.modules.DMLSModule;
+import com.duperknight.client.modules.DemoWaveModule;
 import com.duperknight.client.modules.DonorPetModule;
 import com.duperknight.client.modules.PrefixCreateModule;
 import com.duperknight.client.modules.PromoWaveModule;
@@ -54,6 +55,7 @@ public class DMLSClient implements ClientModInitializer {
             new PrefixCreateModule(),
             new DonorPetModule(),
             new PromoWaveModule(),
+            new DemoWaveModule(),
             new UuidLookupModule(),
             new ChatAlertsModule(),
             new ChatSpamMuteModule(),
@@ -146,6 +148,12 @@ public class DMLSClient implements ClientModInitializer {
                                 .then(ClientCommandManager.argument("rank", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
                                             module(PromoWaveModule.class).submit(context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "rank"), StringArgumentType.getString(context, "igns")); return 1;
+                                        }))))
+                        .then(ClientCommandManager.literal("demowave")
+                                .then(ClientCommandManager.argument("rank", StringArgumentType.word())
+                                        .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
+                                            module(DemoWaveModule.class).submit(context.getSource().getClient(),
                                                     StringArgumentType.getString(context, "rank"), StringArgumentType.getString(context, "igns")); return 1;
                                         }))))
                         .then(ClientCommandManager.literal("activity")
@@ -251,6 +259,7 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls prefix <ign> <limit> <prefixid> <prefixtext>", Text.translatable("dmls.help.prefix", StaffRank.SUPPORT.displayName()));
         helpLine(client, "/dmls donorpet <ign> <pet>", Text.translatable("dmls.help.donorpet", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls promowave <rank> <ign1, ign2, ...>", Text.translatable("dmls.help.promowave", StaffRank.ADMIN.displayName()));
+        helpLine(client, "/dmls demowave <rank> <ign1, ign2, ...>", Text.translatable("dmls.help.demowave", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls activity <ign1, ign2, ...>", Text.translatable("dmls.help.activity", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls rank [rank]", Text.translatable("dmls.help.rank"));
         helpLine(client, "/dmls alerts [on|off|reload]", Text.translatable("dmls.help.alerts"));
