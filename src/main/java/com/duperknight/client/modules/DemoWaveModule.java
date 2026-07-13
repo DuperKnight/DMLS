@@ -1,220 +1,248 @@
 package com.duperknight.client.modules;
 
 import com.duperknight.client.gui.modules.DemoWaveScreen;
+import com.duperknight.client.session.OperationCancelReason;
+import com.duperknight.client.session.OperationCoordinator;
+import com.duperknight.client.session.OperationStartResult;
+import com.duperknight.client.session.PacedCommandSequence;
+import com.duperknight.client.session.PendingConfirmation;
 import com.duperknight.client.utils.ChatUtils;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.ServerGuard;
 import com.duperknight.client.utils.InputValidators;
-import com.duperknight.client.message.MessageOrigin;
-import com.duperknight.client.message.ServerMessage;
-import com.duperknight.client.message.ServerMessageRouter;
-import com.duperknight.client.parser.LuckPermsResponseParser;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Queue;
+import java.util.Locale;
 
-/** The inverse of the promo wave: removes a staff rank from a whole wave for seasonal cleanup. */
+/** Removes a staff rank from a confirmed, paced batch. */
 public final class DemoWaveModule extends DMLSModule {
+    public static final String OPERATION_ID = "demo-wave";
+    public static final int MAX_PLAYERS = 60;
     private static final String PREFIX = "§8[§6DMLS - DemoWave§8] §7";
-    // LuckPerms silently ignores commands that arrive too quickly ("is spamming LuckPerms commands"),
-    // so leave a generous gap between them.
-    private static final int COMMAND_DELAY_TICKS = 20 * 3;
-    private static final int RESPONSE_TIMEOUT_TICKS = 20 * 10;
     private static final List<String> RANKS = List.of("helper", "mod", "sr-mod", "support", "admin");
 
-    private DemoSession activeSession;
+    private PendingConfirmation<DemotionRequest> pendingConfirmation;
 
-    public DemoWaveModule() {
-        super(StaffRank.ADMIN);
+    public DemoWaveModule() { super(StaffRank.ADMIN); }
+
+    public static List<String> ranks() { return RANKS; }
+
+    public record DemotionRequest(PreparationStatus status, String rank, List<String> usernames,
+                                  List<String> skipped, List<String> commands) {
+        public boolean valid() { return status == PreparationStatus.VALID; }
     }
 
-    /** Returns the names of all removable ranks. */
-    public static List<String> ranks() {
-        return RANKS;
+    public enum PreparationStatus { VALID, UNKNOWN_RANK, EMPTY, TOO_MANY }
+    public enum StageStatus { STAGED, INVALID, BLOCKED, BUSY }
+    public record StageResult(StageStatus status, String token, DemotionRequest request) {
+        public boolean staged() { return status == StageStatus.STAGED; }
     }
 
-    @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.demo_wave.name");
+    public static DemotionRequest prepare(String rank, String input) {
+        String cleanRank = rank == null ? "" : rank.trim().toLowerCase(Locale.ROOT);
+        if (!RANKS.contains(cleanRank)) {
+            return new DemotionRequest(PreparationStatus.UNKNOWN_RANK, cleanRank, List.of(), List.of(), List.of());
+        }
+        List<String> skipped = new ArrayList<>();
+        List<String> usernames = InputValidators.uniqueUsernames(input, skipped);
+        if (usernames.isEmpty()) {
+            return new DemotionRequest(PreparationStatus.EMPTY, cleanRank, List.of(), List.copyOf(skipped), List.of());
+        }
+        if (usernames.size() > MAX_PLAYERS) {
+            return new DemotionRequest(PreparationStatus.TOO_MANY, cleanRank, List.copyOf(usernames),
+                    List.copyOf(skipped), List.of());
+        }
+        List<String> commands = usernames.stream()
+                .map(username -> "lp user %s parent remove %s".formatted(username, cleanRank)).toList();
+        return new DemotionRequest(PreparationStatus.VALID, cleanRank, List.copyOf(usernames),
+                List.copyOf(skipped), commands);
     }
 
-    @Override
-    public ItemStack icon() {
-        return new ItemStack(Items.LEATHER_HELMET);
+    @Override public Text displayName() { return Text.translatable("dmls.module.demo_wave.name"); }
+    @Override public ItemStack icon() { return new ItemStack(Items.LEATHER_HELMET); }
+    @Override public List<Text> description() {
+        return List.of(Text.translatable("dmls.module.demo_wave.description.1"),
+                Text.translatable("dmls.module.demo_wave.description.2"));
     }
-
-    @Override
-    public List<Text> description() {
-        return List.of(
-                Text.translatable("dmls.module.demo_wave.description.1"),
-                Text.translatable("dmls.module.demo_wave.description.2")
-        );
-    }
-
-    @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
+    @Override public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new DemoWaveScreen(parent, this));
     }
 
     @Override
     public void register() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            var demowave = ClientCommandManager.literal("demowave");
-            for (String rank : RANKS) {
-                demowave.then(ClientCommandManager.literal(rank)
-                        .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString())
-                                .executes(context -> {
-                                    submit(context.getSource().getClient(), rank, StringArgumentType.getString(context, "igns"));
-                                    return 1;
-                                })));
-            }
-            dispatcher.register(demowave);
-        });
-
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (activeSession != null) {
-                activeSession.tick(client);
-            }
-        });
-        ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.SERVER_SYSTEM), this::handleServerMessage);
+        // Canonical command is registered under /dmls by DMLSClient.
     }
 
-    private void handleServerMessage(ServerMessage message) {
-        if (activeSession != null) activeSession.handleServerMessage(message.cleanText());
+    public StageResult submit(MinecraftClient client, String rank, String input) {
+        return stage(client, rank, input);
+    }
+    public StageResult stage(MinecraftClient client, String rank, String input) {
+        return stage(client, rank, input, true);
     }
 
-    /** Starts a demotion wave. The command and GUI both call this method. */
-    public void submit(MinecraftClient client, String rank, String input) {
-        if (!canRunPrivilegedOperation(client)) {
-            return;
-        }
-
-        if (!RANKS.contains(rank)) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.demo.unknown_rank", rank, String.join(", ", RANKS));
-            return;
-        }
-
-        List<String> igns = new ArrayList<>();
-        List<String> skipped = new ArrayList<>();
-        igns.addAll(InputValidators.uniqueUsernames(input, skipped));
-
-        if (!skipped.isEmpty()) {
+    public StageResult stage(MinecraftClient client, String rank, String input, boolean announcePreview) {
+        invalidatePending();
+        DemotionRequest request = prepare(rank, input);
+        if (!request.skipped().isEmpty()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX,
-                    skipped.size() == 1 ? "dmls.chat.demo.skipping.one" : "dmls.chat.demo.skipping.many",
-                    String.join(", ", skipped));
+                    request.skipped().size() == 1 ? "dmls.chat.demo.skipping.one" : "dmls.chat.demo.skipping.many",
+                    String.join(", ", request.skipped()));
         }
-
-        if (igns.isEmpty()) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_igns");
-            return;
+        if (!request.valid()) {
+            reportPreparationError(client, request);
+            return new StageResult(StageStatus.INVALID, "", request);
         }
-
-        if (activeSession != null) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.demo.active");
-            return;
+        if (!canRunPrivilegedOperation(client)) return new StageResult(StageStatus.BLOCKED, "", request);
+        if (OperationCoordinator.global().isBusy()) {
+            String owner = OperationCoordinator.global().activeDescriptor()
+                    .map(descriptor -> descriptor.displayName()).orElse("another operation");
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.busy", owner);
+            return new StageResult(StageStatus.BUSY, "", request);
         }
-
-        activeSession = new DemoSession(rank, igns);
-        activeSession.start(client);
+        pendingConfirmation = new PendingConfirmation<>(request);
+        if (announcePreview) sendPreview(client, pendingConfirmation);
+        return new StageResult(StageStatus.STAGED, pendingConfirmation.token(), request);
     }
 
-    private final class DemoSession {
-        private final String rank;
-        private final List<String> igns;
-        private final Queue<String> remainingIgns = new ArrayDeque<>();
-        private final String serverIdentity;
-        private final List<String> dispatchedPlayers = new ArrayList<>();
-
-        private int playerIndex;
-        private int waitTicks;
-        private boolean awaitingResponse;
-        private String awaitingIgn;
-
-        private DemoSession(String rank, List<String> igns) {
-            this.rank = rank;
-            this.igns = igns;
-            this.serverIdentity = ServerGuard.connectionIdentity(MinecraftClient.getInstance());
-            remainingIgns.addAll(igns);
+    public boolean confirm(MinecraftClient client, String token) {
+        PendingConfirmation<DemotionRequest> pending = pendingConfirmation;
+        if (pending == null) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.confirmation.none");
+            return false;
         }
-
-        private void start(MinecraftClient client) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX,
-                    igns.size() == 1 ? "dmls.chat.demo.start.one" : "dmls.chat.demo.start.many", igns.size(), rank);
-            sendNext(client);
+        var consumed = pending.consume(token);
+        if (consumed.status() != PendingConfirmation.ConsumeStatus.CONFIRMED) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, confirmationError(consumed.status()));
+            return false;
         }
+        pendingConfirmation = null;
+        if (!canRunPrivilegedOperation(client)) return false;
 
-        private void tick(MinecraftClient client) {
-            if (ClientUtils.isNotConnected(client) || !serverIdentity.equals(ServerGuard.connectionIdentity(client))) {
-                cancel(client);
-                return;
+        DemotionRequest request = consumed.request().orElseThrow();
+        List<RankWaveOperation.Step> steps = request.usernames().stream()
+                .map(username -> RankWaveOperation.step(username,
+                        "lp user %s parent remove %s".formatted(username, request.rank()), true))
+                .toList();
+        RankWaveOperation operation = new RankWaveOperation(steps, request.usernames().size(), listener(request));
+        OperationStartResult result = OperationCoordinator.global().start(client, OPERATION_ID,
+                displayName().getString(), operation);
+        if (result != OperationStartResult.STARTED) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.not_started", result.name());
+            return false;
+        }
+        return operation.acceptedAtStart();
+    }
+
+    /** Confirms the single currently staged command request without exposing its internal nonce. */
+    public boolean confirm(MinecraftClient client) {
+        PendingConfirmation<DemotionRequest> pending = pendingConfirmation;
+        return confirm(client, pending == null ? "" : pending.token());
+    }
+
+    public boolean cancel(MinecraftClient client) {
+        if (pendingConfirmation != null && pendingConfirmation.isActive()) {
+            invalidatePending();
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.confirmation.cancelled");
+            return true;
+        }
+        boolean cancelled = OperationCoordinator.global().cancel(OPERATION_ID, client)
+                == com.duperknight.client.session.OperationCancelResult.CANCELLED;
+        if (!cancelled) ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.none");
+        return cancelled;
+    }
+
+    public boolean isPending(String token) {
+        return pendingConfirmation != null && pendingConfirmation.token().equals(token)
+                && pendingConfirmation.isActive();
+    }
+    public void invalidatePending(String token) {
+        if (pendingConfirmation != null && pendingConfirmation.token().equals(token)) invalidatePending();
+    }
+    public List<Text> previewLines(DemotionRequest request) {
+        List<Text> lines = new ArrayList<>();
+        lines.add(Text.translatable("dmls.screen.demo.review_summary", request.usernames().size(), request.rank()));
+        request.commands().forEach(command -> lines.add(Text.literal("/" + command)));
+        return List.copyOf(lines);
+    }
+
+    private RankWaveOperation.Listener listener(DemotionRequest request) {
+        return new RankWaveOperation.Listener() {
+            @Override public void started(MinecraftClient client, int count) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX,
+                        count == 1 ? "dmls.chat.demo.start.one" : "dmls.chat.demo.start.many", count, request.rank());
             }
-
-            waitTicks++;
-            if (awaitingResponse && waitTicks >= RESPONSE_TIMEOUT_TICKS) {
-                cancel(client);
-            } else if (!awaitingResponse && waitTicks >= COMMAND_DELAY_TICKS) {
-                sendNext(client);
+            @Override public void progress(MinecraftClient client, RankWaveOperation.Step step, int index, int total) {
+                int playerIndex = request.usernames().indexOf(step.username()) + 1;
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.demo.progress",
+                        step.username(), playerIndex, request.usernames().size());
             }
-        }
-
-        private void sendNext(MinecraftClient client) {
-            waitTicks = 0;
-            String ign = remainingIgns.poll();
-            if (ign == null) {
-                report(client);
-                activeSession = null;
-                return;
+            @Override public void finished(MinecraftClient client, RankWaveOperation.Summary summary) {
+                if (summary.state() == PacedCommandSequence.State.COMPLETED) {
+                    List<String> players = summary.simulatedPlayers().isEmpty()
+                            ? summary.confirmedPlayers() : summary.simulatedPlayers();
+                    String stem = summary.simulatedPlayers().isEmpty() ? "confirmed" : "simulated";
+                    ChatUtils.sendTranslatedMessage(client, PREFIX,
+                            "dmls.chat.demo." + stem + (players.size() == 1 ? ".one" : ".many"),
+                            players.size(), request.rank(), String.join(", ", players));
+                } else reportAbort(client, summary, request, null);
             }
-
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.demo.progress", ign, playerIndex + 1, igns.size());
-            awaitingIgn = ign;
-            if (!ClientUtils.sendCommand(client, "lp user %s parent remove %s".formatted(ign, rank))) {
-                cancel(client);
-                return;
+            @Override public void cancelled(MinecraftClient client, RankWaveOperation.Summary summary,
+                                             OperationCancelReason reason) {
+                reportAbort(client, summary, request, reason);
             }
-            awaitingResponse = true;
+        };
+    }
 
-            if (com.duperknight.client.utils.DMLSConfig.dryRun()) {
-                // nothing will confirm in dry run, so advance as if it did
-                awaitingResponse = false;
-                dispatchedPlayers.add(awaitingIgn);
-                playerIndex++;
-            }
-        }
+    private void reportAbort(MinecraftClient client, RankWaveOperation.Summary summary,
+                             DemotionRequest request, OperationCancelReason reason) {
+        int completed = summary.confirmedPlayers().size() + summary.simulatedPlayers().size();
+        String suffix = switch (summary.state()) {
+            case REJECTED -> "rejected";
+            case TIMED_OUT -> "timed_out";
+            case BLOCKED -> "blocked";
+            case FAILED -> "failed";
+            case CANCELLED -> reason == OperationCancelReason.CONNECTION_CHANGED
+                    ? "cancelled_connection" : "cancelled";
+            default -> "partial";
+        };
+        String interrupted = summary.interruptedStep() == null ? "-" : summary.interruptedStep().username();
+        ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.demo." + suffix,
+                completed, request.usernames().size(), interrupted, request.rank());
+    }
 
-        private void handleServerMessage(String message) {
-            if (!awaitingResponse || LuckPermsResponseParser.parseParentChange(
-                    LuckPermsResponseParser.Action.REMOVE, awaitingIgn, rank, message) != LuckPermsResponseParser.Result.CONFIRMED) {
-                return;
-            }
-            awaitingResponse = false;
-            waitTicks = 0;
-            dispatchedPlayers.add(awaitingIgn);
-            playerIndex++;
+    private void reportPreparationError(MinecraftClient client, DemotionRequest request) {
+        switch (request.status()) {
+            case UNKNOWN_RANK -> ChatUtils.sendTranslatedMessage(client, PREFIX,
+                    "dmls.chat.demo.unknown_rank", request.rank(), String.join(", ", RANKS));
+            case EMPTY -> ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_igns");
+            case TOO_MANY -> ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.demo.too_many", MAX_PLAYERS);
+            case VALID -> { }
         }
+    }
 
-        private void report(MinecraftClient client) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX,
-                    igns.size() == 1 ? "dmls.chat.demo.confirmed.one" : "dmls.chat.demo.confirmed.many",
-                    dispatchedPlayers.size(), rank, String.join(", ", dispatchedPlayers));
-        }
+    private void sendPreview(MinecraftClient client, PendingConfirmation<DemotionRequest> pending) {
+        DemotionRequest request = pending.request();
+        ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.demo.preview",
+                request.usernames().size(), request.rank(), String.join(", ", request.usernames()));
+        request.commands().forEach(command -> ChatUtils.sendClientMessage(client, "§8• §7/" + command));
+        ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.confirmation.instructions",
+                "/dmls demowave confirm", "/dmls demowave cancel");
+    }
 
-        private void cancel(MinecraftClient client) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.demo.cancelled",
-                    dispatchedPlayers.size(), igns.size());
-            if (activeSession == this) activeSession = null;
-        }
+    private void invalidatePending() {
+        if (pendingConfirmation != null) pendingConfirmation.invalidate();
+        pendingConfirmation = null;
+    }
+    private static String confirmationError(PendingConfirmation.ConsumeStatus status) {
+        return switch (status) {
+            case EXPIRED -> "dmls.chat.confirmation.expired";
+            case INVALID_TOKEN -> "dmls.chat.confirmation.invalid";
+            case ALREADY_CONSUMED, INVALIDATED -> "dmls.chat.confirmation.none";
+            case CONFIRMED -> throw new IllegalArgumentException("confirmed is not an error");
+        };
     }
 }

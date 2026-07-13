@@ -6,7 +6,6 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -25,9 +24,7 @@ public final class DMLSConfig {
     private static final String TRADE_CHAT_MUTED_KEY = "tradeChatMuted";
     private static final String SERVER_MESSAGES_MUTED_KEY = "serverMessagesMuted";
     private static final String GREETER_ENABLED_KEY = "greeterEnabled";
-    private static final String AWAY_DND_KEY = "awayDnd";
     private static final String ALLOWED_SERVERS_KEY = "allowedServers";
-    private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("dmls.properties");
     private static final StaffRank DEFAULT_RANK = StaffRank.HELPER;
 
     private static boolean loaded;
@@ -36,7 +33,6 @@ public final class DMLSConfig {
     private static boolean tradeChatMuted;
     private static boolean serverMessagesMuted;
     private static boolean greeterEnabled = true;
-    private static boolean awayDnd;
     private static List<String> allowedServers = ServerGuard.DEFAULT_ALLOWED_SERVERS;
     // Deliberately not persisted: the game always starts live, so a forgotten
     // dry run can never suppress real commands in a later session.
@@ -50,10 +46,13 @@ public final class DMLSConfig {
         return staffRank;
     }
 
-    public static void setStaffRank(StaffRank rank) {
+    public static boolean setStaffRank(StaffRank rank) {
         ensureLoaded();
+        StaffRank previous = staffRank;
         staffRank = rank;
-        save();
+        if (save()) return true;
+        staffRank = previous;
+        return false;
     }
 
     public static boolean alertsEnabled() {
@@ -61,10 +60,13 @@ public final class DMLSConfig {
         return alertsEnabled;
     }
 
-    public static void setAlertsEnabled(boolean enabled) {
+    public static boolean setAlertsEnabled(boolean enabled) {
         ensureLoaded();
+        boolean previous = alertsEnabled;
         alertsEnabled = enabled;
-        save();
+        if (save()) return true;
+        alertsEnabled = previous;
+        return false;
     }
 
     public static boolean tradeChatMuted() {
@@ -72,10 +74,13 @@ public final class DMLSConfig {
         return tradeChatMuted;
     }
 
-    public static void setTradeChatMuted(boolean muted) {
+    public static boolean setTradeChatMuted(boolean muted) {
         ensureLoaded();
+        boolean previous = tradeChatMuted;
         tradeChatMuted = muted;
-        save();
+        if (save()) return true;
+        tradeChatMuted = previous;
+        return false;
     }
 
     public static boolean serverMessagesMuted() {
@@ -83,10 +88,13 @@ public final class DMLSConfig {
         return serverMessagesMuted;
     }
 
-    public static void setServerMessagesMuted(boolean muted) {
+    public static boolean setServerMessagesMuted(boolean muted) {
         ensureLoaded();
+        boolean previous = serverMessagesMuted;
         serverMessagesMuted = muted;
-        save();
+        if (save()) return true;
+        serverMessagesMuted = previous;
+        return false;
     }
 
     public static boolean greeterEnabled() {
@@ -94,21 +102,13 @@ public final class DMLSConfig {
         return greeterEnabled;
     }
 
-    public static void setGreeterEnabled(boolean enabled) {
+    public static boolean setGreeterEnabled(boolean enabled) {
         ensureLoaded();
+        boolean previous = greeterEnabled;
         greeterEnabled = enabled;
-        save();
-    }
-
-    public static boolean awayDnd() {
-        ensureLoaded();
-        return awayDnd;
-    }
-
-    public static void setAwayDnd(boolean enabled) {
-        ensureLoaded();
-        awayDnd = enabled;
-        save();
+        if (save()) return true;
+        greeterEnabled = previous;
+        return false;
     }
 
     /** While enabled, DMLS prints every command instead of running it. Not persisted. */
@@ -125,14 +125,17 @@ public final class DMLSConfig {
         return allowedServers;
     }
 
-    public static void setAllowedServers(List<String> servers) {
+    public static boolean setAllowedServers(List<String> servers) {
         ensureLoaded();
+        List<String> previous = allowedServers;
         allowedServers = servers.stream()
                 .map(ServerGuard::normalizeRule)
                 .flatMap(Optional::stream)
                 .distinct()
                 .toList();
-        save();
+        if (save()) return true;
+        allowedServers = previous;
+        return false;
     }
 
     /**
@@ -162,15 +165,16 @@ public final class DMLSConfig {
         }
         loaded = true;
 
-        if (!Files.exists(CONFIG_PATH)) {
+        Path configPath = configPath();
+        if (!Files.exists(configPath)) {
             return;
         }
 
         Properties properties = new Properties();
-        try (InputStream in = Files.newInputStream(CONFIG_PATH)) {
+        try (InputStream in = Files.newInputStream(configPath)) {
             properties.load(in);
         } catch (IOException e) {
-            DMLS.LOGGER.warn("Failed to read {}, using defaults", CONFIG_PATH, e);
+            DMLS.LOGGER.warn("Failed to read {}, using defaults", configPath, e);
             return;
         }
 
@@ -179,7 +183,6 @@ public final class DMLSConfig {
         tradeChatMuted = Boolean.parseBoolean(properties.getProperty(TRADE_CHAT_MUTED_KEY, "false"));
         serverMessagesMuted = Boolean.parseBoolean(properties.getProperty(SERVER_MESSAGES_MUTED_KEY, "false"));
         greeterEnabled = Boolean.parseBoolean(properties.getProperty(GREETER_ENABLED_KEY, "true"));
-        awayDnd = Boolean.parseBoolean(properties.getProperty(AWAY_DND_KEY, "false"));
         if (properties.containsKey(ALLOWED_SERVERS_KEY)) {
             allowedServers = java.util.Arrays.stream(properties.getProperty(ALLOWED_SERVERS_KEY, "").split(","))
                     .map(ServerGuard::normalizeRule)
@@ -191,25 +194,30 @@ public final class DMLSConfig {
         }
     }
 
-    private static void save() {
+    private static boolean save() {
+        Properties properties = propertiesSnapshot();
+        Path configPath = configPath();
+        try {
+            AtomicProperties.store(configPath, properties, "DMLS settings");
+            return true;
+        } catch (IOException e) {
+            DMLS.LOGGER.warn("Failed to save {}", configPath, e);
+            return false;
+        }
+    }
+
+    static Properties propertiesSnapshot() {
         Properties properties = new Properties();
         properties.setProperty(RANK_KEY, staffRank.name());
         properties.setProperty(ALERTS_KEY, Boolean.toString(alertsEnabled));
         properties.setProperty(TRADE_CHAT_MUTED_KEY, Boolean.toString(tradeChatMuted));
         properties.setProperty(SERVER_MESSAGES_MUTED_KEY, Boolean.toString(serverMessagesMuted));
         properties.setProperty(GREETER_ENABLED_KEY, Boolean.toString(greeterEnabled));
-        properties.setProperty(AWAY_DND_KEY, Boolean.toString(awayDnd));
         properties.setProperty(ALLOWED_SERVERS_KEY, String.join(",", allowedServers));
-        try {
-            Files.createDirectories(CONFIG_PATH.getParent());
-        } catch (IOException e) {
-            DMLS.LOGGER.warn("Failed to create config directory for {}", CONFIG_PATH, e);
-            return;
-        }
-        try (OutputStream out = Files.newOutputStream(CONFIG_PATH)) {
-            properties.store(out, "DMLS settings");
-        } catch (IOException e) {
-            DMLS.LOGGER.warn("Failed to save {}", CONFIG_PATH, e);
-        }
+        return properties;
+    }
+
+    private static Path configPath() {
+        return FabricLoader.getInstance().getConfigDir().resolve("dmls.properties");
     }
 }

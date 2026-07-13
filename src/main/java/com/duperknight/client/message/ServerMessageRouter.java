@@ -1,5 +1,6 @@
 package com.duperknight.client.message;
 
+import com.duperknight.DMLS;
 import com.duperknight.client.utils.ChatUtils;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.text.Text;
@@ -13,7 +14,7 @@ import java.util.function.Consumer;
 /** Small, client-thread message router. DMLS-local messages bypass these Fabric receive events. */
 public final class ServerMessageRouter {
     private static final long CROSS_EVENT_DUPLICATE_NANOS = 250_000_000L;
-    private static final List<Subscription> SUBSCRIPTIONS = new ArrayList<>();
+    private static final List<RoutedSubscription> SUBSCRIPTIONS = new ArrayList<>();
     private static String previousText = "";
     private static MessageOrigin previousOrigin;
     private static long previousAt;
@@ -31,8 +32,13 @@ public final class ServerMessageRouter {
                 route(message, MessageOrigin.PLAYER_CHAT, false));
     }
 
-    public static void subscribe(EnumSet<MessageOrigin> origins, Consumer<ServerMessage> consumer) {
-        SUBSCRIPTIONS.add(new Subscription(EnumSet.copyOf(origins), Objects.requireNonNull(consumer)));
+    public static SubscriptionHandle subscribe(EnumSet<MessageOrigin> origins, Consumer<ServerMessage> consumer) {
+        Objects.requireNonNull(origins, "origins");
+        if (origins.isEmpty()) throw new IllegalArgumentException("origins");
+        RoutedSubscription subscription = new RoutedSubscription(
+                EnumSet.copyOf(origins), Objects.requireNonNull(consumer));
+        SUBSCRIPTIONS.add(subscription);
+        return () -> SUBSCRIPTIONS.remove(subscription);
     }
 
     static boolean isCrossEventDuplicate(String text, MessageOrigin origin, long now) {
@@ -54,11 +60,35 @@ public final class ServerMessageRouter {
         long now = System.nanoTime();
         if (isCrossEventDuplicate(clean, origin, now)) return;
         ServerMessage message = new ServerMessage(text, clean, origin, overlay, now);
-        List.copyOf(SUBSCRIPTIONS).forEach(subscription -> {
-            if (subscription.origins.contains(origin)) subscription.consumer.accept(message);
-        });
+        route(message);
     }
 
-    private record Subscription(EnumSet<MessageOrigin> origins, Consumer<ServerMessage> consumer) {
+    /** Routes a pre-built message and isolates each subscriber from failures in the others. */
+    static void route(ServerMessage message) {
+        for (RoutedSubscription subscription : List.copyOf(SUBSCRIPTIONS)) {
+            if (!subscription.origins.contains(message.origin())) continue;
+            try {
+                subscription.consumer.accept(message);
+            } catch (RuntimeException exception) {
+                DMLS.LOGGER.error("A server-message subscriber failed; continuing routing", exception);
+            }
+        }
+    }
+
+    static void clearSubscriptionsForTests() {
+        SUBSCRIPTIONS.clear();
+    }
+
+    @FunctionalInterface
+    public interface SubscriptionHandle extends AutoCloseable {
+        void unsubscribe();
+
+        @Override
+        default void close() {
+            unsubscribe();
+        }
+    }
+
+    private record RoutedSubscription(EnumSet<MessageOrigin> origins, Consumer<ServerMessage> consumer) {
     }
 }

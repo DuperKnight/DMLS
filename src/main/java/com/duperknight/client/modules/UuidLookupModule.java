@@ -1,5 +1,6 @@
 package com.duperknight.client.modules;
 
+import com.duperknight.DMLS;
 import com.duperknight.client.gui.modules.UuidLookupScreen;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.InputValidators;
@@ -15,15 +16,24 @@ import net.minecraft.text.Text;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /** Local Mojang API lookup; it does not send a server command. */
 public final class UuidLookupModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - UUID§8] §7";
-    private volatile boolean lookupActive;
+    private final LookupService lookupService;
+    private final AtomicBoolean lookupActive = new AtomicBoolean();
 
     public UuidLookupModule() {
+        this(MojangProfileLookup::lookup);
+    }
+
+    public UuidLookupModule(LookupService lookupService) {
         super(StaffRank.HELPER);
+        this.lookupService = Objects.requireNonNull(lookupService, "lookupService");
     }
 
     @Override
@@ -57,11 +67,11 @@ public final class UuidLookupModule extends DMLSModule {
     public boolean submit(MinecraftClient client, String input) {
         ParsedInput parsed = parseInput(input);
         if (!reportInputError(client, parsed)) return false;
-        if (lookupActive) {
+        if (lookupActive.get()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.uuid.active");
             return false;
         }
-        if (!beginLookup(client, parsed.usernames(), this::sendChatReport)) return false;
+        if (!beginLookup(client, parsed.usernames(), result -> sendChatReport(client, result))) return false;
         ChatUtils.sendTranslatedMessage(client, PREFIX,
                 parsed.usernames().size() == 1 ? "dmls.chat.uuid.looking_up.one" : "dmls.chat.uuid.looking_up.many",
                 parsed.usernames().size());
@@ -77,7 +87,7 @@ public final class UuidLookupModule extends DMLSModule {
     }
 
     public boolean isLookupActive() {
-        return lookupActive;
+        return lookupActive.get();
     }
 
     public static ParsedInput parseInput(String input) {
@@ -93,13 +103,53 @@ public final class UuidLookupModule extends DMLSModule {
 
     private boolean beginLookup(MinecraftClient client, List<String> usernames,
                                 Consumer<MojangProfileLookup.BatchResult> consumer) {
-        if (lookupActive) return false;
-        lookupActive = true;
-        MojangProfileLookup.lookup(usernames).thenAccept(result -> client.execute(() -> {
-            lookupActive = false;
-            consumer.accept(result);
-        }));
+        Objects.requireNonNull(consumer, "consumer");
+        if (!lookupActive.compareAndSet(false, true)) return false;
+
+        final CompletableFuture<MojangProfileLookup.BatchResult> future;
+        try {
+            future = Objects.requireNonNull(lookupService.lookup(List.copyOf(usernames)),
+                    "lookup service returned null");
+        } catch (RuntimeException exception) {
+            lookupActive.set(false);
+            deliver(client, consumer, MojangProfileLookup.BatchResult.networkError());
+            return true;
+        }
+
+        try {
+            future.whenComplete((result, error) -> {
+                MojangProfileLookup.BatchResult completed = error == null && result != null
+                        ? result
+                        : MojangProfileLookup.failureResult(error == null
+                        ? new IllegalStateException("lookup completed without a result") : error);
+                lookupActive.set(false);
+                deliver(client, consumer, completed);
+            });
+        } catch (RuntimeException exception) {
+            lookupActive.set(false);
+            deliver(client, consumer, MojangProfileLookup.BatchResult.networkError());
+        }
         return true;
+    }
+
+    private static void deliver(MinecraftClient client, Consumer<MojangProfileLookup.BatchResult> consumer,
+                                MojangProfileLookup.BatchResult result) {
+        Runnable callback = () -> {
+            try {
+                consumer.accept(result);
+            } catch (RuntimeException exception) {
+                DMLS.LOGGER.warn("UUID lookup result consumer failed", exception);
+            }
+        };
+        if (client == null) {
+            callback.run();
+            return;
+        }
+        try {
+            client.execute(callback);
+        } catch (RuntimeException exception) {
+            DMLS.LOGGER.warn("Could not schedule UUID lookup result on the client thread", exception);
+        }
     }
 
     private boolean reportInputError(MinecraftClient client, ParsedInput parsed) {
@@ -115,14 +165,13 @@ public final class UuidLookupModule extends DMLSModule {
         return false;
     }
 
-    private void sendChatReport(MojangProfileLookup.BatchResult result) {
-        MinecraftClient client = MinecraftClient.getInstance();
+    private void sendChatReport(MinecraftClient client, MojangProfileLookup.BatchResult result) {
         if (result.status() == MojangProfileLookup.Status.RATE_LIMITED) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.uuid.rate_limited");
             return;
         }
-        if (result.status() == MojangProfileLookup.Status.ERROR) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.uuid.error");
+        if (result.status() != MojangProfileLookup.Status.SUCCESS) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, errorTranslationKey(result.status()));
             return;
         }
 
@@ -144,7 +193,23 @@ public final class UuidLookupModule extends DMLSModule {
                 .withHoverEvent(new HoverEvent.ShowText(Text.translatable("dmls.chat.uuid.copy"))));
     }
 
+    public static String errorTranslationKey(MojangProfileLookup.Status status) {
+        return switch (status) {
+            case RATE_LIMITED -> "dmls.chat.uuid.rate_limited";
+            case MALFORMED_RESPONSE -> "dmls.chat.uuid.malformed_response";
+            case TIMEOUT -> "dmls.chat.uuid.timeout";
+            case NETWORK_ERROR -> "dmls.chat.uuid.network_error";
+            case INVALID_REQUEST -> "dmls.chat.uuid.error";
+            case SUCCESS -> throw new IllegalArgumentException("SUCCESS is not an error");
+        };
+    }
+
     public enum InputStatus { VALID, EMPTY, INVALID, TOO_MANY, ACTIVE }
     public record ParsedInput(InputStatus status, List<String> usernames, List<String> invalidNames) { }
     public record StartResult(InputStatus status, List<String> invalidNames) { }
+
+    @FunctionalInterface
+    public interface LookupService {
+        CompletableFuture<MojangProfileLookup.BatchResult> lookup(List<String> usernames);
+    }
 }

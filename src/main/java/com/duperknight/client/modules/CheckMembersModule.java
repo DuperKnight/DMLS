@@ -1,16 +1,19 @@
 package com.duperknight.client.modules;
 
 import com.duperknight.client.gui.modules.CheckMembersScreen;
+import com.duperknight.client.parser.MembersMenuParser;
+import com.duperknight.client.parser.MembersMenuParser.Group;
+import com.duperknight.client.parser.MembersMenuParser.Scan;
+import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.session.ManagedOperation;
+import com.duperknight.client.session.OperationCancelReason;
+import com.duperknight.client.session.OperationCoordinator;
+import com.duperknight.client.session.OperationHandle;
+import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.ChatUtils;
-import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.InputValidators;
 import com.duperknight.client.utils.MenuCommandQuery;
 import com.duperknight.client.utils.ScreenUtils;
-import com.duperknight.client.utils.TooltipUtils;
-import com.duperknight.client.utils.TooltipUtils.TooltipLine;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -20,22 +23,26 @@ import net.minecraft.text.HoverEvent;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.regex.Pattern;
+import java.util.Objects;
 
 public final class CheckMembersModule extends DMLSModule {
+    public static final String OPERATION_ID = "check-members";
     private static final String PREFIX = "§8[§6DMLS - CheckMembers§8] §7";
     private static final int PLAYER_LIST_SLOT = ScreenUtils.slotIndex(4, 2);
     private static final int MENU_TIMEOUT_TICKS = 20 * 30;
-    private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
+    private static final int MAX_LAND_NAME_LENGTH = 64;
 
+    private final OperationCoordinator coordinator;
     private CheckSession activeSession;
 
     public CheckMembersModule() {
+        this(OperationCoordinator.global());
+    }
+
+    CheckMembersModule(OperationCoordinator coordinator) {
         super(StaffRank.MODERATOR);
+        this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
     }
 
     @Override
@@ -63,170 +70,116 @@ public final class CheckMembersModule extends DMLSModule {
 
     @Override
     public void register() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-                ClientCommandManager.literal("checkmembers")
-                        .then(ClientCommandManager.argument("land", StringArgumentType.greedyString())
-                                .executes(context -> {
-                                    submit(context.getSource().getClient(), StringArgumentType.getString(context, "land").trim());
-                                    return 1;
-                                }))
-        ));
-
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (activeSession != null) {
-                activeSession.tick(client);
-            }
-        });
+        // Canonical command is registered under /dmls by DMLSClient.
     }
 
-    /** Starts a member check for the given land. The command and GUI both call this method. */
-    public void submit(MinecraftClient client, String land) {
-        if (!canRunPrivilegedOperation(client)) {
-            return;
+    /** Starts a mutually exclusive member-menu query. */
+    public OperationStartResult submit(MinecraftClient client, String landInput) {
+        if (!canRunPrivilegedOperation(client)) return OperationStartResult.SERVER_BLOCKED;
+        String land = Objects.requireNonNullElse(landInput, "").trim();
+        if (!InputValidators.isSafeCommandArgument(land, MAX_LAND_NAME_LENGTH)) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, land.isEmpty()
+                    ? "dmls.chat.check_members.no_land" : "dmls.chat.check_members.invalid_land");
+            return OperationStartResult.INVALID;
         }
 
-        if (land.isEmpty()) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_members.no_land");
-            return;
+        replaceOwnOperation(client);
+        CheckSession candidate = new CheckSession(land);
+        activeSession = candidate;
+        OperationStartResult result = coordinator.start(client, OPERATION_ID,
+                "Check Members", candidate);
+        if (result == OperationStartResult.STARTED && !candidate.acceptedAtStart()) {
+            result = OperationStartResult.SERVER_BLOCKED;
         }
-
-        start(client, land);
+        if (result != OperationStartResult.STARTED && activeSession == candidate) activeSession = null;
+        reportStartFailure(client, result);
+        return result;
     }
 
-    private void start(MinecraftClient client, String land) {
-        if (activeSession != null) {
-            activeSession.cancel(client, "Started a new check for §6" + land + "§7.");
+    private void replaceOwnOperation(MinecraftClient client) {
+        if (coordinator.activeDescriptor().filter(descriptor -> descriptor.operationId().equals(OPERATION_ID)).isPresent()) {
+            coordinator.cancel(OPERATION_ID, client);
         }
-
-        activeSession = new CheckSession(land);
-        activeSession.start(client);
     }
 
-    private static Optional<Scan> parseMembers(List<TooltipLine> tooltip) {
-        boolean inPlayers = false;
-        int playerPosition = 0;
-        boolean truncated = false;
-        List<Group> groups = new ArrayList<>();
-
-        for (TooltipLine line : tooltip) {
-            String stripped = TooltipUtils.stripListMarker(line.text());
-            String lower = stripped.toLowerCase(Locale.ROOT);
-            if (!inPlayers) {
-                inPlayers = lower.startsWith("players");
-                continue;
-            }
-
-            if (TooltipUtils.isTooltipFooter(stripped)) {
-                continue;
-            }
-
-            if (stripped.equals("...")) {
-                truncated = true;
-                continue;
-            }
-
-            Optional<String> parsedPlayerName = line.grayUsername(USERNAME).or(() -> TooltipUtils.lastMatch(stripped, USERNAME));
-            if (parsedPlayerName.isEmpty()) {
-                continue;
-            }
-
-            playerPosition++;
-            String playerName = parsedPlayerName.get();
-            String role = stripped.substring(0, Math.max(0, stripped.lastIndexOf(playerName))).trim();
-            String rankName = rankName(playerPosition, role);
-            String formattedRankName = formattedRankName(playerPosition, line, playerName, rankName);
-            groupFor(groups, rankName, formattedRankName).players().add(playerName);
+    private void reportStartFailure(MinecraftClient client, OperationStartResult result) {
+        if (result == OperationStartResult.BUSY) {
+            String owner = coordinator.activeDescriptor().map(descriptor -> descriptor.displayName()).orElse("Another operation");
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.busy", owner);
+        } else if (result != OperationStartResult.STARTED && result != OperationStartResult.SERVER_BLOCKED
+                && result != OperationStartResult.INVALID) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.start_failed");
         }
-
-        if (!inPlayers || playerPosition == 0) {
-            return Optional.empty();
-        }
-
-        return Optional.of(new Scan(groups, truncated));
     }
 
-    private static String rankName(int playerPosition, String role) {
-        if (playerPosition == 1) {
-            return "Owner";
-        }
-        if (role.toLowerCase(Locale.ROOT).contains("admin")) {
-            return "Admin";
-        }
-        return role.isEmpty() ? "Member/Unknown" : role;
-    }
-
-    private static String formattedRankName(int playerPosition, TooltipLine line, String playerName, String fallbackRank) {
-        if (playerPosition == 1) {
-            return "§4§lOwner";
-        }
-        if (fallbackRank.equals("Admin")) {
-            return "§c§lAdmin";
-        }
-        if (fallbackRank.equals("Member/Unknown")) {
-            return "§e§lMember/Unknown";
-        }
-        return line.formattedRoleBefore(playerName).orElse(fallbackRank);
-    }
-
-    private static Group groupFor(List<Group> groups, String rank, String formattedRank) {
-        for (Group group : groups) {
-            if (group.rank().equalsIgnoreCase(rank)) {
-                return group;
-            }
-        }
-
-        Group group = new Group(rank, formattedRank, new ArrayList<>());
-        groups.add(group);
-        return group;
-    }
-
-    private record Scan(List<Group> groups, boolean truncated) {
-    }
-
-    private record Group(String rank, String formattedRank, List<String> players) {
-    }
-
-    private final class CheckSession {
+    private final class CheckSession implements ManagedOperation {
         private final String land;
         private MenuCommandQuery activeQuery;
+        private OperationHandle handle;
+        private CommandDispatch initialDispatch = CommandDispatch.BLOCKED;
 
         private CheckSession(String land) {
             this.land = land;
         }
 
-        private void start(MinecraftClient client) {
+        @Override
+        public void onStarted(OperationHandle handle, MinecraftClient client) {
+            this.handle = handle;
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_members.checking", land);
             activeQuery = new MenuCommandQuery("la info " + land, land, MENU_TIMEOUT_TICKS, PLAYER_LIST_SLOT);
-            activeQuery.start(client);
+            initialDispatch = activeQuery.start(client, handle::dispatchCommand);
+            if (initialDispatch == CommandDispatch.BLOCKED) {
+                handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
+            }
         }
 
-        private void tick(MinecraftClient client) {
-            if (ClientUtils.isNotConnected(client)) {
-                activeSession = null;
-                return;
-            }
+        private boolean acceptedAtStart() {
+            return initialDispatch != CommandDispatch.BLOCKED;
+        }
 
+        @Override
+        public void onTick(OperationHandle handle, MinecraftClient client) {
             MenuCommandQuery.TickResult tickResult = activeQuery.tick(client);
-            if (tickResult.status() == MenuCommandQuery.Status.TIMED_OUT) {
-                fail(client, "Timed out waiting for §6/la info " + land + "§7. Stopping.");
-                return;
-            }
-            if (tickResult.status() == MenuCommandQuery.Status.CANCELLED) {
-                fail(client, Text.translatable("dmls.chat.session.cancelled").getString());
-                return;
+            switch (tickResult.status()) {
+                case WAITING -> { return; }
+                case TIMED_OUT -> {
+                    ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.timeout",
+                            "/la info " + land);
+                    finish(client);
+                    return;
+                }
+                case CANCELLED -> {
+                    handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
+                    return;
+                }
+                case SIMULATED -> {
+                    ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.simulated", "/la info " + land);
+                    finish(client);
+                    return;
+                }
+                case READY -> {
+                    // Continue below.
+                }
             }
 
-            if (tickResult.status() == MenuCommandQuery.Status.WAITING || tickResult.result().isEmpty()) {
+            Scan scan = tickResult.result().flatMap(result -> result.tooltip(PLAYER_LIST_SLOT))
+                    .map(MembersMenuParser::parse).orElseGet(() -> MembersMenuParser.parse(List.of()));
+            if (scan.status() == MembersMenuParser.ParseStatus.MALFORMED) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.malformed", "/la info " + land);
+                finish(client);
                 return;
             }
-
-            Optional<Scan> parsed = tickResult.result().get().tooltip(PLAYER_LIST_SLOT).flatMap(CheckMembersModule::parseMembers);
-            if (parsed.isEmpty()) {
-                return;
-            }
-
-            report(client, parsed.get());
+            report(client, scan);
             finish(client);
+        }
+
+        @Override
+        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+            ScreenUtils.closeHandledScreen(client);
+            if (activeSession == this) activeSession = null;
+            if (reason != OperationCancelReason.MODULE_REQUESTED) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.session.cancelled");
+            }
         }
 
         private void report(MinecraftClient client, Scan scan) {
@@ -235,40 +188,26 @@ public final class CheckMembersModule extends DMLSModule {
             for (Group group : scan.groups()) {
                 MutableText line = Text.literal(group.formattedRank() + "§r§7 (" + group.players().size() + "): ");
                 for (int i = 0; i < group.players().size(); i++) {
-                    if (i > 0) {
-                        line.append("§7, ");
-                    }
+                    if (i > 0) line.append("§7, ");
                     line.append(clickablePlayer(group.players().get(i)));
                 }
                 ChatUtils.sendClientMessage(client, line);
             }
-            if (scan.truncated()) {
-                ChatUtils.sendTranslatedMessage(client, "", "dmls.chat.check_members.truncated");
-            }
+            if (scan.truncated()) ChatUtils.sendTranslatedMessage(client, "", "dmls.chat.check_members.truncated");
             ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         }
 
         private MutableText clickablePlayer(String playerName) {
             return Text.literal("§6" + playerName).styled(style -> style
-                    .withClickEvent(new ClickEvent.RunCommand("/checklands " + playerName))
-                .withHoverEvent(new HoverEvent.ShowText(Text.translatable("dmls.chat.check_members.hover_lands", playerName))));
-        }
-
-        private void fail(MinecraftClient client, String reason) {
-            ChatUtils.sendClientMessage(client, PREFIX + reason);
-            finish(client);
-        }
-
-        private void cancel(MinecraftClient client, String reason) {
-            ChatUtils.sendClientMessage(client, PREFIX + reason);
-            finish(client);
+                    .withClickEvent(new ClickEvent.RunCommand("/dmls lands " + playerName))
+                    .withHoverEvent(new HoverEvent.ShowText(
+                            Text.translatable("dmls.chat.check_members.hover_lands", playerName))));
         }
 
         private void finish(MinecraftClient client) {
             ScreenUtils.closeHandledScreen(client);
-            if (activeSession == this) {
-                activeSession = null;
-            }
+            if (activeSession == this) activeSession = null;
+            if (handle != null) handle.complete();
         }
     }
 }

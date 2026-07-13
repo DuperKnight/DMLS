@@ -1,5 +1,8 @@
 package com.duperknight.client.utils;
 
+import com.duperknight.DMLS;
+import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.session.ConnectionSnapshot;
 import net.minecraft.client.MinecraftClient;
 
 /**
@@ -32,15 +35,44 @@ public final class ClientUtils {
      * @param command the command to send
      */
     public static boolean sendCommand(MinecraftClient client, String command) {
-        if (ServerGuard.check(client).allowed() && client.getNetworkHandler() != null) {
-            if (DMLSConfig.dryRun()) {
-                ChatUtils.sendTranslatedMessage(client, DRY_RUN_PREFIX, "dmls.chat.dry_run.would_run", "/" + command);
-                return true;
-            }
-            client.getNetworkHandler().sendChatCommand(command);
-            return true;
+        return dispatchCommand(client, command).accepted();
+    }
+
+    /** Dispatches a one-shot command using the dry-run state observed at this call. */
+    public static CommandDispatch dispatchCommand(MinecraftClient client, String command) {
+        return dispatchCommand(client, command, DMLSConfig.dryRun(), ConnectionSnapshot.capture(client));
+    }
+
+    /**
+     * Dispatches using operation-start state. The captured flag never consults the mutable global
+     * dry-run setting, and the expected connection protects against same-host reconnects.
+     */
+    public static CommandDispatch dispatchCommand(
+            MinecraftClient client,
+            String command,
+            boolean dryRunCaptured,
+            ConnectionSnapshot expectedConnection
+    ) {
+        if (command == null || command.isBlank() || expectedConnection == null
+                || !expectedConnection.matches(client)) {
+            return CommandDispatch.BLOCKED;
         }
-        return false;
+        if (dryRunCaptured) {
+            ChatUtils.sendTranslatedMessage(client, DRY_RUN_PREFIX,
+                    "dmls.chat.dry_run.would_run", "/" + command);
+            return CommandDispatch.SIMULATED;
+        }
+        if (!ServerGuard.check(client).allowed() || client.getNetworkHandler() == null
+                || !client.getNetworkHandler().isConnectionOpen()) {
+            return CommandDispatch.BLOCKED;
+        }
+        try {
+            client.getNetworkHandler().sendChatCommand(command);
+            return CommandDispatch.SENT;
+        } catch (RuntimeException exception) {
+            DMLS.LOGGER.warn("Failed to dispatch a guarded command", exception);
+            return CommandDispatch.BLOCKED;
+        }
     }
 
     /**
@@ -50,12 +82,40 @@ public final class ClientUtils {
      * @param message the message to send
      */
     public static void sendChatMessage(MinecraftClient client, String message) {
-        if (client != null && client.getNetworkHandler() != null) {
-            if (DMLSConfig.dryRun()) {
-                ChatUtils.sendTranslatedMessage(client, DRY_RUN_PREFIX, "dmls.chat.dry_run.would_say", message);
-                return;
-            }
+        dispatchChatMessage(client, message);
+    }
+
+    /** Dispatches a one-shot chat message using the dry-run state observed at this call. */
+    public static CommandDispatch dispatchChatMessage(MinecraftClient client, String message) {
+        return dispatchChatMessage(client, message, DMLSConfig.dryRun(), ConnectionSnapshot.capture(client));
+    }
+
+    /** Guarded chat-message equivalent of {@link #dispatchCommand}. */
+    public static CommandDispatch dispatchChatMessage(
+            MinecraftClient client,
+            String message,
+            boolean dryRunCaptured,
+            ConnectionSnapshot expectedConnection
+    ) {
+        if (message == null || message.isBlank() || expectedConnection == null
+                || !expectedConnection.matches(client)) {
+            return CommandDispatch.BLOCKED;
+        }
+        if (dryRunCaptured) {
+            ChatUtils.sendTranslatedMessage(client, DRY_RUN_PREFIX,
+                    "dmls.chat.dry_run.would_say", message);
+            return CommandDispatch.SIMULATED;
+        }
+        if (!ServerGuard.check(client).allowed() || client.getNetworkHandler() == null
+                || !client.getNetworkHandler().isConnectionOpen()) {
+            return CommandDispatch.BLOCKED;
+        }
+        try {
             client.getNetworkHandler().sendChatMessage(message);
+            return CommandDispatch.SENT;
+        } catch (RuntimeException exception) {
+            DMLS.LOGGER.warn("Failed to dispatch a guarded chat message", exception);
+            return CommandDispatch.BLOCKED;
         }
     }
 }

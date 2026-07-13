@@ -12,6 +12,7 @@ public final class HistoryOutputParser {
     private static final String NEVER_JOINED = "user has not joined before.";
     private final String username;
     private final Pattern punishmentRecord;
+    private final Pattern targetHeader;
     private boolean headerSeen;
     private boolean neverJoined;
     private boolean failed;
@@ -24,6 +25,8 @@ public final class HistoryOutputParser {
         this.username = username;
         this.punishmentRecord = Pattern.compile("(?s)^.*\\b" + Pattern.quote(username)
                 + " was (muted|warned|kicked|banned) by .*$", Pattern.CASE_INSENSITIVE);
+        this.targetHeader = Pattern.compile("^history\\s+for\\s+" + Pattern.quote(username)
+                + "\\b.*$", Pattern.CASE_INSENSITIVE);
     }
 
     public Event accept(String line) {
@@ -37,8 +40,11 @@ public final class HistoryOutputParser {
             headerSeen = true;
             return Event.RECOGNIZED;
         }
+        if (targetHeader.matcher(value).matches()) {
+            failed = true;
+            return Event.FAILED;
+        }
         if (!headerSeen) return Event.UNRELATED;
-        String lower = value.toLowerCase(Locale.ROOT);
         Matcher record = punishmentRecord.matcher(value);
         if (!record.matches()) return Event.UNRELATED;
         String type = record.group(1).toLowerCase(Locale.ROOT);
@@ -50,6 +56,7 @@ public final class HistoryOutputParser {
     }
 
     public Result result() {
+        if (failed) return new Result(Status.MALFORMED, 0, 0, 0, 0);
         if (neverJoined) return new Result(Status.NEVER_JOINED, 0, 0, 0, 0);
         if (headerSeen && bans + mutes + warns + kicks == 0) return new Result(Status.CLEAN, 0, 0, 0, 0);
         if (headerSeen) return new Result(Status.PARSED, bans, mutes, warns, kicks);
@@ -57,6 +64,6 @@ public final class HistoryOutputParser {
     }
 
     public enum Event { UNRELATED, RECOGNIZED, COMPLETE, FAILED }
-    public enum Status { CLEAN, PARSED, NEVER_JOINED, UNKNOWN }
+    public enum Status { CLEAN, PARSED, NEVER_JOINED, UNKNOWN, MALFORMED }
     public record Result(Status status, int bans, int mutes, int warns, int kicks) { }
 }

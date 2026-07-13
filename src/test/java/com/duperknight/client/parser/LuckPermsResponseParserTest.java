@@ -18,5 +18,30 @@ class LuckPermsResponseParserTest {
         assertEquals(LuckPermsResponseParser.Result.UNRELATED,
                 LuckPermsResponseParser.parseParentChange(LuckPermsResponseParser.Action.ADD, "Other", "helper",
                         "[LP] DuperKnight now inherits permissions from helper in context global."));
+        assertEquals(LuckPermsResponseParser.Result.REJECTED,
+                LuckPermsResponseParser.parseParentChange(LuckPermsResponseParser.Action.ADD, "DuperKnight", "helper",
+                        "[LP] User DuperKnight could not be found."));
+        assertEquals(LuckPermsResponseParser.Result.UNRELATED,
+                LuckPermsResponseParser.parseParentChange(LuckPermsResponseParser.Action.ADD, "DuperKnight", "helper",
+                        "[LP] User Other could not be found."));
+    }
+
+    @Test void classifiesCorrelatedPermissionOutcomesFailClosed() {
+        String permission = "mcpets.elitemountvol6whitegriffon";
+        assertEquals(LuckPermsResponseParser.PermissionResult.CONFIRMED,
+                LuckPermsResponseParser.parsePermissionSet("Alice", permission,
+                        "[LP] Set " + permission + " to true for Alice in context global."));
+        assertEquals(LuckPermsResponseParser.PermissionResult.CONFIRMED,
+                LuckPermsResponseParser.parsePermissionSet("Alice", permission,
+                        "[LP] Alice already has " + permission + " set in context global."));
+        assertEquals(LuckPermsResponseParser.PermissionResult.REJECTED,
+                LuckPermsResponseParser.parsePermissionSet("Alice", permission,
+                        "[LP] User Alice could not be found."));
+        assertEquals(LuckPermsResponseParser.PermissionResult.UNRELATED,
+                LuckPermsResponseParser.parsePermissionSet("Alice", permission,
+                        "[LP] Set " + permission + " to true for Bob in context global."));
+        assertEquals(LuckPermsResponseParser.PermissionResult.UNRELATED,
+                LuckPermsResponseParser.parsePermissionSet("Alice", permission,
+                        "Permission updated successfully."));
     }
 }

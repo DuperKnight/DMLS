@@ -3,6 +3,7 @@ package com.duperknight.client.gui.modules;
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.ActivityWaveModule;
 import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -31,14 +32,18 @@ public final class ActivityWaveScreen extends DMLSMenuScreen {
                 Text.translatable("dmls.field.player_igns")), scaled(14));
         ignsField.setMaxLength(1024);
         ignsField.setSuggestion(Text.translatable("dmls.placeholder.player_names_many").getString());
-        ignsField.setChangedListener(value -> ignsField.setSuggestion(value.isEmpty() ? Text.translatable("dmls.placeholder.player_names_many").getString() : null));
+        ignsField.setChangedListener(value -> {
+            ignsField.setSuggestion(value.isEmpty()
+                    ? Text.translatable("dmls.placeholder.player_names_many").getString() : null);
+            validationMessage = Text.empty();
+        });
         setInitialFocus(ignsField);
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.check_activity"), button -> submit())
                 .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton.active = !ClientUtils.isNotConnected(client);
+        submitButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
     }
 
     private void submit() {
@@ -47,13 +52,24 @@ public final class ActivityWaveScreen extends DMLSMenuScreen {
             validationMessage = Text.translatable("dmls.validation.player_igns");
             return;
         }
-        module.submit(client, input);
-        closeToGame();
+        ActivityWaveModule.SubmitStatus status = module.submit(client, input);
+        if (status == ActivityWaveModule.SubmitStatus.STARTED) {
+            closeToGame();
+            return;
+        }
+        validationMessage = switch (status) {
+            case INVALID -> Text.translatable("dmls.validation.player_igns");
+            case TOO_MANY -> Text.translatable("dmls.chat.activity.too_many", ActivityWaveModule.MAX_PLAYERS);
+            case BUSY -> Text.translatable("dmls.validation.operation.busy");
+            case BLOCKED -> Text.translatable("dmls.validation.operation.blocked");
+            case FAILED -> Text.translatable("dmls.validation.operation.start_failed");
+            case STARTED -> Text.empty();
+        };
     }
 
     @Override
     public void tick() {
-        submitButton.active = !ClientUtils.isNotConnected(client);
+        submitButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
     }
 
     @Override

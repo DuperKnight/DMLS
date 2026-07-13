@@ -90,8 +90,8 @@ public final class UuidLookupScreen extends DMLSMenuScreen {
         result = lookupResult;
         validationMessage = switch (lookupResult.status()) {
             case SUCCESS -> Text.empty();
-            case RATE_LIMITED -> Text.translatable("dmls.chat.uuid.rate_limited");
-            case ERROR -> Text.translatable("dmls.chat.uuid.error");
+            case RATE_LIMITED, MALFORMED_RESPONSE, TIMEOUT, NETWORK_ERROR, INVALID_REQUEST ->
+                    Text.translatable(UuidLookupModule.errorTranslationKey(lookupResult.status()));
         };
         if (client.currentScreen == this) clearAndInit();
     }

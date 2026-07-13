@@ -59,6 +59,25 @@ class ChatReplayModuleTest {
     }
 
     @Test
+    void capturesOnlyTheTwoOriginsSubscribedByTheMessageRouter() {
+        ChatReplayModule.initializeStorage(directory, LocalDateTime.of(2026, 7, 13, 19, 30));
+
+        ChatReplayModule.capture(message("overlay", MessageOrigin.OVERLAY));
+        ChatReplayModule.capture(message("local", MessageOrigin.DMLS_LOCAL));
+        ChatReplayModule.capture(message("", MessageOrigin.SERVER_SYSTEM));
+        assertEquals(0, ChatReplayModule.currentMessageCount());
+
+        ChatReplayModule.capture(message("player", MessageOrigin.PLAYER_CHAT));
+        ChatReplayModule.capture(message("system", MessageOrigin.SERVER_SYSTEM));
+
+        assertEquals(2, ChatReplayModule.currentMessageCount());
+        ChatReplayModule.Chunk chunk = ChatReplayModule.loadChunk(
+                ChatReplayModule.currentSessionId(), "", -1).join();
+        assertEquals(List.of("player", "system"),
+                chunk.entries().stream().map(ChatReplayModule.Entry::cleanText).toList());
+    }
+
+    @Test
     void loadsCompleteHistoryInBoundedChunksAndSearchesTheWholeFile() throws Exception {
         ChatReplayModule.initializeStorage(directory, LocalDateTime.of(2026, 7, 13, 20, 1, 24));
         int messageCount = ChatReplayModule.DISPLAY_CHUNK_SIZE + 5;
@@ -102,5 +121,10 @@ class ChatReplayModuleTest {
 
         Path export = ChatReplayModule.export(sessionId, "match 1004").join();
         assertEquals(List.of("[" + searchLast.entries().getLast().time() + "] match 1004"), Files.readAllLines(export));
+    }
+
+    private static ServerMessage message(String value, MessageOrigin origin) {
+        return new ServerMessage(Text.literal(value), value, origin,
+                origin == MessageOrigin.OVERLAY, System.nanoTime());
     }
 }

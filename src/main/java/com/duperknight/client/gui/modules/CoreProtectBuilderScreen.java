@@ -1,9 +1,11 @@
 package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
+import com.duperknight.client.gui.DangerReviewScreen;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.CoreProtectBuilderModule;
 import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -27,6 +29,7 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
     private String mode = CoreProtectBuilderModule.MODES.get(0);
     private String action = CoreProtectBuilderModule.ACTIONS.get(0);
     private CoreProtectBuilderModule.BuildResult result = CoreProtectBuilderModule.build("lookup", "", "", "", "", "", "");
+    private Text status = Text.empty();
 
     public CoreProtectBuilderScreen(Screen parent, CoreProtectBuilderModule module) {
         super(Text.translatable("dmls.module.co_builder.name"), parent);
@@ -80,12 +83,34 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        runButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.co.run"), button -> {
-            module.submit(client, mode, userField.getText(), timeField.getText(), radiusField.getText(),
-                    action, includeField.getText(), excludeField.getText());
-            closeToGame();
-        }).dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        runButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.co.run"), button -> submit())
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         refresh();
+    }
+
+    private void submit() {
+        CoreProtectBuilderModule.SubmissionResult submission = module.submit(
+                client, mode, userField.getText(), timeField.getText(), radiusField.getText(),
+                action, includeField.getText(), excludeField.getText());
+        if (submission.staged()) {
+            String token = submission.token();
+            client.setScreen(new DangerReviewScreen(
+                    this,
+                    Text.translatable("dmls.screen.co.review_title"),
+                    module.previewLines(submission.request()),
+                    Text.translatable("dmls.button.co.confirm"),
+                    () -> module.isPending(token),
+                    () -> module.confirm(client, token).accepted(),
+                    () -> module.invalidatePending(token)
+            ));
+            return;
+        }
+        if (submission.accepted()) {
+            closeToGame();
+            return;
+        }
+        status = Text.translatable(submission.errorKey().isEmpty()
+                ? "dmls.validation.operation.start_failed" : submission.errorKey());
     }
 
     private TextFieldWidget addField(int x, int offset, int fieldWidth, String saved, String placeholder, int maxLength) {
@@ -111,8 +136,9 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
         }
         result = CoreProtectBuilderModule.build(mode, userField.getText(), timeField.getText(), radiusField.getText(),
                 action, includeField.getText(), excludeField.getText());
+        status = Text.empty();
         if (runButton != null) {
-            runButton.active = result.valid() && !ClientUtils.isNotConnected(client);
+            runButton.active = result.valid() && (DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client));
         }
         if (copyButton != null) {
             copyButton.active = result.valid();
@@ -122,7 +148,7 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
     @Override
     public void tick() {
         if (runButton != null) {
-            runButton.active = result.valid() && !ClientUtils.isNotConnected(client);
+            runButton.active = result.valid() && (DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client));
         }
     }
 
@@ -157,6 +183,10 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
                 context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.module.co_builder.warning"),
                         width / 2, warningY, 0xFFFFAA00);
             }
+        }
+        if (!status.getString().isEmpty()) {
+            context.drawCenteredTextWithShadow(textRenderer, status, width / 2,
+                    footerButtonY() - scaled(13), 0xFFFF5555);
         }
         super.render(context, mouseX, mouseY, delta);
     }

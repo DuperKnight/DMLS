@@ -1,14 +1,20 @@
 package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
+import com.duperknight.client.gui.DangerReviewScreen;
 import com.duperknight.client.modules.PunishmentHelperModule;
+import com.duperknight.client.modules.PunishmentHelperModule.BanOutcome;
+import com.duperknight.client.modules.PunishmentHelperModule.BanPreparation;
 import com.duperknight.client.modules.PunishmentHelperModule.Rule;
+import com.duperknight.client.session.PendingConfirmation;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.Text;
+
+import java.util.List;
 
 /** Composes a ban log in the Stoneworks format, copies it, and can run the ban command. */
 public final class BanLogScreen extends DMLSMenuScreen {
@@ -22,7 +28,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
     private TextFieldWidget commentsField;
     private TextFieldWidget evidenceField;
     private ButtonWidget banButton;
-    private boolean banArmed;
+    private PendingConfirmation<PunishmentHelperModule.BanRequest> pendingBan;
     private Text status = Text.empty();
 
     public BanLogScreen(Screen parent, Rule rule) {
@@ -67,8 +73,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
     }
 
     private Text banLabel() {
-        return banArmed ? Text.translatable("dmls.button.ban_log.confirm").styled(s -> s.withColor(0xFFFF5555))
-                : Text.translatable("dmls.button.ban_log.ban");
+        return Text.translatable("dmls.button.ban_log.ban");
     }
 
     private String defaultReason() {
@@ -104,25 +109,61 @@ public final class BanLogScreen extends DMLSMenuScreen {
     }
 
     private void tryBan() {
-        if (!banArmed) {
-            banArmed = true;
-            if (banButton != null) {
-                banButton.setMessage(banLabel());
-            }
-            status = Text.translatable("dmls.screen.ban_log.confirm_hint");
+        BanPreparation preparation = PunishmentHelperModule.prepareBan(
+                ignField.getText(), durationField.getText(), reasonField.getText());
+        if (!preparation.isValid()) {
+            disarmBan();
+            status = Text.translatable(PunishmentHelperModule.validationTranslationKey(preparation.validation()));
             return;
         }
 
-        boolean ran = PunishmentHelperModule.ban(client, ignField.getText(), durationField.getText(), reasonField.getText());
-        disarmBan();
-        if (ran) {
-            closeToGame();
+        pendingBan = new PendingConfirmation<>(preparation.request());
+        PunishmentHelperModule.BanRequest request = pendingBan.request();
+        List<Text> preview = List.of(
+                Text.translatable("dmls.field.ban_log.ign").append(Text.literal(" §f" + request.ign())),
+                Text.translatable("dmls.field.ban_log.duration").append(Text.literal(" §f" + request.duration())),
+                Text.translatable("dmls.field.ban_log.reason").append(Text.literal(" §f" + request.reason())),
+                Text.literal("§7/" + request.command())
+        );
+        client.setScreen(new DangerReviewScreen(this, Text.translatable("dmls.screen.ban_log.title"), preview,
+                Text.translatable("dmls.button.ban_log.ban"), this::confirmationActive,
+                this::confirmPendingBan, this::disarmBan));
+    }
+
+    private boolean confirmationActive() {
+        return pendingBan != null && pendingBan.isActive();
+    }
+
+    private boolean confirmPendingBan() {
+        if (pendingBan == null) {
+            return false;
         }
+        PendingConfirmation.ConsumeResult<PunishmentHelperModule.BanRequest> confirmation =
+                pendingBan.consume(pendingBan.token());
+        if (confirmation.status() != PendingConfirmation.ConsumeStatus.CONFIRMED) {
+            disarmBan();
+            status = Text.translatable("dmls.screen.ban_log.confirm_expired");
+            return false;
+        }
+
+        BanOutcome outcome = PunishmentHelperModule.ban(client, confirmation.request().orElseThrow());
+        disarmBan();
+        if (outcome == BanOutcome.SENT || outcome == BanOutcome.SIMULATED) {
+            return true;
+        } else if (outcome == BanOutcome.RANK_BLOCKED) {
+            status = Text.translatable("dmls.validation.required_rank");
+        } else if (outcome == BanOutcome.SERVER_BLOCKED) {
+            status = Text.translatable("dmls.chat.command.not_sent");
+        } else if (outcome == BanOutcome.BUSY) {
+            status = Text.translatable("dmls.validation.operation.busy");
+        }
+        return false;
     }
 
     private void disarmBan() {
-        if (banArmed) {
-            banArmed = false;
+        if (pendingBan != null) {
+            pendingBan.invalidate();
+            pendingBan = null;
             if (banButton != null) {
                 banButton.setMessage(banLabel());
             }

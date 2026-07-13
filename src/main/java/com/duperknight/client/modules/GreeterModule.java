@@ -4,9 +4,12 @@ import com.duperknight.client.gui.modules.GreeterScreen;
 import com.duperknight.client.message.MessageOrigin;
 import com.duperknight.client.message.ServerMessage;
 import com.duperknight.client.message.ServerMessageRouter;
+import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
+import com.duperknight.client.utils.InputValidators;
+import com.duperknight.client.utils.ServerGuard;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -21,7 +24,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -30,16 +35,22 @@ public final class GreeterModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - Greeter§8] §7";
     private static final String GREETING = "Welcome to Stoneworks, %s! Enjoy your stay, and feel free to ask if you have any questions :)";
     private static final long PROMPT_COOLDOWN_MILLIS = 5 * 60 * 1000;
-    private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
     private static final List<Pattern> FIRST_JOIN_PATTERNS = List.of(
             Pattern.compile("welcome,? ([A-Za-z0-9_]{3,16}),? to (?:the )?(?:server|stoneworks)", Pattern.CASE_INSENSITIVE),
             Pattern.compile("([A-Za-z0-9_]{3,16}) (?:has )?joined (?:the server |us )?for the first time", Pattern.CASE_INSENSITIVE)
     );
 
+    private final LongSupplier clock;
     private final Map<String, Long> recentPrompts = new HashMap<>();
+    private Object promptConnectionIdentity;
 
     public GreeterModule() {
+        this(System::currentTimeMillis);
+    }
+
+    GreeterModule(LongSupplier clock) {
         super(StaffRank.HELPER);
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     @Override
@@ -72,24 +83,37 @@ public final class GreeterModule extends DMLSModule {
     }
 
     /** Enables or disables first-join prompts and saves the preference. */
-    public void setEnabled(MinecraftClient client, boolean enabled) {
-        DMLSConfig.setGreeterEnabled(enabled);
+    public boolean setEnabled(MinecraftClient client, boolean enabled) {
+        if (!DMLSConfig.setGreeterEnabled(enabled)) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.config.save_failed");
+            return false;
+        }
+        if (!enabled) {
+            resetPromptCache();
+        }
         ChatUtils.sendTranslatedMessage(client, PREFIX,
                 enabled ? "dmls.chat.greeter.enabled" : "dmls.chat.greeter.disabled");
+        return true;
     }
 
     /** Sends the public welcome message for the given player. */
-    public void greet(MinecraftClient client, String ign) {
-        if (!hasRequiredRank(client)) {
-            return;
-        }
-
-        if (!USERNAME.matcher(ign).matches()) {
+    public CommandDispatch greet(MinecraftClient client, String ign) {
+        if (!InputValidators.isUsername(ign)) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_ign");
-            return;
+            return CommandDispatch.BLOCKED;
         }
 
-        ClientUtils.sendChatMessage(client, GREETING.formatted(ign));
+        if (!hasRequiredRank(client)) {
+            return CommandDispatch.BLOCKED;
+        }
+
+        CommandDispatch result = ClientUtils.dispatchChatMessage(client, GREETING.formatted(ign));
+        if (result == CommandDispatch.BLOCKED) {
+            ServerGuard.GuardResult guard = ServerGuard.check(client);
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.server_guard.blocked",
+                    guard.reason(), guard.address());
+        }
+        return result;
     }
 
     private void handleServerMessage(ServerMessage message) {
@@ -98,8 +122,14 @@ public final class GreeterModule extends DMLSModule {
         }
 
         MinecraftClient client = MinecraftClient.getInstance();
-        if (ClientUtils.isNotConnected(client)) {
+        if (ClientUtils.isNotConnected(client) || !ServerGuard.check(client).allowed()) {
+            resetPromptCache();
             return;
+        }
+        Object currentConnection = client.getNetworkHandler();
+        if (promptConnectionIdentity != currentConnection) {
+            recentPrompts.clear();
+            promptConnectionIdentity = currentConnection;
         }
 
         Optional<String> parsedName = parseFirstJoin(message.cleanText());
@@ -112,12 +142,9 @@ public final class GreeterModule extends DMLSModule {
             return;
         }
 
-        long now = System.currentTimeMillis();
-        Long lastPrompt = recentPrompts.get(name.toLowerCase(Locale.ROOT));
-        if (lastPrompt != null && now - lastPrompt < PROMPT_COOLDOWN_MILLIS) {
+        if (!InputValidators.isUsername(name) || !recordPrompt(name, clock.getAsLong())) {
             return;
         }
-        recentPrompts.put(name.toLowerCase(Locale.ROOT), now);
 
         Text button = Text.translatable("dmls.chat.greeter.button").formatted(Formatting.GREEN)
                 .styled(style -> style
@@ -129,7 +156,7 @@ public final class GreeterModule extends DMLSModule {
                 .append(button));
     }
 
-    private static Optional<String> parseFirstJoin(String message) {
+    static Optional<String> parseFirstJoin(String message) {
         for (Pattern pattern : FIRST_JOIN_PATTERNS) {
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
@@ -137,5 +164,21 @@ public final class GreeterModule extends DMLSModule {
             }
         }
         return Optional.empty();
+    }
+
+    /** Prunes expired entries and records a prompt only when its cooldown elapsed. */
+    boolean recordPrompt(String name, long now) {
+        recentPrompts.entrySet().removeIf(entry -> now - entry.getValue() >= PROMPT_COOLDOWN_MILLIS);
+        String key = name.toLowerCase(Locale.ROOT);
+        if (recentPrompts.containsKey(key)) {
+            return false;
+        }
+        recentPrompts.put(key, now);
+        return true;
+    }
+
+    private void resetPromptCache() {
+        recentPrompts.clear();
+        promptConnectionIdentity = null;
     }
 }

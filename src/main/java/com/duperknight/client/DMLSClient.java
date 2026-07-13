@@ -32,6 +32,11 @@ import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.UpdateChecker;
 import com.duperknight.client.message.ServerMessageRouter;
+import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.session.OperationCancelResult;
+import com.duperknight.client.session.OperationCoordinator;
+import com.duperknight.client.session.OperationStartResult;
+import com.duperknight.client.utils.AlertWordlist;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.api.ClientModInitializer;
@@ -60,6 +65,7 @@ public class DMLSClient implements ClientModInitializer {
     public void onInitializeClient() {
         DMLS.LOGGER.info("Initializing DMLS client, you are a lazy staff member!");
         ServerMessageRouter.register();
+        OperationCoordinator.global().register();
         registerDmlsCommand();
         registerMenuKeybind();
         UpdateChecker.register();
@@ -96,91 +102,127 @@ public class DMLSClient implements ClientModInitializer {
                                                 return 0;
                                             }
 
-                                            DMLSConfig.setStaffRank(rank.get());
+                                            if (!DMLSConfig.setStaffRank(rank.get())) {
+                                                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.config.save_failed");
+                                                return 0;
+                                            }
                                             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.rank.set", rank.get().displayName());
                                             return 1;
                                         })))
                         .then(ClientCommandManager.literal("help")
                                 .executes(context -> sendHelp(context.getSource().getClient())))
+                        .then(ClientCommandManager.literal("cancel")
+                                .executes(context -> cancelActiveOperation(context.getSource().getClient())))
                         .then(ClientCommandManager.literal("lands")
                                 .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
-                                    module(CheckLandsModule.class).submit(context.getSource().getClient(), StringArgumentType.getString(context, "igns")); return 1;
+                                    return module(CheckLandsModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "igns"))
+                                            == OperationStartResult.STARTED ? 1 : 0;
                                 })))
                         .then(ClientCommandManager.literal("members")
                                 .then(ClientCommandManager.argument("land", StringArgumentType.greedyString()).executes(context -> {
-                                    module(CheckMembersModule.class).submit(context.getSource().getClient(), StringArgumentType.getString(context, "land")); return 1;
+                                    return module(CheckMembersModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "land"))
+                                            == OperationStartResult.STARTED ? 1 : 0;
                                 })))
                         .then(ClientCommandManager.literal("alts")
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
-                                    module(CheckAltsModule.class).submit(context.getSource().getClient(), StringArgumentType.getString(context, "ign")); return 1;
+                                    return module(CheckAltsModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "ign"))
+                                            == OperationStartResult.STARTED ? 1 : 0;
                                 })))
                         .then(ClientCommandManager.literal("uuid")
                                 .then(ClientCommandManager.argument("usernames", StringArgumentType.greedyString()).executes(context -> {
-                                    module(UuidLookupModule.class).submit(context.getSource().getClient(),
-                                            StringArgumentType.getString(context, "usernames")); return 1;
+                                    return module(UuidLookupModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "usernames")) ? 1 : 0;
                                 })))
                         .then(ClientCommandManager.literal("xray")
+                                .then(ClientCommandManager.literal("confirm")
+                                        .executes(context -> module(XrayRollbackModule.class).confirm(
+                                                context.getSource().getClient()) ? 1 : 0))
                                 .then(ClientCommandManager.literal("cancel").executes(context -> {
-                                    module(XrayRollbackModule.class).cancel(context.getSource().getClient()); return 1;
+                                    return module(XrayRollbackModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
                                 }))
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
-                                    module(XrayRollbackModule.class).submit(context.getSource().getClient(), StringArgumentType.getString(context, "ign")); return 1;
+                                    return module(XrayRollbackModule.class).stage(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "ign")).staged() ? 1 : 0;
                                 })))
                         .then(ClientCommandManager.literal("prefix")
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("limit", StringArgumentType.word())
                                                 .then(ClientCommandManager.argument("prefixid", StringArgumentType.word())
                                                         .then(ClientCommandManager.argument("prefixtext", StringArgumentType.greedyString()).executes(context -> {
-                                                            module(PrefixCreateModule.class).submit(context.getSource().getClient(),
+                                                            return module(PrefixCreateModule.class).submit(context.getSource().getClient(),
                                                                     StringArgumentType.getString(context, "ign"), StringArgumentType.getString(context, "limit"),
-                                                                    StringArgumentType.getString(context, "prefixid"), StringArgumentType.getString(context, "prefixtext")); return 1;
+                                                                    StringArgumentType.getString(context, "prefixid"),
+                                                                    StringArgumentType.getString(context, "prefixtext")).valid() ? 1 : 0;
                                                         }))))))
                         .then(ClientCommandManager.literal("donorpet")
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("pet", StringArgumentType.word()).executes(context -> {
-                                            module(DonorPetModule.class).submit(context.getSource().getClient(),
-                                                    StringArgumentType.getString(context, "ign"), StringArgumentType.getString(context, "pet")); return 1;
+                                            return module(DonorPetModule.class).submit(context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "ign"),
+                                                    StringArgumentType.getString(context, "pet"))
+                                                    == DonorPetModule.SubmitStatus.STARTED ? 1 : 0;
                                         }))))
                         .then(ClientCommandManager.literal("promowave")
+                                .then(ClientCommandManager.literal("confirm")
+                                        .executes(context -> module(PromoWaveModule.class).confirm(
+                                                context.getSource().getClient()) ? 1 : 0))
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(PromoWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
                                 .then(ClientCommandManager.argument("rank", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
-                                            module(PromoWaveModule.class).submit(context.getSource().getClient(),
-                                                    StringArgumentType.getString(context, "rank"), StringArgumentType.getString(context, "igns")); return 1;
+                                            return module(PromoWaveModule.class).stage(context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "rank"),
+                                                    StringArgumentType.getString(context, "igns")).staged() ? 1 : 0;
                                         }))))
                         .then(ClientCommandManager.literal("demowave")
+                                .then(ClientCommandManager.literal("confirm")
+                                        .executes(context -> module(DemoWaveModule.class).confirm(
+                                                context.getSource().getClient()) ? 1 : 0))
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(DemoWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
                                 .then(ClientCommandManager.argument("rank", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
-                                            module(DemoWaveModule.class).submit(context.getSource().getClient(),
-                                                    StringArgumentType.getString(context, "rank"), StringArgumentType.getString(context, "igns")); return 1;
+                                            return module(DemoWaveModule.class).stage(context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "rank"),
+                                                    StringArgumentType.getString(context, "igns")).staged() ? 1 : 0;
                                         }))))
                         .then(ClientCommandManager.literal("activity")
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(ActivityWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
                                 .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
-                                    module(ActivityWaveModule.class).submit(context.getSource().getClient(),
-                                            StringArgumentType.getString(context, "igns")); return 1;
+                                    return module(ActivityWaveModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "igns"))
+                                            == ActivityWaveModule.SubmitStatus.STARTED ? 1 : 0;
                                 })))
                         .then(ClientCommandManager.literal("containers")
                                 .then(ClientCommandManager.literal("cancel").executes(context -> {
-                                    module(ContainerScanModule.class).cancel(context.getSource().getClient()); return 1;
+                                    return module(ContainerScanModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
                                 }))
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("time", StringArgumentType.word())
                                                 .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
-                                                    module(ContainerScanModule.class).submit(context.getSource().getClient(),
+                                                    return module(ContainerScanModule.class).submit(context.getSource().getClient(),
                                                             StringArgumentType.getString(context, "ign"),
                                                             StringArgumentType.getString(context, "time"),
-                                                            StringArgumentType.getString(context, "radius")); return 1;
+                                                            StringArgumentType.getString(context, "radius")).accepted() ? 1 : 0;
                                                 })))))
                         .then(ClientCommandManager.literal("griefs")
                                 .then(ClientCommandManager.literal("cancel").executes(context -> {
-                                    module(GriefScanModule.class).cancel(context.getSource().getClient()); return 1;
+                                    return module(GriefScanModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
                                 }))
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("time", StringArgumentType.word())
                                                 .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
-                                                    module(GriefScanModule.class).submit(context.getSource().getClient(),
+                                                    return module(GriefScanModule.class).submit(context.getSource().getClient(),
                                                             StringArgumentType.getString(context, "ign"),
                                                             StringArgumentType.getString(context, "time"),
-                                                            StringArgumentType.getString(context, "radius")); return 1;
+                                                            StringArgumentType.getString(context, "radius")).accepted() ? 1 : 0;
                                                 })))))
                         .then(ClientCommandManager.literal("co")
                                 .executes(context -> {
@@ -195,8 +237,9 @@ public class DMLSClient implements ClientModInitializer {
                                 }))
                         .then(ClientCommandManager.literal("greet")
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
-                                    module(GreeterModule.class).greet(context.getSource().getClient(),
-                                            StringArgumentType.getString(context, "ign").trim()); return 1;
+                                    CommandDispatch dispatch = module(GreeterModule.class).greet(
+                                            context.getSource().getClient(), StringArgumentType.getString(context, "ign").trim());
+                                    return dispatch == CommandDispatch.BLOCKED ? 0 : 1;
                                 })))
                         .then(ClientCommandManager.literal("greeter")
                                 .executes(context -> {
@@ -206,10 +249,10 @@ public class DMLSClient implements ClientModInitializer {
                                     return 1;
                                 })
                                 .then(ClientCommandManager.literal("on").executes(context -> {
-                                    module(GreeterModule.class).setEnabled(context.getSource().getClient(), true); return 1;
+                                    return module(GreeterModule.class).setEnabled(context.getSource().getClient(), true) ? 1 : 0;
                                 }))
                                 .then(ClientCommandManager.literal("off").executes(context -> {
-                                    module(GreeterModule.class).setEnabled(context.getSource().getClient(), false); return 1;
+                                    return module(GreeterModule.class).setEnabled(context.getSource().getClient(), false) ? 1 : 0;
                                 })))
                         .then(ClientCommandManager.literal("loc")
                                 .executes(context -> {
@@ -220,22 +263,25 @@ public class DMLSClient implements ClientModInitializer {
                                 }))
                                 .then(ClientCommandManager.literal("save")
                                         .then(ClientCommandManager.argument("name", StringArgumentType.greedyString()).executes(context -> {
-                                            module(LocationsModule.class).save(context.getSource().getClient(),
-                                                    StringArgumentType.getString(context, "name")); return 1;
+                                            return locationOutcomeSucceeded(module(LocationsModule.class).save(
+                                                    context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "name"))) ? 1 : 0;
                                         })))
                                 .then(ClientCommandManager.literal("tp")
                                         .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
                                                 .suggests((context, builder) -> CommandSource.suggestMatching(module(LocationsModule.class).names(), builder))
                                                 .executes(context -> {
-                                                    module(LocationsModule.class).teleport(context.getSource().getClient(),
-                                                            StringArgumentType.getString(context, "name")); return 1;
+                                                    return locationOutcomeSucceeded(module(LocationsModule.class).teleport(
+                                                            context.getSource().getClient(),
+                                                            StringArgumentType.getString(context, "name"))) ? 1 : 0;
                                                 })))
                                 .then(ClientCommandManager.literal("del")
                                         .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
                                                 .suggests((context, builder) -> CommandSource.suggestMatching(module(LocationsModule.class).names(), builder))
                                                 .executes(context -> {
-                                                    module(LocationsModule.class).delete(context.getSource().getClient(),
-                                                            StringArgumentType.getString(context, "name")); return 1;
+                                                    return locationOutcomeSucceeded(module(LocationsModule.class).delete(
+                                                            context.getSource().getClient(),
+                                                            StringArgumentType.getString(context, "name"))) ? 1 : 0;
                                                 }))))
                         .then(ClientCommandManager.literal("dryrun")
                                 .executes(context -> {
@@ -268,9 +314,9 @@ public class DMLSClient implements ClientModInitializer {
                                 .then(ClientCommandManager.argument("duration", StringArgumentType.word())
                                         .suggests((context, builder) -> CommandSource.suggestMatching(List.of("5m", "15m", "30m", "1h"), builder))
                                         .executes(context -> {
-                                            module(AwayModule.class).startBrb(context.getSource().getClient(),
-                                                    StringArgumentType.getString(context, "duration"));
-                                            return 1;
+                                            return module(AwayModule.class).startBrb(
+                                                    context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "duration")) ? 1 : 0;
                                         })))
                         .then(ClientCommandManager.literal("dnd")
                                 .executes(context -> {
@@ -300,7 +346,13 @@ public class DMLSClient implements ClientModInitializer {
                                         .executes(context -> setAlertsEnabled(context.getSource().getClient(), false)))
                                 .then(ClientCommandManager.literal("reload")
                                         .executes(context -> {
-                                            int count = ChatAlertsModule.reloadWordlist();
+                                            AlertWordlist.LoadResult result = ChatAlertsModule.reloadWordlistResult();
+                                            int count = result.wordCount();
+                                            if (!result.successful()) {
+                                                ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
+                                                        "dmls.chat.alerts.reload_failed", count);
+                                                return 0;
+                                            }
                                             ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
                                                     count == 1 ? "dmls.chat.alerts.reloaded.one" : "dmls.chat.alerts.reloaded.many", count);
                                             return 1;
@@ -309,6 +361,22 @@ public class DMLSClient implements ClientModInitializer {
 
     private static <T extends DMLSModule> T module(Class<T> type) {
         return modules().stream().filter(type::isInstance).map(type::cast).findFirst().orElseThrow();
+    }
+
+    private int cancelActiveOperation(MinecraftClient client) {
+        OperationCancelResult result = OperationCoordinator.global().cancelActive(client);
+        ChatUtils.sendTranslatedMessage(client, PREFIX,
+                result == OperationCancelResult.CANCELLED
+                        ? "dmls.chat.operation.cancelled"
+                        : "dmls.chat.operation.none");
+        return result == OperationCancelResult.CANCELLED ? 1 : 0;
+    }
+
+    private static boolean locationOutcomeSucceeded(LocationsModule.Outcome outcome) {
+        return switch (outcome) {
+            case SAVED, UPDATED, DELETED, SENT, SIMULATED -> true;
+            default -> false;
+        };
     }
 
     private LiteralArgumentBuilder<FabricClientCommandSource> buildSayCommand() {
@@ -321,8 +389,10 @@ public class DMLSClient implements ClientModInitializer {
 
         for (String name : CannedReplies.names()) {
             say.then(ClientCommandManager.literal(name).executes(context -> {
-                CannedReplies.get(name).ifPresent(reply -> ClientUtils.sendChatMessage(context.getSource().getClient(), reply));
-                return 1;
+                return CannedReplies.get(name)
+                        .map(reply -> ClientUtils.dispatchChatMessage(
+                                context.getSource().getClient(), reply).accepted() ? 1 : 0)
+                        .orElse(0);
             }));
         }
         return say;
@@ -349,25 +419,27 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls members <land>", Text.translatable("dmls.help.checkmembers"));
         helpLine(client, "/dmls alts <ign>", Text.translatable("dmls.help.checkalts", StaffRank.MODERATOR.displayName()));
         helpLine(client, "/dmls uuid <username...>", Text.translatable("dmls.help.uuid"));
-        helpLine(client, "/dmls xray <ign|cancel>", Text.translatable("dmls.help.xray", StaffRank.SENIOR_MODERATOR.displayName()));
+        helpLine(client, "/dmls xray <ign>|confirm|cancel", Text.translatable("dmls.help.xray", StaffRank.SENIOR_MODERATOR.displayName()));
         helpLine(client, "/dmls prefix <ign> <limit> <prefixid> <prefixtext>", Text.translatable("dmls.help.prefix", StaffRank.SUPPORT.displayName()));
         helpLine(client, "/dmls donorpet <ign> <pet>", Text.translatable("dmls.help.donorpet", StaffRank.ADMIN.displayName()));
-        helpLine(client, "/dmls promowave <rank> <ign1, ign2, ...>", Text.translatable("dmls.help.promowave", StaffRank.ADMIN.displayName()));
-        helpLine(client, "/dmls demowave <rank> <ign1, ign2, ...>", Text.translatable("dmls.help.demowave", StaffRank.ADMIN.displayName()));
-        helpLine(client, "/dmls activity <ign1, ign2, ...>", Text.translatable("dmls.help.activity", StaffRank.ADMIN.displayName()));
+        helpLine(client, "/dmls promowave <rank> <igns>|confirm|cancel", Text.translatable("dmls.help.promowave", StaffRank.ADMIN.displayName()));
+        helpLine(client, "/dmls demowave <rank> <igns>|confirm|cancel", Text.translatable("dmls.help.demowave", StaffRank.ADMIN.displayName()));
+        helpLine(client, "/dmls activity <igns>|cancel", Text.translatable("dmls.help.activity", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls rank [rank]", Text.translatable("dmls.help.rank"));
         helpLine(client, "/dmls alerts [on|off|reload]", Text.translatable("dmls.help.alerts"));
         helpLine(client, "/dmls chatlog [filter]", Text.translatable("dmls.help.chatlog"));
         helpLine(client, "/dmls dryrun <on|off>", Text.translatable("dmls.help.dryrun", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls greet <ign>", Text.translatable("dmls.help.greet"));
+        helpLine(client, "/dmls greeter [on|off]", Text.translatable("dmls.help.greeter"));
         helpLine(client, "/dmls loc <save|tp|del|list> [name]", Text.translatable("dmls.help.loc"));
         helpLine(client, "/dmls punish", Text.translatable("dmls.help.punish"));
         helpLine(client, "/dmls co", Text.translatable("dmls.help.co", StaffRank.SENIOR_MODERATOR.displayName()));
-        helpLine(client, "/dmls containers <ign|*> <time> <radius>", Text.translatable("dmls.help.containers", StaffRank.MODERATOR.displayName()));
-        helpLine(client, "/dmls griefs <ign|*> <time> <radius>", Text.translatable("dmls.help.griefs", StaffRank.MODERATOR.displayName()));
+        helpLine(client, "/dmls containers <ign|*> <time> <radius>|cancel", Text.translatable("dmls.help.containers", StaffRank.MODERATOR.displayName()));
+        helpLine(client, "/dmls griefs <ign|*> <time> <radius>|cancel", Text.translatable("dmls.help.griefs", StaffRank.MODERATOR.displayName()));
         helpLine(client, "/dmls brb <duration|off>", Text.translatable("dmls.help.brb"));
         helpLine(client, "/dmls dnd <on|off>", Text.translatable("dmls.help.dnd"));
         helpLine(client, "/dmls say [reply]", Text.translatable("dmls.help.say"));
+        helpLine(client, "/dmls cancel", Text.translatable("dmls.help.cancel"));
         helpLine(client, "/dmls", Text.translatable("dmls.help.menu"));
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         return 1;
@@ -400,7 +472,10 @@ public class DMLSClient implements ClientModInitializer {
     }
 
     private int setAlertsEnabled(MinecraftClient client, boolean enabled) {
-        DMLSConfig.setAlertsEnabled(enabled);
+        if (!DMLSConfig.setAlertsEnabled(enabled)) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.config.save_failed");
+            return 0;
+        }
         ChatUtils.sendTranslatedMessage(client, PREFIX,
                 enabled ? "dmls.chat.alerts.enabled" : "dmls.chat.alerts.disabled");
         return 1;

@@ -48,6 +48,8 @@ public final class ChatReplayModule extends DMLSModule {
     private static final DateTimeFormatter FILE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
     private static final DateTimeFormatter ENTRY_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     private static final Gson GSON = new Gson();
+    private static final EnumSet<MessageOrigin> CAPTURED_ORIGINS =
+            EnumSet.of(MessageOrigin.PLAYER_CHAT, MessageOrigin.SERVER_SYSTEM);
     private static final Deque<StoredSession> SESSIONS = new ArrayDeque<>();
     private static final Deque<Entry> CURRENT_TAIL = new ArrayDeque<>(DISPLAY_CHUNK_SIZE);
     private static final AtomicLong LOAD_GENERATION = new AtomicLong();
@@ -107,11 +109,11 @@ public final class ChatReplayModule extends DMLSModule {
     @Override
     public void register() {
         initializeStorage(defaultDirectory(), LocalDateTime.now());
-        ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.PLAYER_CHAT, MessageOrigin.SERVER_SYSTEM), ChatReplayModule::capture);
+        ServerMessageRouter.subscribe(EnumSet.copyOf(CAPTURED_ORIGINS), ChatReplayModule::capture);
     }
 
     static synchronized void capture(ServerMessage message) {
-        if (message.cleanText().isEmpty()) {
+        if (!acceptsForReplay(message)) {
             return;
         }
         ensureInitialized();
@@ -130,6 +132,14 @@ public final class ChatReplayModule extends DMLSModule {
         } catch (IOException | RuntimeException e) {
             DMLS.LOGGER.error("Failed to append chat replay entry to {}", currentSession.path, e);
         }
+    }
+
+    /** Mirrors the router subscription so direct captures cannot persist overlay or local DMLS output. */
+    static boolean acceptsForReplay(ServerMessage message) {
+        return message != null
+                && CAPTURED_ORIGINS.contains(message.origin())
+                && message.cleanText() != null
+                && !message.cleanText().isEmpty();
     }
 
     public static synchronized List<Session> sessions() {

@@ -7,7 +7,6 @@ import com.duperknight.client.message.ServerMessageRouter;
 import com.duperknight.client.utils.CannedReplies;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ServerGuard;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
@@ -22,8 +21,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -47,14 +48,20 @@ public final class AwayModule extends DMLSModule {
         DND
     }
 
-    private Mode mode = DMLSConfig.awayDnd() ? Mode.DND : Mode.OFF;
+    private final LongSupplier clock;
+    private Mode mode = Mode.OFF;
     private long brbExpiresAtMillis;
     private long lastReplyAtMillis;
     private final Map<String, Long> lastReplyBySender = new HashMap<>();
     private final List<String> sendersWhileAway = new ArrayList<>();
 
     public AwayModule() {
+        this(System::currentTimeMillis);
+    }
+
+    AwayModule(LongSupplier clock) {
         super(StaffRank.HELPER);
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     @Override
@@ -88,18 +95,18 @@ public final class AwayModule extends DMLSModule {
     }
 
     /** Enables BRB mode for the given duration, like 5m, 30s, 1h or 1h30m. */
-    public void startBrb(MinecraftClient client, String durationInput) {
+    public boolean startBrb(MinecraftClient client, String durationInput) {
         OptionalLong duration = parseDurationMillis(durationInput);
         if (duration.isEmpty()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.brb.invalid");
-            return;
+            return false;
         }
 
         mode = Mode.BRB;
-        DMLSConfig.setAwayDnd(false);
-        brbExpiresAtMillis = System.currentTimeMillis() + duration.getAsLong();
+        brbExpiresAtMillis = now() + duration.getAsLong();
         clearAwayState();
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.brb.on", formatDuration(duration.getAsLong()));
+        return true;
     }
 
     /** Enables or disables DND mode. */
@@ -110,20 +117,20 @@ public final class AwayModule extends DMLSModule {
         }
 
         mode = Mode.DND;
-        DMLSConfig.setAwayDnd(true);
+        brbExpiresAtMillis = 0;
         clearAwayState();
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.dnd.on");
     }
 
     /** Disables any away mode and reports who messaged meanwhile. */
     public void disable(MinecraftClient client) {
-        DMLSConfig.setAwayDnd(false);
         if (mode == Mode.OFF) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.already_off");
             return;
         }
 
         mode = Mode.OFF;
+        brbExpiresAtMillis = 0;
         if (!sendersWhileAway.isEmpty()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX,
                     sendersWhileAway.size() == 1 ? "dmls.chat.away.summary.one" : "dmls.chat.away.summary.many",
@@ -138,7 +145,7 @@ public final class AwayModule extends DMLSModule {
         switch (mode) {
             case OFF -> ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.status.off");
             case BRB -> ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.status.brb",
-                    formatDuration(Math.max(0, brbExpiresAtMillis - System.currentTimeMillis())));
+                    formatDuration(Math.max(0, brbExpiresAtMillis - now())));
             case DND -> ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.status.dnd");
         }
     }
@@ -148,43 +155,55 @@ public final class AwayModule extends DMLSModule {
         return switch (mode) {
             case OFF -> Text.translatable("dmls.screen.away.status.off");
             case BRB -> Text.translatable("dmls.screen.away.status.brb",
-                    formatDuration(Math.max(0, brbExpiresAtMillis - System.currentTimeMillis())));
+                    formatDuration(Math.max(0, brbExpiresAtMillis - now())));
             case DND -> Text.translatable("dmls.screen.away.status.dnd");
         };
     }
 
     /** Parses durations like 5m, 30s, 1h or 1h30m into milliseconds. Bare numbers count as minutes. */
     public static OptionalLong parseDurationMillis(String input) {
+        if (input == null) {
+            return OptionalLong.empty();
+        }
         String trimmed = input.trim().toLowerCase(Locale.ROOT);
         if (trimmed.isEmpty()) {
             return OptionalLong.empty();
         }
 
         if (BARE_MINUTES.matcher(trimmed).matches()) {
-            return clampDuration(Long.parseLong(trimmed) * 60 * 1000);
+            try {
+                return validDuration(Math.multiplyExact(Long.parseLong(trimmed), 60_000));
+            } catch (ArithmeticException exception) {
+                return OptionalLong.empty();
+            }
         }
 
         Matcher matcher = DURATION_PART.matcher(trimmed);
         long totalMillis = 0;
         int matchedLength = 0;
-        while (matcher.find()) {
-            long value = Long.parseLong(matcher.group(1));
-            totalMillis += switch (matcher.group(2)) {
-                case "h" -> value * 60 * 60 * 1000;
-                case "m" -> value * 60 * 1000;
-                default -> value * 1000;
-            };
-            matchedLength += matcher.group().length();
+        try {
+            while (matcher.find()) {
+                long value = Long.parseLong(matcher.group(1));
+                long multiplier = switch (matcher.group(2)) {
+                    case "h" -> 60L * 60 * 1000;
+                    case "m" -> 60L * 1000;
+                    default -> 1000L;
+                };
+                totalMillis = Math.addExact(totalMillis, Math.multiplyExact(value, multiplier));
+                matchedLength += matcher.group().length();
+            }
+        } catch (ArithmeticException exception) {
+            return OptionalLong.empty();
         }
 
         if (totalMillis <= 0 || matchedLength != trimmed.length()) {
             return OptionalLong.empty();
         }
-        return clampDuration(totalMillis);
+        return validDuration(totalMillis);
     }
 
-    private static OptionalLong clampDuration(long millis) {
-        return millis <= 0 ? OptionalLong.empty() : OptionalLong.of(Math.min(millis, MAX_BRB_MILLIS));
+    private static OptionalLong validDuration(long millis) {
+        return millis <= 0 || millis > MAX_BRB_MILLIS ? OptionalLong.empty() : OptionalLong.of(millis);
     }
 
     private static String formatDuration(long millis) {
@@ -206,7 +225,7 @@ public final class AwayModule extends DMLSModule {
     }
 
     private void tick(MinecraftClient client) {
-        if (mode == Mode.BRB && System.currentTimeMillis() > brbExpiresAtMillis) {
+        if (mode == Mode.BRB && now() >= brbExpiresAtMillis) {
             disable(client);
         }
     }
@@ -232,7 +251,8 @@ public final class AwayModule extends DMLSModule {
             return;
         }
 
-        long now = System.currentTimeMillis();
+        long now = now();
+        lastReplyBySender.entrySet().removeIf(entry -> now - entry.getValue() >= SENDER_COOLDOWN_MILLIS);
         if (now - lastReplyAtMillis < GLOBAL_REPLY_GAP_MILLIS) {
             return;
         }
@@ -262,7 +282,7 @@ public final class AwayModule extends DMLSModule {
         }
     }
 
-    private static Optional<String> parseIncomingWhisper(String message) {
+    static Optional<String> parseIncomingWhisper(String message) {
         for (Pattern pattern : INCOMING_WHISPERS) {
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
@@ -276,5 +296,9 @@ public final class AwayModule extends DMLSModule {
         lastReplyBySender.clear();
         sendersWhileAway.clear();
         lastReplyAtMillis = 0;
+    }
+
+    private long now() {
+        return clock.getAsLong();
     }
 }

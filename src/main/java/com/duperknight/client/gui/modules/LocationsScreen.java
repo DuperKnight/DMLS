@@ -15,6 +15,7 @@ public final class LocationsScreen extends DMLSMenuScreen {
     private static final int ROW_HEIGHT_UNSCALED = 24;
 
     private final LocationsModule module;
+    private Text status = Text.empty();
 
     public LocationsScreen(Screen parent, LocationsModule module) {
         super(Text.translatable("dmls.module.locations.name"), parent);
@@ -34,16 +35,27 @@ public final class LocationsScreen extends DMLSMenuScreen {
             String name = entry.getKey();
             LocationsModule.SavedLocation location = entry.getValue();
             int offset = row * scaled(ROW_HEIGHT_UNSCALED);
+            String server = location.isBound() ? location.server() : "unbound";
             addScrollableChild(ButtonWidget.builder(
-                            Text.literal(name + " §8(" + location.x() + ", " + location.y() + ", " + location.z() + ")"),
+                            Text.literal(name + " §8(" + location.x() + ", " + location.y() + ", " + location.z()
+                                    + " · " + location.world() + " @ " + server + ")"),
                             button -> {
-                                module.teleport(client, name);
-                                closeToGame();
+                                status = Text.empty();
+                                LocationsModule.Outcome outcome = module.teleport(client, name);
+                                if (outcome == LocationsModule.Outcome.SENT || outcome == LocationsModule.Outcome.SIMULATED) {
+                                    closeToGame();
+                                } else {
+                                    status = Text.translatable("dmls.validation.locations.teleport_blocked");
+                                }
                             })
                     .dimensions(formX, contentY(offset), formWidth - deleteWidth - scaled(4), STANDARD_BUTTON_HEIGHT).build(), offset);
             addScrollableChild(ButtonWidget.builder(Text.literal("✕"), button -> {
-                        module.delete(client, name);
-                        clearAndInit();
+                        status = Text.empty();
+                        if (module.delete(client, name) == LocationsModule.Outcome.DELETED) {
+                            clearAndInit();
+                        } else {
+                            status = Text.translatable("dmls.validation.locations.action_blocked");
+                        }
                     })
                     .dimensions(formX + formWidth - deleteWidth, contentY(offset), deleteWidth, STANDARD_BUTTON_HEIGHT).build(), offset);
             row++;
@@ -63,6 +75,10 @@ public final class LocationsScreen extends DMLSMenuScreen {
                 context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.screen.locations.empty"),
                         width / 2, emptyY, 0xFFAAAAAA);
             }
+        }
+        if (!status.getString().isEmpty()) {
+            context.drawCenteredTextWithShadow(textRenderer, status, width / 2,
+                    footerButtonY() - scaled(13), 0xFFFF5555);
         }
         super.render(context, mouseX, mouseY, delta);
     }

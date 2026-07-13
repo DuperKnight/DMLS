@@ -56,8 +56,11 @@ public final class AwayScreen extends DMLSMenuScreen {
             return;
         }
         validationMessage = Text.empty();
-        module.startBrb(client, input);
-        closeToGame();
+        if (module.startBrb(client, input)) {
+            closeToGame();
+        } else {
+            validationMessage = Text.translatable("dmls.validation.brb_duration");
+        }
     }
 
     @Override

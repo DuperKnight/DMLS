@@ -45,7 +45,7 @@ public final class ScreenUtils {
      * @return the sync ID, or -1 if not applicable
      */
     public static int currentSyncId(MinecraftClient client) {
-        if (client.currentScreen instanceof HandledScreen<?> handledScreen) {
+        if (client != null && client.currentScreen instanceof HandledScreen<?> handledScreen) {
             return handledScreen.getScreenHandler().syncId;
         }
         return -1;
@@ -62,7 +62,7 @@ public final class ScreenUtils {
      * @return the slot contents, if available
      */
     public static Optional<ScreenSnapshot> readSlot(MinecraftClient client, int slotIndex, String expectedTitle, int previousSyncId, int waitTicks) {
-        if (!(client.currentScreen instanceof HandledScreen<?> handledScreen)) {
+        if (client == null || !(client.currentScreen instanceof HandledScreen<?> handledScreen)) {
             return Optional.empty();
         }
 
@@ -76,7 +76,9 @@ public final class ScreenUtils {
             return Optional.empty();
         }
 
-        if (handler.syncId == previousSyncId && waitTicks < 20) {
+        // Never read a same-title menu that was already open before dispatch. If the
+        // server does not replace it, the query times out instead of trusting stale data.
+        if (!isReplacementSyncId(previousSyncId, handler.syncId)) {
             return Optional.empty();
         }
 
@@ -97,6 +99,10 @@ public final class ScreenUtils {
                 .toList();
 
         return Optional.of(new ScreenSnapshot(title, tooltip));
+    }
+
+    static boolean isReplacementSyncId(int previousSyncId, int currentSyncId) {
+        return previousSyncId != currentSyncId;
     }
 
     /**

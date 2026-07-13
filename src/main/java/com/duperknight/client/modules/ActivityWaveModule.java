@@ -1,13 +1,12 @@
 package com.duperknight.client.modules;
 
 import com.duperknight.client.gui.modules.ActivityWaveScreen;
-import com.duperknight.client.message.MessageOrigin;
-import com.duperknight.client.message.ServerMessage;
-import com.duperknight.client.message.ServerMessageRouter;
+import com.duperknight.client.session.OperationCancelReason;
+import com.duperknight.client.session.OperationCancelResult;
+import com.duperknight.client.session.OperationCoordinator;
+import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.ChatUtils;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.ServerGuard;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import com.duperknight.client.utils.InputValidators;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -16,32 +15,45 @@ import net.minecraft.text.Text;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalDouble;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /** Checks the recent activity of a whole staff wave with the server's /activity command. */
 public final class ActivityWaveModule extends DMLSModule {
+    public static final String OPERATION_ID = "activity-wave";
+    public static final int MAX_PLAYERS = 60;
     private static final String PREFIX = "§8[§6DMLS - Activity§8] §7";
-    private static final int COMMAND_GAP_TICKS = 20;
-    private static final int RESPONSE_TIMEOUT_TICKS = 20 * 10;
-    private static final int MAX_PLAYERS = 60;
-    private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
-    private static final Pattern ACTIVITY_HEADER = Pattern.compile(
-            "activity for player ([A-Za-z0-9_]{3,16}) in the last (\\d+) days", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ACTIVITY_HOURS = Pattern.compile(
-            "([\\d,]+(?:\\.\\d+)?) minutes or ([\\d,]+(?:\\.\\d+)?) hours", Pattern.CASE_INSENSITIVE);
-
-    private WaveSession activeSession;
 
     public ActivityWaveModule() {
         super(StaffRank.ADMIN);
+    }
+
+    public enum PreparationStatus { VALID, EMPTY, TOO_MANY }
+
+    public enum SubmitStatus { STARTED, INVALID, TOO_MANY, BLOCKED, BUSY, FAILED }
+
+    public record ActivityRequest(PreparationStatus status, List<String> usernames, List<String> skipped) {
+        public ActivityRequest {
+            usernames = List.copyOf(usernames);
+            skipped = List.copyOf(skipped);
+        }
+
+        public boolean valid() {
+            return status == PreparationStatus.VALID;
+        }
+    }
+
+    public static ActivityRequest prepare(String input) {
+        List<String> skipped = new ArrayList<>();
+        List<String> usernames = InputValidators.uniqueUsernames(input, skipped);
+        if (usernames.isEmpty()) {
+            return new ActivityRequest(PreparationStatus.EMPTY, List.of(), skipped);
+        }
+        if (usernames.size() > MAX_PLAYERS) {
+            return new ActivityRequest(PreparationStatus.TOO_MANY, usernames, skipped);
+        }
+        return new ActivityRequest(PreparationStatus.VALID, usernames, skipped);
     }
 
     @Override
@@ -66,190 +78,115 @@ public final class ActivityWaveModule extends DMLSModule {
 
     @Override
     public void register() {
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (activeSession != null) {
-                activeSession.tick(client);
-            }
-        });
-        ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.SERVER_SYSTEM), this::handleServerMessage);
+        // Tick and server-message routing are owned by OperationCoordinator.
     }
 
-    /** Starts an activity check for the given players. The command and GUI both call this method. */
-    public void submit(MinecraftClient client, String input) {
-        if (!canRunPrivilegedOperation(client)) {
-            return;
-        }
-
-        List<String> igns = new ArrayList<>();
-        List<String> skipped = new ArrayList<>();
-        for (String ign : input.trim().split("[,\\s]+")) {
-            if (ign.isEmpty()) {
-                continue;
-            }
-            if (!USERNAME.matcher(ign).matches()) {
-                skipped.add(ign);
-            } else if (igns.stream().noneMatch(ign::equalsIgnoreCase)) {
-                igns.add(ign);
-            }
-        }
-
-        if (!skipped.isEmpty()) {
+    /** Starts an activity check for the given players. The command and GUI share this entrypoint. */
+    public SubmitStatus submit(MinecraftClient client, String input) {
+        ActivityRequest request = prepare(input);
+        if (!request.skipped().isEmpty()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX,
-                    skipped.size() == 1 ? "dmls.chat.activity.skipping.one" : "dmls.chat.activity.skipping.many",
-                    String.join(", ", skipped));
+                    request.skipped().size() == 1
+                            ? "dmls.chat.activity.skipping.one" : "dmls.chat.activity.skipping.many",
+                    String.join(", ", request.skipped()));
         }
-
-        if (igns.isEmpty()) {
+        if (!request.valid()) {
+            if (request.status() == PreparationStatus.TOO_MANY) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.activity.too_many", MAX_PLAYERS);
+                return SubmitStatus.TOO_MANY;
+            }
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_igns");
-            return;
+            return SubmitStatus.INVALID;
         }
+        if (!canRunPrivilegedOperation(client)) return SubmitStatus.BLOCKED;
 
-        if (igns.size() > MAX_PLAYERS) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.activity.too_many", MAX_PLAYERS);
-            return;
-        }
-
-        if (activeSession != null) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.activity.active");
-            return;
-        }
-
-        activeSession = new WaveSession(igns, ServerGuard.connectionIdentity(client));
-        activeSession.start(client);
-    }
-
-    private void handleServerMessage(ServerMessage message) {
-        if (activeSession != null) {
-            activeSession.handleServerMessage(message.cleanText());
-        }
-    }
-
-    private final class WaveSession {
-        private final List<String> igns;
-        private final String serverIdentity;
-        private final Map<String, OptionalDouble> results = new LinkedHashMap<>();
-
-        private int playerIndex = -1;
-        private int waitTicks;
-        private boolean headerSeen;
-        private boolean inGap;
-        private int reportedDays = 30;
-
-        private WaveSession(List<String> igns, String serverIdentity) {
-            this.igns = igns;
-            this.serverIdentity = serverIdentity;
-        }
-
-        private void start(MinecraftClient client) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX,
-                    igns.size() == 1 ? "dmls.chat.activity.start.one" : "dmls.chat.activity.start.many", igns.size());
-            next(client);
-        }
-
-        private void tick(MinecraftClient client) {
-            if (ClientUtils.isNotConnected(client) || !serverIdentity.equals(ServerGuard.connectionIdentity(client))) {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.session.cancelled");
-                activeSession = null;
-                return;
+        ActivityWaveOperation operation = new ActivityWaveOperation(request.usernames(), listener());
+        OperationStartResult started = OperationCoordinator.global().start(
+                client, OPERATION_ID, displayName().getString(), operation);
+        return switch (started) {
+            case STARTED -> operation.acceptedAtStart() ? SubmitStatus.STARTED : SubmitStatus.BLOCKED;
+            case BUSY -> {
+                String owner = OperationCoordinator.global().activeDescriptor()
+                        .map(descriptor -> descriptor.displayName()).orElse("another operation");
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.busy", owner);
+                yield SubmitStatus.BUSY;
             }
-
-            if (playerIndex < 0 || playerIndex >= igns.size()) {
-                return;
-            }
-
-            waitTicks++;
-            if (inGap) {
-                if (waitTicks >= COMMAND_GAP_TICKS) {
-                    next(client);
-                }
-            } else if (waitTicks > RESPONSE_TIMEOUT_TICKS) {
-                results.put(currentIgn(), OptionalDouble.empty());
-                next(client);
-            }
-        }
-
-        private void handleServerMessage(String text) {
-            if (playerIndex < 0 || playerIndex >= igns.size() || inGap) {
-                return;
-            }
-
-            if (!headerSeen) {
-                Matcher header = ACTIVITY_HEADER.matcher(text);
-                if (header.find() && header.group(1).equalsIgnoreCase(currentIgn())) {
-                    headerSeen = true;
-                    reportedDays = Integer.parseInt(header.group(2));
-                }
-            }
-
-            if (headerSeen) {
-                Matcher hours = ACTIVITY_HOURS.matcher(text);
-                if (hours.find()) {
-                    parseNumber(hours.group(2)).ifPresent(value -> {
-                        results.put(currentIgn(), OptionalDouble.of(value));
-                        inGap = true;
-                        waitTicks = 0;
-                    });
-                }
-            }
-        }
-
-        private void next(MinecraftClient client) {
-            playerIndex++;
-            inGap = false;
-            headerSeen = false;
-            waitTicks = 0;
-
-            if (playerIndex >= igns.size()) {
-                report(client);
-                activeSession = null;
-                return;
-            }
-
-            String ign = currentIgn();
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.activity.progress", ign, playerIndex + 1, igns.size());
-            if (!ClientUtils.sendCommand(client, "activity " + ign)) {
+            case SERVER_BLOCKED -> {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.command.not_sent");
-                activeSession = null;
-                return;
+                yield SubmitStatus.BLOCKED;
+            }
+            case INVALID, FAILED_TO_START -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX,
+                        "dmls.chat.operation.not_started", started.name());
+                yield SubmitStatus.FAILED;
+            }
+        };
+    }
+
+    /** Cancels only this module's active operation; another module's slot is left untouched. */
+    public boolean cancel(MinecraftClient client) {
+        OperationCancelResult result = OperationCoordinator.global().cancel(OPERATION_ID, client);
+        if (result != OperationCancelResult.CANCELLED) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.activity.nothing");
+        }
+        return result == OperationCancelResult.CANCELLED;
+    }
+
+    private ActivityWaveOperation.Listener listener() {
+        return new ActivityWaveOperation.Listener() {
+            @Override
+            public void started(MinecraftClient client, int playerCount) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX,
+                        playerCount == 1
+                                ? "dmls.chat.activity.start.one" : "dmls.chat.activity.start.many",
+                        playerCount);
             }
 
-            if (com.duperknight.client.utils.DMLSConfig.dryRun()) {
-                // no response will arrive in dry run, so just pace through the wave
-                inGap = true;
+            @Override
+            public void progress(MinecraftClient client, String username, int playerIndex, int playerCount) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.activity.progress",
+                        username, playerIndex, playerCount);
             }
-        }
 
-        private String currentIgn() {
-            return igns.get(playerIndex);
-        }
-
-        private void report(MinecraftClient client) {
-            String header = PREFIX;
-            ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
-            ChatUtils.sendTranslatedMessage(client, "", "dmls.chat.activity.header", reportedDays);
-
-            results.entrySet().stream()
-                    .sorted(Comparator.comparingDouble((Map.Entry<String, OptionalDouble> entry) ->
-                            entry.getValue().orElse(-1)).reversed())
-                    .forEach(entry -> {
-                        if (entry.getValue().isPresent()) {
-                            ChatUtils.sendClientMessage(client, Text.literal("§8• ").append(ChatUtils.translated(
-                                    "dmls.chat.activity.result", entry.getKey(),
-                                    String.format(Locale.ROOT, "%.1f", entry.getValue().getAsDouble()))));
-                        } else {
-                            ChatUtils.sendClientMessage(client, Text.literal("§8• ").append(ChatUtils.translated(
-                                    "dmls.chat.activity.no_data", entry.getKey())));
-                        }
-                    });
-            ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
-        }
-
-        private Optional<Double> parseNumber(String value) {
-            try {
-                return Optional.of(Double.parseDouble(value.replace(",", "")));
-            } catch (NumberFormatException exception) {
-                return Optional.empty();
+            @Override
+            public void finished(MinecraftClient client, ActivityWaveOperation.Summary summary) {
+                report(client, summary);
             }
-        }
+
+            @Override
+            public void cancelled(MinecraftClient client, ActivityWaveOperation.Summary summary,
+                                  OperationCancelReason reason) {
+                report(client, summary);
+                String key = switch (reason) {
+                    case USER_REQUESTED, MODULE_REQUESTED -> "dmls.chat.activity.cancelled";
+                    case DISPATCH_BLOCKED -> "dmls.chat.command.not_sent";
+                    case CONNECTION_CHANGED, INTERNAL_ERROR -> "dmls.chat.session.cancelled";
+                };
+                ChatUtils.sendTranslatedMessage(client, PREFIX, key);
+            }
+        };
+    }
+
+    private void report(MinecraftClient client, ActivityWaveOperation.Summary summary) {
+        String header = PREFIX;
+        ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
+        ChatUtils.sendTranslatedMessage(client, "", "dmls.chat.activity.header", summary.reportedDays());
+
+        summary.results().entrySet().stream()
+                .sorted(Comparator.comparingDouble((Map.Entry<String, ActivityWaveOperation.ActivityValue> entry) ->
+                        entry.getValue().kind() == ActivityWaveOperation.ResultKind.HOURS
+                                ? entry.getValue().hours() : -1).reversed())
+                .forEach(entry -> {
+                    String key = switch (entry.getValue().kind()) {
+                        case HOURS -> "dmls.chat.activity.result";
+                        case NO_RESPONSE -> "dmls.chat.activity.no_data";
+                        case SIMULATED -> "dmls.chat.activity.simulated";
+                    };
+                    Object[] args = entry.getValue().kind() == ActivityWaveOperation.ResultKind.HOURS
+                            ? new Object[]{entry.getKey(), String.format(Locale.ROOT, "%.1f", entry.getValue().hours())}
+                            : new Object[]{entry.getKey()};
+                    ChatUtils.sendClientMessage(client, Text.literal("§8• ").append(ChatUtils.translated(key, args)));
+                });
+        ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
     }
 }

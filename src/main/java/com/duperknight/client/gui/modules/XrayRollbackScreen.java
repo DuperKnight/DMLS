@@ -1,8 +1,10 @@
 package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
+import com.duperknight.client.gui.DangerReviewScreen;
 import com.duperknight.client.modules.XrayRollbackModule;
 import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -24,21 +26,26 @@ public final class XrayRollbackScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
+        String savedIgn = ignField == null ? "" : ignField.getText();
         configureScrollableContent(module, scaled(82));
         int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
         ignField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(14)), formWidth, STANDARD_BUTTON_HEIGHT,
                 Text.translatable("dmls.field.player_ign")), scaled(14));
         ignField.setMaxLength(16);
+        ignField.setText(savedIgn);
         ignField.setSuggestion(Text.translatable("dmls.placeholder.player_name").getString());
-        ignField.setChangedListener(value -> ignField.setSuggestion(value.isEmpty() ? Text.translatable("dmls.placeholder.player_name").getString() : null));
+        ignField.setChangedListener(value -> {
+            ignField.setSuggestion(value.isEmpty() ? Text.translatable("dmls.placeholder.player_name").getString() : null);
+            validationMessage = Text.empty();
+        });
         setInitialFocus(ignField);
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.rollback"), button -> submit())
                 .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton.active = !ClientUtils.isNotConnected(client);
+        submitButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
     }
 
     private void submit() {
@@ -47,13 +54,30 @@ public final class XrayRollbackScreen extends DMLSMenuScreen {
             validationMessage = Text.translatable("dmls.validation.player_ign");
             return;
         }
-        module.submit(client, input);
-        closeToGame();
+        XrayRollbackModule.StageResult staged = module.stage(client, input, false);
+        if (!staged.staged()) {
+            validationMessage = switch (staged.status()) {
+                case INVALID -> Text.translatable("dmls.validation.player_ign");
+                case BLOCKED -> Text.translatable("dmls.validation.operation.blocked");
+                case BUSY -> Text.translatable("dmls.validation.operation.busy");
+                case STAGED -> Text.empty();
+            };
+            return;
+        }
+
+        String token = staged.token();
+        client.setScreen(new DangerReviewScreen(this,
+                Text.translatable("dmls.screen.xray.review_title"),
+                module.previewLines(staged.request()),
+                Text.translatable("dmls.button.confirm_rollback"),
+                () -> module.isPending(token),
+                () -> module.confirm(client, token),
+                () -> module.invalidatePending(token)));
     }
 
     @Override
     public void tick() {
-        submitButton.active = !ClientUtils.isNotConnected(client);
+        submitButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
     }
 
     @Override

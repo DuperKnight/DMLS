@@ -52,8 +52,17 @@ public final class ChatAlertsModule extends DMLSModule {
         ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.PLAYER_CHAT, MessageOrigin.SERVER_SYSTEM), this::check);
     }
 
+    /** Compatibility wrapper used by the command tree. */
     public static int reloadWordlist() {
+        return reloadWordlistResult().wordCount();
+    }
+
+    public static AlertWordlist.LoadResult reloadWordlistResult() {
         return WORDLIST.load();
+    }
+
+    public static AlertWordlist.LoadResult lastWordlistLoadResult() {
+        return WORDLIST.lastLoadResult();
     }
 
     public static int wordCount() {

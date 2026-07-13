@@ -4,6 +4,7 @@ import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.DonorPetModule;
 import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -33,7 +34,11 @@ public final class DonorPetScreen extends DMLSMenuScreen {
                 Text.translatable("dmls.field.player_ign")), scaled(14));
         ignField.setMaxLength(16);
         ignField.setSuggestion(Text.translatable("dmls.placeholder.player_name").getString());
-        ignField.setChangedListener(value -> ignField.setSuggestion(value.isEmpty() ? Text.translatable("dmls.placeholder.player_name").getString() : null));
+        ignField.setChangedListener(value -> {
+            ignField.setSuggestion(value.isEmpty()
+                    ? Text.translatable("dmls.placeholder.player_name").getString() : null);
+            validationMessage = Text.empty();
+        });
         setInitialFocus(ignField);
 
         addScrollableDropdownChild(DropdownWidget.builder(
@@ -47,7 +52,7 @@ public final class DonorPetScreen extends DMLSMenuScreen {
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         submitButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.give_pet"), button -> submit())
                 .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton.active = !ClientUtils.isNotConnected(client);
+        submitButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
     }
 
     private void submit() {
@@ -56,13 +61,23 @@ public final class DonorPetScreen extends DMLSMenuScreen {
             validationMessage = Text.translatable("dmls.validation.player_ign");
             return;
         }
-        module.submit(client, input, pet);
-        closeToGame();
+        DonorPetModule.SubmitStatus status = module.submit(client, input, pet);
+        if (status == DonorPetModule.SubmitStatus.STARTED) {
+            closeToGame();
+            return;
+        }
+        validationMessage = switch (status) {
+            case INVALID -> Text.translatable("dmls.validation.player_ign");
+            case BUSY -> Text.translatable("dmls.validation.operation.busy");
+            case BLOCKED -> Text.translatable("dmls.validation.operation.blocked");
+            case FAILED -> Text.translatable("dmls.validation.operation.start_failed");
+            case STARTED -> Text.empty();
+        };
     }
 
     @Override
     public void tick() {
-        submitButton.active = !ClientUtils.isNotConnected(client);
+        submitButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
     }
 
     @Override

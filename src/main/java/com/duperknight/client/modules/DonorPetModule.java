@@ -1,19 +1,11 @@
 package com.duperknight.client.modules;
 
 import com.duperknight.client.gui.modules.DonorPetScreen;
+import com.duperknight.client.session.OperationCancelReason;
+import com.duperknight.client.session.OperationCoordinator;
+import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.ChatUtils;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.ServerGuard;
-import com.duperknight.client.message.MessageOrigin;
-import com.duperknight.client.message.ServerMessage;
-import com.duperknight.client.message.ServerMessageRouter;
-import com.duperknight.client.parser.LuckPermsResponseParser;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import com.mojang.brigadier.builder.RequiredArgumentBuilder;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import com.duperknight.client.utils.InputValidators;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -22,16 +14,13 @@ import net.minecraft.text.Text;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
-import java.util.EnumSet;
 
 public final class DonorPetModule extends DMLSModule {
+    public static final String OPERATION_ID = "donor-pet";
     private static final String PREFIX = "§8[§6DMLS - DonorPet§8] §7";
-    private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
     private static final Map<String, String> PET_PERMISSIONS = new LinkedHashMap<>();
-    private static final int RESPONSE_TIMEOUT_TICKS = 20 * 10;
-    private PendingPermission pendingPermission;
 
     static {
         PET_PERMISSIONS.put("blackcrow", "mcpets.elitemountvol6blackcrow");
@@ -45,9 +34,42 @@ public final class DonorPetModule extends DMLSModule {
         super(StaffRank.ADMIN);
     }
 
+    public enum PreparationStatus { VALID, INVALID_USERNAME, UNKNOWN_PET }
+
+    public enum SubmitStatus { STARTED, INVALID, BLOCKED, BUSY, FAILED }
+
+    public record DonorPetRequest(
+            PreparationStatus status,
+            String username,
+            String pet,
+            String permission,
+            String command
+    ) {
+        public boolean valid() {
+            return status == PreparationStatus.VALID;
+        }
+    }
+
     /** Returns the names of all available pets. */
     public static List<String> pets() {
         return List.copyOf(PET_PERMISSIONS.keySet());
+    }
+
+    public static DonorPetRequest prepare(String username, String pet) {
+        String cleanUsername = username == null ? "" : username.trim();
+        String cleanPet = pet == null ? "" : pet.trim().toLowerCase(Locale.ROOT);
+        if (!InputValidators.isUsername(cleanUsername)) {
+            return new DonorPetRequest(PreparationStatus.INVALID_USERNAME,
+                    cleanUsername, cleanPet, "", "");
+        }
+        String permission = PET_PERMISSIONS.get(cleanPet);
+        if (permission == null) {
+            return new DonorPetRequest(PreparationStatus.UNKNOWN_PET,
+                    cleanUsername, cleanPet, "", "");
+        }
+        String command = "lp user %s permission set %s true".formatted(cleanUsername, permission);
+        return new DonorPetRequest(PreparationStatus.VALID,
+                cleanUsername, cleanPet, permission, command);
     }
 
     @Override
@@ -72,87 +94,82 @@ public final class DonorPetModule extends DMLSModule {
 
     @Override
     public void register() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            RequiredArgumentBuilder<FabricClientCommandSource, String> ign = ClientCommandManager.argument("ign", StringArgumentType.word());
-            for (String pet : PET_PERMISSIONS.keySet()) {
-                ign.then(ClientCommandManager.literal(pet).executes(context -> {
-                    submit(context.getSource().getClient(), StringArgumentType.getString(context, "ign").trim(), pet);
-                    return 1;
-                }));
+        // Canonical command is registered under /dmls by DMLSClient.
+    }
+
+    /** Gives the pet permission to the given player. The command and GUI share this entrypoint. */
+    public SubmitStatus submit(MinecraftClient client, String username, String pet) {
+        DonorPetRequest request = prepare(username, pet);
+        if (!request.valid()) {
+            if (request.status() == PreparationStatus.INVALID_USERNAME) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_ign");
+            } else {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.unknown",
+                        request.pet(), String.join(", ", pets()));
             }
-            dispatcher.register(ClientCommandManager.literal("donorpet").then(ign));
-        });
-        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.SERVER_SYSTEM), this::handleServerMessage);
-    }
-
-    /** Gives the pet permission to the given player. The command and GUI both call this method. */
-    public void submit(MinecraftClient client, String ign, String pet) {
-        if (!canRunPrivilegedOperation(client)) {
-            return;
+            return SubmitStatus.INVALID;
         }
+        if (!canRunPrivilegedOperation(client)) return SubmitStatus.BLOCKED;
 
-        if (!USERNAME.matcher(ign).matches()) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_ign");
-            return;
-        }
-
-        String permission = PET_PERMISSIONS.get(pet);
-        if (permission == null) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.unknown", pet, String.join(", ", pets()));
-            return;
-        }
-
-        if (pendingPermission != null) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.active");
-            return;
-        }
-
-        if (ClientUtils.sendCommand(client, "lp user %s permission set %s true".formatted(ign, permission))) {
-            if (com.duperknight.client.utils.DMLSConfig.dryRun()) {
-                return;
+        DonorPetOperation operation = new DonorPetOperation(request, listener());
+        OperationStartResult started = OperationCoordinator.global().start(
+                client, OPERATION_ID, displayName().getString(), operation);
+        return switch (started) {
+            case STARTED -> operation.acceptedAtStart() ? SubmitStatus.STARTED : SubmitStatus.BLOCKED;
+            case BUSY -> {
+                String owner = OperationCoordinator.global().activeDescriptor()
+                        .map(descriptor -> descriptor.displayName()).orElse("another operation");
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.busy", owner);
+                yield SubmitStatus.BUSY;
             }
-            pendingPermission = new PendingPermission(ign, pet, permission, ServerGuard.connectionIdentity(client));
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.waiting", ign, pet);
-        } else {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.command.not_sent");
-        }
+            case SERVER_BLOCKED -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.command.not_sent");
+                yield SubmitStatus.BLOCKED;
+            }
+            case INVALID, FAILED_TO_START -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX,
+                        "dmls.chat.operation.not_started", started.name());
+                yield SubmitStatus.FAILED;
+            }
+        };
     }
 
-    private void tick(MinecraftClient client) {
-        if (pendingPermission == null) return;
-        if (ClientUtils.isNotConnected(client)
-                || !pendingPermission.serverIdentity.equals(ServerGuard.connectionIdentity(client))) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.command.not_sent");
-            pendingPermission = null;
-        } else if (++pendingPermission.waitTicks > RESPONSE_TIMEOUT_TICKS) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.sent",
-                    pendingPermission.ign, pendingPermission.pet, pendingPermission.permission);
-            pendingPermission = null;
-        }
-    }
+    private DonorPetOperation.Listener listener() {
+        return new DonorPetOperation.Listener() {
+            @Override
+            public void waiting(MinecraftClient client, DonorPetRequest request) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.waiting",
+                        request.username(), request.pet());
+            }
 
-    private void handleServerMessage(ServerMessage message) {
-        if (pendingPermission != null && LuckPermsResponseParser.parsePermissionAlreadySet(
-                pendingPermission.ign, pendingPermission.permission, message.cleanText()) == LuckPermsResponseParser.Result.CONFIRMED) {
-            ChatUtils.sendTranslatedMessage(MinecraftClient.getInstance(), PREFIX, "dmls.chat.donor_pet.confirmed",
-                    pendingPermission.ign, pendingPermission.pet, pendingPermission.permission);
-            pendingPermission = null;
-        }
-    }
+            @Override
+            public void finished(MinecraftClient client, DonorPetOperation.Summary summary) {
+                DonorPetRequest request = summary.request();
+                switch (summary.outcome()) {
+                    case CONFIRMED -> ChatUtils.sendTranslatedMessage(client, PREFIX,
+                            "dmls.chat.donor_pet.confirmed",
+                            request.username(), request.pet(), request.permission());
+                    case REJECTED -> ChatUtils.sendTranslatedMessage(client, PREFIX,
+                            "dmls.chat.donor_pet.rejected",
+                            request.username(), request.pet(), request.permission());
+                    case SIMULATED -> ChatUtils.sendTranslatedMessage(client, PREFIX,
+                            "dmls.chat.donor_pet.simulated",
+                            request.username(), request.pet(), request.permission());
+                    case SENT_UNVERIFIED -> ChatUtils.sendTranslatedMessage(client, PREFIX,
+                            "dmls.chat.donor_pet.sent",
+                            request.username(), request.pet(), request.permission());
+                    case BLOCKED -> ChatUtils.sendTranslatedMessage(client, PREFIX,
+                            "dmls.chat.command.not_sent");
+                    case CANCELLED -> throw new IllegalStateException("Cancellation uses the cancellation callback");
+                }
+            }
 
-    private static final class PendingPermission {
-        private final String ign;
-        private final String pet;
-        private final String permission;
-        private final String serverIdentity;
-        private int waitTicks;
-
-        private PendingPermission(String ign, String pet, String permission, String serverIdentity) {
-            this.ign = ign;
-            this.pet = pet;
-            this.permission = permission;
-            this.serverIdentity = serverIdentity;
-        }
+            @Override
+            public void cancelled(MinecraftClient client, DonorPetOperation.Summary summary,
+                                  OperationCancelReason reason) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.cancelled",
+                        summary.request().username(), summary.request().pet());
+            }
+        };
     }
 }

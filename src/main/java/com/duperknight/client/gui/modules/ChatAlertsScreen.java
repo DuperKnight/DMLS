@@ -2,6 +2,7 @@ package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.ChatAlertsModule;
+import com.duperknight.client.utils.AlertWordlist;
 import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -30,10 +31,16 @@ public final class ChatAlertsScreen extends DMLSMenuScreen {
         addScrollableChild(CyclingButtonWidget.builder((Boolean value) -> Text.translatable(value ? "dmls.option.on" : "dmls.option.off")
                         .formatted(value ? Formatting.GREEN : Formatting.RED), DMLSConfig.alertsEnabled()).values(true, false)
                 .build(x, contentY(0), controlWidth, STANDARD_BUTTON_HEIGHT, Text.translatable("dmls.module.chat_alerts.toggle"),
-                        (button, value) -> DMLSConfig.setAlertsEnabled(value)), 0);
+                        (button, value) -> {
+                            if (!DMLSConfig.setAlertsEnabled(value)) {
+                                button.setValue(DMLSConfig.alertsEnabled());
+                                wordlistStatus = Text.translatable("dmls.validation.config.save_failed");
+                            } else {
+                                wordlistStatus = wordlistStatusText();
+                            }
+                        }), 0);
         addScrollableChild(ButtonWidget.builder(Text.translatable("dmls.module.chat_alerts.reload"), button -> {
-            ChatAlertsModule.reloadWordlist();
-            wordlistStatus = wordlistStatusText();
+            wordlistStatus = wordlistStatusText(ChatAlertsModule.reloadWordlistResult());
         }).dimensions(x, contentY(scaled(30)), controlWidth, STANDARD_BUTTON_HEIGHT).build(), scaled(30));
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
@@ -51,7 +58,14 @@ public final class ChatAlertsScreen extends DMLSMenuScreen {
     }
 
     private Text wordlistStatusText() {
-        int count = ChatAlertsModule.wordCount();
+        return wordlistStatusText(ChatAlertsModule.lastWordlistLoadResult());
+    }
+
+    private Text wordlistStatusText(AlertWordlist.LoadResult result) {
+        int count = result.wordCount();
+        if (result.status() == AlertWordlist.LoadStatus.FAILED) {
+            return Text.translatable("dmls.module.chat_alerts.reload_failed", count);
+        }
         return Text.translatable(count == 1 ? "dmls.module.chat_alerts.words.one" : "dmls.module.chat_alerts.words.many", count);
     }
 }

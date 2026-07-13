@@ -1,17 +1,18 @@
 package com.duperknight.client.modules;
 
 import com.duperknight.client.gui.modules.CheckAltsScreen;
-import com.duperknight.client.utils.ChatUtils;
-import com.duperknight.client.utils.ClientUtils;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import com.duperknight.client.message.MessageOrigin;
 import com.duperknight.client.message.ServerMessage;
-import com.duperknight.client.message.ServerMessageRouter;
+import com.duperknight.client.parser.AltsOutputParser;
 import com.duperknight.client.parser.HistoryOutputParser;
-import com.duperknight.client.utils.ServerGuard;
+import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.session.ManagedOperation;
+import com.duperknight.client.session.OperationCancelReason;
+import com.duperknight.client.session.OperationCoordinator;
+import com.duperknight.client.session.OperationHandle;
+import com.duperknight.client.session.OperationStartResult;
+import com.duperknight.client.utils.ChatUtils;
+import com.duperknight.client.utils.InputValidators;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -24,26 +25,27 @@ import net.minecraft.text.Text;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.Objects;
 import java.util.Queue;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.EnumSet;
 
 public final class CheckAltsModule extends DMLSModule {
+    public static final String OPERATION_ID = "check-alts";
     private static final String PREFIX = "§8[§6DMLS - CheckAlts§8] §7";
     private static final int ALTS_TIMEOUT_TICKS = 20 * 10;
     private static final int ALTS_OUTPUT_QUIET_TICKS = 10;
     private static final int HISTORY_WINDOW_TICKS = 20 * 3;
     private static final int MAX_ACCOUNTS = 10;
-    private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
-    private static final Pattern USERNAME_LIST = Pattern.compile(
-            "[A-Za-z0-9_]{3,16}(?:\\s*,\\s*[A-Za-z0-9_]{3,16})*");
 
+    private final OperationCoordinator coordinator;
     private CheckSession activeSession;
 
     public CheckAltsModule() {
+        this(OperationCoordinator.global());
+    }
+
+    CheckAltsModule(OperationCoordinator coordinator) {
         super(StaffRank.MODERATOR);
+        this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
     }
 
     @Override
@@ -71,50 +73,44 @@ public final class CheckAltsModule extends DMLSModule {
 
     @Override
     public void register() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-                ClientCommandManager.literal("dalts")
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word())
-                                .executes(context -> {
-                                    submit(context.getSource().getClient(), StringArgumentType.getString(context, "ign").trim());
-                                    return 1;
-                                }))
-        ));
-
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (activeSession != null) {
-                activeSession.tick(client);
-            }
-        });
-
-        ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.SERVER_SYSTEM), this::handleServerMessage);
+        // Canonical command is registered under /dmls by DMLSClient.
     }
 
-    /** Starts an alt check for the given player. The command and GUI both call this method. */
-    public void submit(MinecraftClient client, String ign) {
-        if (!canRunPrivilegedOperation(client)) {
-            return;
-        }
-
-        if (!USERNAME.matcher(ign).matches()) {
+    /** Starts one coordinator-owned /alts and /history sequence. */
+    public OperationStartResult submit(MinecraftClient client, String ignInput) {
+        if (!canRunPrivilegedOperation(client)) return OperationStartResult.SERVER_BLOCKED;
+        String ign = Objects.requireNonNullElse(ignInput, "").trim();
+        if (!InputValidators.isUsername(ign)) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_ign");
-            return;
+            return OperationStartResult.INVALID;
         }
 
-        start(client, ign);
-    }
-
-    private void start(MinecraftClient client, String ign) {
-        if (activeSession != null) {
-            activeSession.cancel(client, "Started a new check for §6" + ign + "§7.");
+        replaceOwnOperation(client);
+        CheckSession candidate = new CheckSession(ign);
+        activeSession = candidate;
+        OperationStartResult result = coordinator.start(client, OPERATION_ID, "Check Alts", candidate);
+        if (result == OperationStartResult.STARTED && !candidate.acceptedAtStart()) {
+            result = OperationStartResult.SERVER_BLOCKED;
         }
-
-        activeSession = new CheckSession(ign);
-        activeSession.start(client);
+        if (result != OperationStartResult.STARTED && activeSession == candidate) activeSession = null;
+        reportStartFailure(client, result);
+        return result;
     }
 
-    private void handleServerMessage(ServerMessage message) {
-        if (activeSession != null) {
-            activeSession.handleServerMessage(message.cleanText());
+    private void replaceOwnOperation(MinecraftClient client) {
+        if (coordinator.activeDescriptor().filter(descriptor -> descriptor.operationId().equals(OPERATION_ID)).isPresent()) {
+            coordinator.cancel(OPERATION_ID, client);
+        }
+    }
+
+    private void reportStartFailure(MinecraftClient client, OperationStartResult result) {
+        if (result == OperationStartResult.BUSY) {
+            String owner = coordinator.activeDescriptor().map(descriptor -> descriptor.displayName())
+                    .orElse("Another operation");
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.busy", owner);
+        } else if (result != OperationStartResult.STARTED && result != OperationStartResult.SERVER_BLOCKED
+                && result != OperationStartResult.INVALID) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.start_failed");
         }
     }
 
@@ -123,63 +119,52 @@ public final class CheckAltsModule extends DMLSModule {
         WAITING_FOR_HISTORY
     }
 
-    private static final class PunishmentStats {
-        private final String name;
-        private int bans;
-        private int mutes;
-        private int warns;
-        private int kicks;
-        private HistoryOutputParser.Status status = HistoryOutputParser.Status.UNKNOWN;
-
-        private PunishmentStats(String name) {
-            this.name = name;
-        }
-
-        private boolean isClean() {
-            return status == HistoryOutputParser.Status.CLEAN;
-        }
+    private record PunishmentStats(String name, HistoryOutputParser.Result result) {
     }
 
-    private final class CheckSession {
+    private final class CheckSession implements ManagedOperation {
         private final String ign;
+        private final AltsOutputParser altsParser;
         private final Queue<String> remainingAccounts = new ArrayDeque<>();
         private final List<PunishmentStats> results = new ArrayList<>();
-
-        private Stage stage = Stage.WAITING_FOR_ALTS;
-        private PunishmentStats currentStats;
-        private int waitTicks;
-        private boolean altsParsed;
-        private boolean readingAltsList;
-        private int altsListQuietTicks;
-        private final List<String> collectedAlts = new ArrayList<>();
-        private HistoryOutputParser historyParser;
-        private final String serverIdentity;
         private final List<String> skippedAccounts = new ArrayList<>();
+
+        private OperationHandle handle;
+        private Stage stage = Stage.WAITING_FOR_ALTS;
+        private int waitTicks;
+        private int altsListQuietTicks;
+        private boolean altsListStarted;
+        private boolean altsResolved;
+        private String currentAccount;
+        private HistoryOutputParser historyParser;
+        private CommandDispatch initialDispatch = CommandDispatch.BLOCKED;
 
         private CheckSession(String ign) {
             this.ign = ign;
-            this.serverIdentity = ServerGuard.connectionIdentity(MinecraftClient.getInstance());
+            this.altsParser = new AltsOutputParser(ign);
         }
 
-        private void start(MinecraftClient client) {
+        @Override
+        public void onStarted(OperationHandle handle, MinecraftClient client) {
+            this.handle = handle;
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.checking", ign);
-            ClientUtils.sendCommand(client, "alts " + ign);
+            initialDispatch = handle.dispatchCommand(client, "alts " + ign);
+            handleDispatch(client, initialDispatch, "/alts " + ign);
         }
 
-        private void tick(MinecraftClient client) {
-            if (ClientUtils.isNotConnected(client) || !serverIdentity.equals(ServerGuard.connectionIdentity(client))) {
-                cancel(client, Text.translatable("dmls.chat.session.cancelled").getString());
-                return;
-            }
+        private boolean acceptedAtStart() {
+            return initialDispatch != CommandDispatch.BLOCKED;
+        }
 
+        @Override
+        public void onTick(OperationHandle handle, MinecraftClient client) {
             waitTicks++;
             switch (stage) {
                 case WAITING_FOR_ALTS -> {
-                    if (readingAltsList && ++altsListQuietTicks > ALTS_OUTPUT_QUIET_TICKS) {
+                    if (altsListStarted && ++altsListQuietTicks > ALTS_OUTPUT_QUIET_TICKS) {
                         finishAltsList(client);
-                    } else if (!readingAltsList && waitTicks > ALTS_TIMEOUT_TICKS) {
-                        ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.read_failed", ign);
-                        beginHistoryChecks(client, List.of());
+                    } else if (!altsListStarted && waitTicks > ALTS_TIMEOUT_TICKS) {
+                        failAltsReadAndContinue(client);
                     }
                 }
                 case WAITING_FOR_HISTORY -> {
@@ -191,204 +176,180 @@ public final class CheckAltsModule extends DMLSModule {
             }
         }
 
-        private void handleServerMessage(String message) {
+        @Override
+        public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+            if (message.origin() != MessageOrigin.SERVER_SYSTEM) return;
             switch (stage) {
-                case WAITING_FOR_ALTS -> handleAltsMessage(message);
-                case WAITING_FOR_HISTORY -> handleHistoryMessage(message);
+                case WAITING_FOR_ALTS -> handleAltsMessage(client, message.cleanText());
+                case WAITING_FOR_HISTORY -> handleHistoryMessage(client, message.cleanText());
             }
         }
 
-        private void handleAltsMessage(String message) {
-            String lower = message.toLowerCase(Locale.ROOT);
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (lower.contains(ign.toLowerCase(Locale.ROOT))
-                    && (lower.contains("no known alts") || lower.contains("no alts") || lower.contains("no other accounts"))) {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.no_alts", ign);
-                beginHistoryChecks(client, List.of());
-                return;
+        @Override
+        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+            remainingAccounts.clear();
+            historyParser = null;
+            currentAccount = null;
+            if (activeSession == this) activeSession = null;
+            if (reason != OperationCancelReason.MODULE_REQUESTED) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.session.cancelled");
+                if (!results.isEmpty()) report(client);
             }
+        }
 
-            // The server's /alts command prints a status legend followed by one
-            // username per chat line instead of a single "Alts: ..." line.
-            if (isAltsStatusHeader(lower)) {
-                readingAltsList = true;
-                altsListQuietTicks = 0;
-                return;
-            }
-
-            if (readingAltsList) {
-                if (USERNAME_LIST.matcher(message).matches()) {
+        private void handleAltsMessage(MinecraftClient client, String message) {
+            if (altsResolved) return;
+            AltsOutputParser.Event event = altsParser.accept(message);
+            switch (event) {
+                case UNRELATED -> { }
+                case LIST_STARTED -> {
+                    altsListStarted = true;
                     altsListQuietTicks = 0;
-                    Matcher accounts = USERNAME.matcher(message);
-                    while (accounts.find()) {
-                        String name = accounts.group();
-                        if (!name.equalsIgnoreCase(ign)
-                                && collectedAlts.stream().noneMatch(name::equalsIgnoreCase)) {
-                            collectedAlts.add(name);
-                        }
-                    }
+                    waitTicks = 0;
                 }
-                return;
-            }
-
-            if (!lower.contains(ign.toLowerCase(Locale.ROOT))) {
-                return;
-            }
-
-            int colon = message.indexOf(':');
-            if (colon < 0 || !lower.substring(0, colon).contains("alt")) {
-                return;
-            }
-
-            List<String> alts = new ArrayList<>();
-            Matcher matcher = USERNAME.matcher(message.substring(colon + 1));
-            while (matcher.find()) {
-                String name = matcher.group();
-                if (!name.equalsIgnoreCase(ign) && alts.stream().noneMatch(name::equalsIgnoreCase)) {
-                    alts.add(name);
+                case ACCOUNT_LINE -> {
+                    altsListStarted = true;
+                    altsListQuietTicks = 0;
                 }
+                case INLINE_RESULT -> resolveAlts(client, altsParser.alts());
+                case NO_ALTS -> resolveNoAlts(client);
+                case MALFORMED -> failAltsReadAndContinue(client);
             }
-
-            if (alts.isEmpty()) {
-                return;
-            }
-
-            announceAltsAndBeginHistory(client, alts);
-        }
-
-        private boolean isAltsStatusHeader(String lower) {
-            return lower.contains("[online]")
-                    && lower.contains("[offline]")
-                    && lower.contains("[banned]")
-                    && lower.contains("[ipbanned]");
         }
 
         private void finishAltsList(MinecraftClient client) {
-            if (collectedAlts.isEmpty()) {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.no_alts", ign);
-                beginHistoryChecks(client, List.of());
-                return;
+            AltsOutputParser.ListResult parsed = altsParser.finishList();
+            switch (parsed.status()) {
+                case FOUND -> resolveAlts(client, parsed.alts());
+                case NO_ALTS -> resolveNoAlts(client);
+                case NO_RESPONSE -> failAltsReadAndContinue(client);
             }
-
-            announceAltsAndBeginHistory(client, new ArrayList<>(collectedAlts));
         }
 
-        private void announceAltsAndBeginHistory(MinecraftClient client, List<String> alts) {
-
+        private void resolveAlts(MinecraftClient client, List<String> foundAlts) {
+            if (foundAlts.isEmpty()) {
+                resolveNoAlts(client);
+                return;
+            }
+            List<String> alts = new ArrayList<>(foundAlts);
             if (alts.size() > MAX_ACCOUNTS - 1) {
                 skippedAccounts.addAll(alts.subList(MAX_ACCOUNTS - 1, alts.size()));
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.found_limited", alts.size(), MAX_ACCOUNTS - 1);
-                alts = alts.subList(0, MAX_ACCOUNTS - 1);
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.found_limited",
+                        alts.size(), MAX_ACCOUNTS - 1);
+                alts = new ArrayList<>(alts.subList(0, MAX_ACCOUNTS - 1));
             } else {
                 ChatUtils.sendTranslatedMessage(client, PREFIX,
                         alts.size() == 1 ? "dmls.chat.check_alts.found.one" : "dmls.chat.check_alts.found.many",
                         alts.size(), String.join(", ", alts));
             }
-
             beginHistoryChecks(client, alts);
         }
 
-        private void handleHistoryMessage(String message) {
-            HistoryOutputParser.Event event = historyParser.accept(message);
-            if (event == HistoryOutputParser.Event.RECOGNIZED) {
-                waitTicks = 0;
-            }
-            if (event == HistoryOutputParser.Event.COMPLETE || event == HistoryOutputParser.Event.FAILED) {
-                finishCurrentHistory();
-                sendNextHistoryCommand(MinecraftClient.getInstance());
-            }
+        private void resolveNoAlts(MinecraftClient client) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.no_alts", ign);
+            beginHistoryChecks(client, List.of());
         }
 
-        private void finishCurrentHistory() {
-            HistoryOutputParser.Result parsed = historyParser.result();
-            currentStats.status = parsed.status();
-            currentStats.bans = parsed.bans();
-            currentStats.mutes = parsed.mutes();
-            currentStats.warns = parsed.warns();
-            currentStats.kicks = parsed.kicks();
-            results.add(currentStats);
+        private void failAltsReadAndContinue(MinecraftClient client) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.read_failed", ign);
+            beginHistoryChecks(client, List.of());
         }
 
         private void beginHistoryChecks(MinecraftClient client, List<String> alts) {
-            if (altsParsed) {
-                return;
-            }
-            altsParsed = true;
-
+            if (altsResolved) return;
+            altsResolved = true;
             remainingAccounts.add(ign);
             remainingAccounts.addAll(alts);
             sendNextHistoryCommand(client);
         }
 
+        private void handleHistoryMessage(MinecraftClient client, String message) {
+            if (historyParser == null) return;
+            HistoryOutputParser.Event event = historyParser.accept(message);
+            if (event == HistoryOutputParser.Event.RECOGNIZED) waitTicks = 0;
+            if (event == HistoryOutputParser.Event.COMPLETE || event == HistoryOutputParser.Event.FAILED) {
+                finishCurrentHistory();
+                sendNextHistoryCommand(client);
+            }
+        }
+
+        private void finishCurrentHistory() {
+            if (historyParser == null || currentAccount == null) return;
+            results.add(new PunishmentStats(currentAccount, historyParser.result()));
+            historyParser = null;
+            currentAccount = null;
+        }
+
         private void sendNextHistoryCommand(MinecraftClient client) {
             String next = remainingAccounts.poll();
             if (next == null) {
-                // End the session before printing the report. Client-side chat
-                // messages fire the receive event too, and result text such as
-                // "Mutes: 1" must not be counted against the last account.
-                finish();
+                finish(client);
                 report(client);
                 return;
             }
 
-            currentStats = new PunishmentStats(next);
+            currentAccount = next;
             historyParser = new HistoryOutputParser(next);
             waitTicks = 0;
             stage = Stage.WAITING_FOR_HISTORY;
-            ClientUtils.sendCommand(client, "history " + next);
+            handleDispatch(client, handle.dispatchCommand(client, "history " + next), "/history " + next);
+        }
+
+        private void handleDispatch(MinecraftClient client, CommandDispatch dispatch, String shownCommand) {
+            if (dispatch == CommandDispatch.SENT) return;
+            if (dispatch == CommandDispatch.SIMULATED) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.simulated", shownCommand);
+                finish(client);
+                return;
+            }
+            handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
         }
 
         private void report(MinecraftClient client) {
             String header = PREFIX + "Alt history of §6" + ign + "§7 ";
             ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
             for (PunishmentStats stats : results) {
-                MutableText line = Text.literal("§8• ").append(clickableName(stats.name)).append("§7: ");
-                if (stats.isClean()) {
-                    line.append("§aclean");
-                } else if (stats.status == HistoryOutputParser.Status.NEVER_JOINED) {
-                    line.append(Text.translatable("dmls.chat.check_alts.never_joined"));
-                } else if (stats.status == HistoryOutputParser.Status.UNKNOWN) {
-                    line.append(Text.translatable("dmls.chat.check_alts.unknown"));
-                } else {
-                    List<String> parts = new ArrayList<>();
-                    if (stats.bans > 0) {
-                        parts.add("§cBans: " + stats.bans);
-                    }
-                    if (stats.mutes > 0) {
-                        parts.add("§6Mutes: " + stats.mutes);
-                    }
-                    if (stats.warns > 0) {
-                        parts.add("§eWarns: " + stats.warns);
-                    }
-                    if (stats.kicks > 0) {
-                        parts.add("§7Kicks: " + stats.kicks);
-                    }
-                    line.append(String.join("§7, ", parts));
+                MutableText line = Text.literal("§8• ").append(clickableName(stats.name())).append("§7: ");
+                HistoryOutputParser.Result result = stats.result();
+                switch (result.status()) {
+                    case CLEAN -> line.append("§aclean");
+                    case NEVER_JOINED -> line.append(Text.translatable("dmls.chat.check_alts.never_joined"));
+                    case UNKNOWN -> line.append(Text.translatable("dmls.chat.check_alts.unknown"));
+                    case MALFORMED -> line.append(Text.translatable("dmls.chat.check_alts.parse_failed"));
+                    case PARSED -> appendPunishmentCounts(line, result);
                 }
                 ChatUtils.sendClientMessage(client, line);
             }
             ChatUtils.sendTranslatedMessage(client, "", "dmls.chat.check_alts.counts_note");
             if (!skippedAccounts.isEmpty()) {
-                ChatUtils.sendTranslatedMessage(client, "", "dmls.chat.check_alts.skipped", String.join(", ", skippedAccounts));
+                ChatUtils.sendTranslatedMessage(client, "", "dmls.chat.check_alts.skipped",
+                        String.join(", ", skippedAccounts));
             }
             ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
+        }
+
+        private void appendPunishmentCounts(MutableText line, HistoryOutputParser.Result result) {
+            List<String> parts = new ArrayList<>();
+            if (result.bans() > 0) parts.add("§cBans: " + result.bans());
+            if (result.mutes() > 0) parts.add("§6Mutes: " + result.mutes());
+            if (result.warns() > 0) parts.add("§eWarns: " + result.warns());
+            if (result.kicks() > 0) parts.add("§7Kicks: " + result.kicks());
+            line.append(String.join("§7, ", parts));
         }
 
         private MutableText clickableName(String name) {
             return Text.literal("§6" + name).styled(style -> style
                     .withClickEvent(new ClickEvent.RunCommand("/history " + name))
-                    .withHoverEvent(new HoverEvent.ShowText(Text.translatable("dmls.chat.check_alts.hover_history", name))));
+                    .withHoverEvent(new HoverEvent.ShowText(
+                            Text.translatable("dmls.chat.check_alts.hover_history", name))));
         }
 
-        private void cancel(MinecraftClient client, String reason) {
-            ChatUtils.sendClientMessage(client, PREFIX + reason);
-            finish();
-        }
-
-        private void finish() {
-            if (activeSession == this) {
-                activeSession = null;
-            }
+        private void finish(MinecraftClient client) {
+            remainingAccounts.clear();
+            historyParser = null;
+            currentAccount = null;
+            if (activeSession == this) activeSession = null;
+            if (handle != null) handle.complete();
         }
     }
 }
