@@ -66,6 +66,12 @@
   "dmls.module.uuid.description.1": "Look up as many as 10 Minecraft UUIDs using Mojang's API.",
   "dmls.module.uuid.description.2": "Separate usernames with commas or spaces; results can be copied.",
 
+  "dmls.module.event_protect.name":  "Event Protect",
+  "dmls.module.event_protect.description": "Broadcast a protection message for protected events",
+  "dmls.module.event_protect.event_name": "Event Name",
+  "dmls.module.event_protect.event_name_placeholder": "e.g. Wither Fight",
+  "dmls.module.event_protect.broadcast": "Broadcast",
+
   "dmls.field.player_ign": "Player IGN",
   "dmls.field.player_igns": "Player IGN(s)",
   "dmls.field.player_ign.label": "Player IGN:",

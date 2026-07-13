@@ -14,6 +14,7 @@ import com.duperknight.client.modules.CoreProtectBuilderModule;
 import com.duperknight.client.modules.DMLSModule;
 import com.duperknight.client.modules.DemoWaveModule;
 import com.duperknight.client.modules.DonorPetModule;
+import com.duperknight.client.modules.EventProtectModule;
 import com.duperknight.client.modules.GreeterModule;
 import com.duperknight.client.modules.GriefScanModule;
 import com.duperknight.client.modules.LocationsModule;
@@ -61,6 +62,7 @@ public class DMLSClient implements ClientModInitializer {
             new XrayRollbackModule(),
             new PrefixCreateModule(),
             new DonorPetModule(),
+            new EventProtectModule(),
             new PromoWaveModule(),
             new DemoWaveModule(),
             new UuidLookupModule(),
