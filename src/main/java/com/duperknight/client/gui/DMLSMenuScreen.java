@@ -121,6 +121,57 @@ abstract class DMLSMenuScreen extends Screen {
         return y >= contentViewportTop && y + elementHeight <= contentViewportBottom;
     }
 
+    /** Returns the first fixed-height content row that can intersect the viewport. */
+    protected int firstVisibleContentIndex(int rowHeight) {
+        return Math.max(0, contentScrollOffset / Math.max(1, rowHeight));
+    }
+
+    /** Returns the exclusive end index for fixed-height rows that can intersect the viewport. */
+    protected int visibleContentEndIndex(int rowHeight, int rowCount) {
+        int safeRowHeight = Math.max(1, rowHeight);
+        int viewportHeight = contentViewportBottom - contentViewportTop;
+        return Math.min(rowCount, (contentScrollOffset + viewportHeight + safeRowHeight - 1) / safeRowHeight + 1);
+    }
+
+    protected void resetContentScroll() {
+        contentScrollOffset = 0;
+        updateScrollableWidgets();
+    }
+
+    protected void scrollContentToBottom() {
+        contentScrollOffset = maxContentScroll;
+        updateScrollableWidgets();
+    }
+
+    protected boolean isContentScrolledToTop() {
+        return contentScrollOffset <= 0;
+    }
+
+    protected boolean isContentScrolledToBottom() {
+        return contentScrollOffset >= maxContentScroll;
+    }
+
+    protected int contentScrollOffset() {
+        return contentScrollOffset;
+    }
+
+    protected int maxContentScroll() {
+        return maxContentScroll;
+    }
+
+    protected void setContentScrollOffset(int offset) {
+        contentScrollOffset = Math.clamp(offset, 0, maxContentScroll);
+        updateScrollableWidgets();
+    }
+
+    protected boolean isDraggingContentScrollbar() {
+        return draggingContentScrollbar;
+    }
+
+    protected void stopDraggingContentScrollbar() {
+        draggingContentScrollbar = false;
+    }
+
     private List<OrderedText> wrappedDescription(DMLSModule module, int descriptionWidth) {
         return module.description().stream()
                 .flatMap(line -> textRenderer.wrapLines(line, descriptionWidth - scaled(16)).stream())
@@ -188,7 +239,7 @@ abstract class DMLSMenuScreen extends Screen {
         return super.mouseReleased(click);
     }
 
-    private int contentScrollbarX() {
+    protected int contentScrollbarX() {
         int contentWidth = Math.min(scaled(360), width - scaled(48));
         return width / 2 + contentWidth / 2 + scaled(7);
     }
