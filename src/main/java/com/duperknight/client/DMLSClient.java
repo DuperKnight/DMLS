@@ -176,6 +176,9 @@ public class DMLSClient implements ClientModInitializer {
                                             StringArgumentType.getString(context, "igns")); return 1;
                                 })))
                         .then(ClientCommandManager.literal("containers")
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    module(ContainerScanModule.class).cancel(context.getSource().getClient()); return 1;
+                                }))
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("time", StringArgumentType.word())
                                                 .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
@@ -185,6 +188,9 @@ public class DMLSClient implements ClientModInitializer {
                                                             StringArgumentType.getString(context, "radius")); return 1;
                                                 })))))
                         .then(ClientCommandManager.literal("griefs")
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    module(GriefScanModule.class).cancel(context.getSource().getClient()); return 1;
+                                }))
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("time", StringArgumentType.word())
                                                 .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {

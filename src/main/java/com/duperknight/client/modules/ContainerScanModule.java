@@ -31,7 +31,6 @@ public final class ContainerScanModule extends DMLSModule {
     private static final int PAGE_TIMEOUT_TICKS = 20 * 10;
     private static final int SILENCE_FINISH_TICKS = 20 * 3;
     private static final int PAGE_GAP_TICKS = 20;
-    private static final int MAX_PAGES = 10;
     private static final int MAX_ITEMS_PER_LINE = 8;
 
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
@@ -123,12 +122,23 @@ public final class ContainerScanModule extends DMLSModule {
         }
 
         activeSession = new ScanSession(allPlayers ? "*" : cleanIgn, cleanTime, cleanRadius);
-        ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.containers.start", cleanTime, cleanRadius);
+        ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.containers.start", cleanTime, cleanRadius, "/dmls containers cancel");
     }
 
     private void handleServerMessage(ServerMessage message) {
         if (activeSession != null) {
             activeSession.handleServerMessage(message.cleanText());
+        }
+    }
+
+    /** Cancels an in-progress scan and reports what was collected so far. */
+    public void cancel(MinecraftClient client) {
+        if (activeSession != null) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.containers.cancelled");
+            activeSession.report(client);
+            activeSession = null;
+        } else {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.containers.nothing");
         }
     }
 
@@ -162,10 +172,13 @@ public final class ContainerScanModule extends DMLSModule {
 
             waitTicks++;
             if (pageMarkerSeen && waitTicks >= PAGE_GAP_TICKS) {
-                if (currentPage < Math.min(totalPages, MAX_PAGES)) {
+                if (currentPage < totalPages) {
                     currentPage++;
                     pageMarkerSeen = false;
                     waitTicks = 0;
+                    if (currentPage % 5 == 0) {
+                        ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.containers.progress", currentPage, totalPages);
+                    }
                     if (!ClientUtils.sendCommand(client, "co page " + currentPage)) {
                         report(client);
                         activeSession = null;
@@ -242,10 +255,8 @@ public final class ContainerScanModule extends DMLSModule {
                         });
             }
 
-            int scannedPages = Math.min(currentPage, Math.min(totalPages, MAX_PAGES));
-            ChatUtils.sendTranslatedMessage(client, PREFIX,
-                    totalPages > MAX_PAGES ? "dmls.chat.containers.pages.capped" : "dmls.chat.containers.pages",
-                    scannedPages, totalPages);
+            int scannedPages = currentPage;
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.containers.pages", scannedPages, totalPages);
             ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         }
 
