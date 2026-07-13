@@ -18,6 +18,11 @@ import java.util.List;
 abstract class DMLSMenuScreen extends Screen {
     protected static final float UI_SCALE = 0.85F;
     private static final Identifier LOGO = Identifier.of(DMLS.MOD_ID.toLowerCase(), "logo.png");
+    private static final Identifier HEADER_SEPARATOR = Identifier.ofVanilla("textures/gui/inworld_header_separator.png");
+    private static final Identifier FOOTER_SEPARATOR = Identifier.ofVanilla("textures/gui/inworld_footer_separator.png");
+    protected static final Identifier SCROLLER = Identifier.ofVanilla("widget/scroller");
+    protected static final Identifier SCROLLER_BACKGROUND = Identifier.ofVanilla("widget/scroller_background");
+    protected static final int SCROLLBAR_WIDTH = 6;
     private static final int LOGO_TEXTURE_WIDTH = 2040;
     private static final int LOGO_TEXTURE_HEIGHT = 400;
     protected static final int HEADER_HEIGHT = scaled(80);
@@ -42,7 +47,6 @@ abstract class DMLSMenuScreen extends Screen {
     protected void renderMenuBackground(DrawContext context) {
         // Screen.renderBackground has already applied the vanilla blurred in-world background.
         context.fill(0, 0, width, HEADER_HEIGHT, 0x20000000);
-        context.fill(0, HEADER_HEIGHT - 1, width, HEADER_HEIGHT + 1, 0xFF8A8A8A);
 
         int logoWidth = Math.clamp(width - scaled(32), scaled(160), scaled(205));
         int logoHeight = Math.max(1, logoWidth * LOGO_TEXTURE_HEIGHT / LOGO_TEXTURE_WIDTH);
@@ -52,9 +56,15 @@ abstract class DMLSMenuScreen extends Screen {
                 logoWidth, logoHeight, LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT,
                 LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT);
 
-        context.fill(0, HEADER_HEIGHT + 1, width, height - FOOTER_TOP_OFFSET, 0xA6000000);
-        context.fill(0, height - FOOTER_TOP_OFFSET + 1, width, height, 0x20000000);
-        context.fill(0, height - FOOTER_TOP_OFFSET, width, height - FOOTER_TOP_OFFSET + 2, 0xFF8A8A8A);
+        int footerTop = height - FOOTER_TOP_OFFSET;
+        context.fill(0, HEADER_HEIGHT, width, footerTop, 0xA6000000);
+        context.fill(0, footerTop, width, height, 0x20000000);
+
+        // Use the same two-layer translucent separators as vanilla in-world lists.
+        context.drawTexture(RenderPipelines.GUI_TEXTURED, HEADER_SEPARATOR, 0, HEADER_HEIGHT - 2,
+                0.0F, 0.0F, width, 2, 32, 2);
+        context.drawTexture(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
+                0.0F, 0.0F, width, 2, 32, 2);
     }
 
     protected void renderPanel(DrawContext context, int x, int y, int panelWidth, int panelHeight) {
@@ -135,10 +145,9 @@ abstract class DMLSMenuScreen extends Screen {
         if (maxContentScroll > 0) {
             int trackX = contentScrollbarX();
             int viewportHeight = contentViewportBottom - contentViewportTop;
-            int thumbHeight = Math.max(scaled(18), viewportHeight * viewportHeight / (viewportHeight + maxContentScroll));
+            int thumbHeight = scrollbarThumbHeight(viewportHeight, viewportHeight + maxContentScroll);
             int thumbY = contentViewportTop + contentScrollOffset * (viewportHeight - thumbHeight) / maxContentScroll;
-            context.fill(trackX, contentViewportTop, trackX + scaled(5), contentViewportBottom, 0x70000000);
-            context.fill(trackX, thumbY, trackX + scaled(5), thumbY + thumbHeight, 0xFFC0C0C0);
+            renderVanillaScrollbar(context, trackX, contentViewportTop, viewportHeight, thumbY, thumbHeight);
         }
     }
 
@@ -155,7 +164,7 @@ abstract class DMLSMenuScreen extends Screen {
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
         if (maxContentScroll > 0 && click.button() == 0
-                && click.x() >= contentScrollbarX() - scaled(2) && click.x() < contentScrollbarX() + scaled(7)
+                && click.x() >= contentScrollbarX() && click.x() <= contentScrollbarX() + SCROLLBAR_WIDTH
                 && click.y() >= contentViewportTop && click.y() < contentViewportBottom) {
             draggingContentScrollbar = true;
             updateContentScrollFromMouse(click.y());
@@ -186,11 +195,24 @@ abstract class DMLSMenuScreen extends Screen {
 
     private void updateContentScrollFromMouse(double mouseY) {
         int viewportHeight = contentViewportBottom - contentViewportTop;
-        int thumbHeight = Math.max(scaled(18), viewportHeight * viewportHeight / (viewportHeight + maxContentScroll));
+        int thumbHeight = scrollbarThumbHeight(viewportHeight, viewportHeight + maxContentScroll);
         int track = Math.max(1, viewportHeight - thumbHeight);
         double relative = Math.clamp((int) (mouseY - contentViewportTop - thumbHeight / 2.0), 0, track);
         contentScrollOffset = Math.clamp((int) Math.round(relative * maxContentScroll / track), 0, maxContentScroll);
         updateScrollableWidgets();
+    }
+
+    protected static int scrollbarThumbHeight(int viewportHeight, int contentHeight) {
+        return Math.clamp(viewportHeight * viewportHeight / Math.max(1, contentHeight),
+                32, Math.max(32, viewportHeight - 8));
+    }
+
+    protected static void renderVanillaScrollbar(DrawContext context, int x, int y, int height,
+                                                  int thumbY, int thumbHeight) {
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SCROLLER_BACKGROUND,
+                x, y, SCROLLBAR_WIDTH, height);
+        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SCROLLER,
+                x, thumbY, SCROLLBAR_WIDTH, thumbHeight);
     }
 
     protected int pairedButtonWidth() {
