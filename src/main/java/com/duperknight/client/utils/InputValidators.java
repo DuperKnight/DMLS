@@ -26,6 +26,12 @@ public final class InputValidators {
         return value != null && PREFIX_ID.matcher(value).matches();
     }
 
+    /** Allows spaces but rejects blank, oversized, or control-bearing command arguments. */
+    public static boolean isSafeCommandArgument(String value, int maxLength) {
+        return value != null && maxLength > 0 && !value.isBlank() && value.length() <= maxLength
+                && value.chars().noneMatch(Character::isISOControl);
+    }
+
     public static List<String> uniqueUsernames(String input, List<String> rejected) {
         LinkedHashMap<String, String> unique = new LinkedHashMap<>();
         if (input == null) return List.of();

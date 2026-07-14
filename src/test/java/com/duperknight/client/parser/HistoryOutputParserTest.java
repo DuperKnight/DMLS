@@ -39,4 +39,32 @@ class HistoryOutputParserTest {
         parser.accept(" -- [one day ago] --\n AnotherPlayer was banned by Console: 'reason'");
         assertEquals(HistoryOutputParser.Status.UNKNOWN, parser.result().status());
     }
+
+    @Test void recordsBeforeTheCorrelatedHeaderDoNotCount() {
+        var parser = new HistoryOutputParser("DuperKnight");
+        assertEquals(HistoryOutputParser.Event.UNRELATED,
+                parser.accept("DuperKnight was banned by Console: 'reason'"));
+        assertEquals(HistoryOutputParser.Status.UNKNOWN, parser.result().status());
+        assertEquals(0, parser.result().bans());
+    }
+
+    @Test void malformedCorrelatedHeaderFailsClosed() {
+        var parser = new HistoryOutputParser("DuperKnight");
+        assertEquals(HistoryOutputParser.Event.FAILED,
+                parser.accept("History for DuperKnight (Limit: many):"));
+        assertEquals(HistoryOutputParser.Status.MALFORMED, parser.result().status());
+    }
+
+    @Test void usernamePrefixesDoNotCorrelateAnotherAccountsHeader() {
+        var parser = new HistoryOutputParser("DuperKnight");
+        assertEquals(HistoryOutputParser.Event.UNRELATED,
+                parser.accept("History for DuperKnight2 (Limit: many):"));
+        assertEquals(HistoryOutputParser.Status.UNKNOWN, parser.result().status());
+    }
+
+    @Test void emptyOutputRemainsUnknownInsteadOfBeingCalledClean() {
+        var parser = new HistoryOutputParser("DuperKnight");
+        assertEquals(HistoryOutputParser.Event.UNRELATED, parser.accept(""));
+        assertEquals(HistoryOutputParser.Status.UNKNOWN, parser.result().status());
+    }
 }

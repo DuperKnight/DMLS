@@ -1,19 +1,23 @@
 package com.duperknight.client.modules;
 
-import com.duperknight.client.utils.ChatUtils;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.MenuCommandQuery;
-import com.duperknight.client.utils.ScreenUtils;
-import com.duperknight.client.utils.TooltipUtils;
-import com.duperknight.client.utils.TooltipUtils.TooltipLine;
-import com.duperknight.client.gui.CheckLandsScreen;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import com.duperknight.client.gui.modules.CheckLandsScreen;
 import com.duperknight.client.message.MessageOrigin;
 import com.duperknight.client.message.ServerMessage;
-import com.duperknight.client.message.ServerMessageRouter;
+import com.duperknight.client.parser.LandsMenuParser;
+import com.duperknight.client.parser.LandsMenuParser.LandList;
+import com.duperknight.client.parser.LandsMenuParser.RankAssignment;
+import com.duperknight.client.parser.LandsMenuParser.RankScan;
+import com.duperknight.client.parser.LandsMenuParser.RankStats;
+import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.session.ManagedOperation;
+import com.duperknight.client.session.OperationCancelReason;
+import com.duperknight.client.session.OperationCoordinator;
+import com.duperknight.client.session.OperationHandle;
+import com.duperknight.client.session.OperationStartResult;
+import com.duperknight.client.utils.ChatUtils;
+import com.duperknight.client.utils.InputValidators;
+import com.duperknight.client.utils.MenuCommandQuery;
+import com.duperknight.client.utils.ScreenUtils;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -27,24 +31,27 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
-import java.util.regex.Pattern;
-import java.util.EnumSet;
 
 public final class CheckLandsModule extends DMLSModule {
+    public static final String OPERATION_ID = "check-lands";
     private static final String PREFIX = "§8[§6DMLS - CheckLands§8] §7";
     private static final int LAND_LIST_SLOT = ScreenUtils.slotIndex(6, 3);
     private static final int PLAYER_LIST_SLOT = ScreenUtils.slotIndex(4, 2);
     private static final int MENU_TIMEOUT_TICKS = 20 * 30;
-    private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
 
-    private final Queue<String> pendingPlayers = new ArrayDeque<>();
+    private final OperationCoordinator coordinator;
     private CheckSession activeSession;
 
     public CheckLandsModule() {
+        this(OperationCoordinator.global());
+    }
+
+    CheckLandsModule(OperationCoordinator coordinator) {
         super(StaffRank.MODERATOR);
+        this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
     }
 
     @Override
@@ -72,278 +79,48 @@ public final class CheckLandsModule extends DMLSModule {
 
     @Override
     public void register() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
-                ClientCommandManager.literal("checklands")
-                        .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString())
-                                .executes(context -> {
-                                    MinecraftClient client = context.getSource().getClient();
-                                    submit(client, StringArgumentType.getString(context, "igns"));
-                                    return 1;
-                                }))
-        ));
-
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (activeSession != null) {
-                activeSession.tick(client);
-            }
-        });
-
-        ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.SERVER_SYSTEM), this::handleServerMessage);
+        // Canonical command is registered under /dmls by DMLSClient.
     }
 
-    /** Starts a single or batch land check. The command and GUI both call this method. */
-    public void submit(MinecraftClient client, String input) {
-        if (!canRunPrivilegedOperation(client)) {
-            return;
-        }
-        List<String> igns = new ArrayList<>();
-        for (String ign : input.trim().split("[,\\s]+")) {
-            if (!ign.isEmpty() && USERNAME.matcher(ign).matches() && igns.stream().noneMatch(ign::equalsIgnoreCase)) {
-                igns.add(ign);
-            }
-        }
-
-        if (igns.isEmpty()) {
+    /** Starts a batch that owns the shared response tracker until every player is complete. */
+    public OperationStartResult submit(MinecraftClient client, String input) {
+        if (!canRunPrivilegedOperation(client)) return OperationStartResult.SERVER_BLOCKED;
+        List<String> rejected = new ArrayList<>();
+        List<String> players = InputValidators.uniqueUsernames(input, rejected);
+        if (players.isEmpty()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_igns");
-            return;
+            return OperationStartResult.INVALID;
         }
 
-        pendingPlayers.clear();
-        pendingPlayers.addAll(igns);
-        if (igns.size() > 1) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_lands.queued", igns.size(), String.join(", ", igns));
+        replaceOwnOperation(client);
+        if (players.size() > 1) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_lands.queued",
+                    players.size(), String.join(", ", players));
         }
+        CheckSession candidate = new CheckSession(players);
+        activeSession = candidate;
+        OperationStartResult result = coordinator.start(client, OPERATION_ID, "Check Lands", candidate);
+        if (result == OperationStartResult.STARTED && !candidate.acceptedAtStart()) {
+            result = OperationStartResult.SERVER_BLOCKED;
+        }
+        if (result != OperationStartResult.STARTED && activeSession == candidate) activeSession = null;
+        reportStartFailure(client, result);
+        return result;
+    }
 
-        if (activeSession != null) {
-            // cancelling advances into the new queue
-            activeSession.cancel(client, "Started a new check.");
-        } else {
-            advanceQueue(client);
+    private void replaceOwnOperation(MinecraftClient client) {
+        if (coordinator.activeDescriptor().filter(descriptor -> descriptor.operationId().equals(OPERATION_ID)).isPresent()) {
+            coordinator.cancel(OPERATION_ID, client);
         }
     }
 
-    private void advanceQueue(MinecraftClient client) {
-        String next = pendingPlayers.poll();
-        if (next == null) {
-            return;
-        }
-
-        activeSession = new CheckSession(next);
-        activeSession.start(client);
-    }
-
-    private void handleServerMessage(ServerMessage message) {
-        if (activeSession != null) {
-            activeSession.handleServerMessage(message.cleanText());
-        }
-    }
-
-    private static Optional<List<String>> parseLands(List<TooltipLine> tooltip) {
-        List<String> lands = new ArrayList<>();
-        boolean inLands = false;
-
-        for (TooltipLine line : tooltip) {
-            String stripped = TooltipUtils.stripListMarker(line.text());
-            String lower = stripped.toLowerCase(Locale.ROOT);
-            if (!inLands) {
-                inLands = lower.startsWith("lands");
-                continue;
-            }
-
-            if (TooltipUtils.isTooltipFooter(stripped)) {
-                continue;
-            }
-
-            if (stripped.equalsIgnoreCase("none")) {
-                return Optional.of(List.of());
-            }
-
-            if (!stripped.isEmpty()) {
-                lands.add(stripped);
-            }
-        }
-
-        return inLands && !lands.isEmpty() ? Optional.of(lands) : Optional.empty();
-    }
-
-    private static Optional<RankScan> parsePlayerRank(List<TooltipLine> tooltip, String ign) {
-        boolean inPlayers = false;
-        int playerPosition = 0;
-        List<String> distinctRanks = new ArrayList<>();
-        List<RankStats> rankStats = new ArrayList<>();
-        String previousRank = "";
-        RankAssignment targetRank = null;
-        boolean hasMorePlayers = false;
-
-        for (TooltipLine line : tooltip) {
-            String stripped = TooltipUtils.stripListMarker(line.text());
-            String lower = stripped.toLowerCase(Locale.ROOT);
-            if (!inPlayers) {
-                inPlayers = lower.startsWith("players");
-                continue;
-            }
-
-            if (TooltipUtils.isTooltipFooter(stripped)) {
-                continue;
-            }
-
-            if (stripped.equals("...")) {
-                hasMorePlayers = true;
-                continue;
-            }
-
-            Optional<String> parsedPlayerName = line.grayUsername(USERNAME).or(() -> TooltipUtils.lastMatch(stripped, USERNAME));
-            if (parsedPlayerName.isEmpty()) {
-                continue;
-            }
-
-            playerPosition++;
-            String playerName = parsedPlayerName.get();
-            String role = stripped.substring(0, Math.max(0, stripped.lastIndexOf(playerName))).trim();
-            String rankName = rankName(playerPosition, role);
-            String formattedRankName = formattedRankName(playerPosition, line, playerName, rankName);
-            addDistinctRank(distinctRanks, rankName);
-            int position = rankPosition(distinctRanks, rankName);
-            RankStats stats = getOrCreateRankStats(rankStats, rankName, formattedRankName, position);
-            stats.visibleCount++;
-            if (!previousRank.isEmpty() && !previousRank.equalsIgnoreCase(rankName)) {
-                setOpenEnded(rankStats, previousRank, false);
-            }
-            previousRank = rankName;
-
-            if (!playerName.equalsIgnoreCase(ign)) {
-                continue;
-            }
-
-            if (playerPosition == 1) {
-                targetRank = RankAssignment.owner();
-                continue;
-            }
-
-            String normalizedRole = role.toLowerCase(Locale.ROOT);
-            if (normalizedRole.contains("admin")) {
-                targetRank = RankAssignment.admin();
-                continue;
-            }
-            if (normalizedRole.equals("member")) {
-                targetRank = RankAssignment.memberOrUnknown();
-                continue;
-            }
-
-            targetRank = RankAssignment.custom(rankName, formattedRankName, position);
-        }
-
-        if (!previousRank.isEmpty()) {
-            setOpenEnded(rankStats, previousRank, hasMorePlayers);
-        }
-
-        if (!inPlayers) {
-            return Optional.empty();
-        }
-
-        return Optional.of(new RankScan(targetRank == null ? RankAssignment.memberOrUnknown() : targetRank, rankStats));
-    }
-
-    private static String formattedRankName(int playerPosition, TooltipLine line, String playerName, String fallbackRank) {
-        if (playerPosition == 1 || fallbackRank.equals("Admin") || fallbackRank.equals("Member/Unknown")) {
-            return fallbackRank;
-        }
-        return line.formattedRoleBefore(playerName).orElse(fallbackRank);
-    }
-
-    private static String rankName(int playerPosition, String role) {
-        if (playerPosition == 1) {
-            return "Owner";
-        }
-        if (role.toLowerCase(Locale.ROOT).contains("admin")) {
-            return "Admin";
-        }
-        return role.isEmpty() ? "Member/Unknown" : role;
-    }
-
-    private static void addDistinctRank(List<String> ranks, String rank) {
-        for (String existingRank : ranks) {
-            if (existingRank.equalsIgnoreCase(rank)) {
-                return;
-            }
-        }
-        ranks.add(rank);
-    }
-
-    private static int rankPosition(List<String> ranks, String rank) {
-        for (int i = 0; i < ranks.size(); i++) {
-            if (ranks.get(i).equalsIgnoreCase(rank)) {
-                return i + 1;
-            }
-        }
-        return ranks.size() + 1;
-    }
-
-    private static RankStats getOrCreateRankStats(List<RankStats> rankStats, String rank, String formattedRank, int position) {
-        for (RankStats stats : rankStats) {
-            if (stats.rank.equalsIgnoreCase(rank) && stats.position == position) {
-                return stats;
-            }
-        }
-
-        RankStats stats = new RankStats(rank, formattedRank, position);
-        rankStats.add(stats);
-        return stats;
-    }
-
-    private static void setOpenEnded(List<RankStats> rankStats, String rank, boolean openEnded) {
-        for (RankStats stats : rankStats) {
-            if (stats.rank.equalsIgnoreCase(rank)) {
-                stats.openEnded = openEnded;
-            }
-        }
-    }
-
-    private enum Stage {
-        WAITING_FOR_LANDS,
-        SENDING_NEXT_INFO_COMMAND,
-        WAITING_FOR_INFO
-    }
-
-    private enum RankType {
-        OWNER,
-        ADMIN,
-        CUSTOM,
-        MEMBER_OR_UNKNOWN
-    }
-
-    private record RankScan(RankAssignment assignment, List<RankStats> stats) {
-    }
-
-    private static final class RankStats {
-        private final String rank;
-        private final String formattedRank;
-        private final int position;
-        private int visibleCount;
-        private boolean openEnded;
-
-        private RankStats(String rank, String formattedRank, int position) {
-            this.rank = rank;
-            this.formattedRank = formattedRank;
-            this.position = position;
-        }
-    }
-
-    private record RankAssignment(RankType type, String customRank, String formattedCustomRank, int position) {
-        private static RankAssignment owner() {
-            return new RankAssignment(RankType.OWNER, "", "", 1);
-        }
-
-        private static RankAssignment admin() {
-            return new RankAssignment(RankType.ADMIN, "", "", Integer.MAX_VALUE);
-        }
-
-        private static RankAssignment custom(String customRank, String formattedCustomRank, int position) {
-            return new RankAssignment(RankType.CUSTOM, customRank, formattedCustomRank, position);
-        }
-
-        private static RankAssignment memberOrUnknown() {
-            return new RankAssignment(RankType.MEMBER_OR_UNKNOWN, "", "", Integer.MAX_VALUE);
+    private void reportStartFailure(MinecraftClient client, OperationStartResult result) {
+        if (result == OperationStartResult.BUSY) {
+            String owner = coordinator.activeDescriptor().map(descriptor -> descriptor.displayName()).orElse("Another operation");
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.busy", owner);
+        } else if (result != OperationStartResult.STARTED && result != OperationStartResult.SERVER_BLOCKED
+                && result != OperationStartResult.INVALID) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.start_failed");
         }
     }
 
@@ -361,11 +138,8 @@ public final class CheckLandsModule extends DMLSModule {
 
         private void addClaim(String claim, Optional<RankStats> stats) {
             claims.add(toClaimResult(claim, stats));
-            stats.ifPresent(rankStats -> {
-                if (!rankStats.formattedRank.isBlank()) {
-                    formattedRank = rankStats.formattedRank;
-                }
-            });
+            stats.filter(value -> !value.formattedRank().isBlank())
+                    .ifPresent(value -> formattedRank = value.formattedRank());
         }
     }
 
@@ -373,42 +147,39 @@ public final class CheckLandsModule extends DMLSModule {
     }
 
     private static ClaimResult toClaimResult(String claim, Optional<RankStats> stats) {
-        return stats
-                .map(rankStats -> new ClaimResult(claim, Math.max(1, rankStats.visibleCount), rankStats.openEnded))
+        return stats.map(value -> new ClaimResult(claim, Math.max(1, value.visibleCount()), value.openEnded()))
                 .orElseGet(() -> new ClaimResult(claim, 1, false));
     }
 
-    private final class CheckSession {
-        private final String ign;
+    private enum Stage { WAITING_FOR_LANDS, SENDING_NEXT_INFO_COMMAND, WAITING_FOR_INFO }
+
+    private final class CheckSession implements ManagedOperation {
+        private final Queue<String> remainingPlayers = new ArrayDeque<>();
         private final Queue<String> remainingClaims = new ArrayDeque<>();
         private final List<String> ownedClaims = new ArrayList<>();
         private final List<ClaimResult> adminClaims = new ArrayList<>();
         private final List<RankClaims> customRankClaims = new ArrayList<>();
         private final List<String> memberOrUnknownClaims = new ArrayList<>();
 
-        private Stage stage = Stage.WAITING_FOR_LANDS;
+        private OperationHandle handle;
+        private Stage stage;
+        private String ign;
         private String currentClaim;
         private MenuCommandQuery activeQuery;
-        private int totalClaims;
+        private CommandDispatch initialDispatch = CommandDispatch.BLOCKED;
 
-        private CheckSession(String ign) {
-            this.ign = ign;
+        private CheckSession(List<String> players) {
+            remainingPlayers.addAll(players);
         }
 
-        private void start(MinecraftClient client) {
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_lands.checking", ign);
-            activeQuery = new MenuCommandQuery("la player " + ign, "Player " + ign, MENU_TIMEOUT_TICKS, LAND_LIST_SLOT);
-            activeQuery.start(client);
-            stage = Stage.WAITING_FOR_LANDS;
+        @Override
+        public void onStarted(OperationHandle handle, MinecraftClient client) {
+            this.handle = handle;
+            startNextPlayer(client);
         }
 
-        private void tick(MinecraftClient client) {
-            if (ClientUtils.isNotConnected(client)) {
-                pendingPlayers.clear();
-                activeSession = null;
-                return;
-            }
-
+        @Override
+        public void onTick(OperationHandle handle, MinecraftClient client) {
             switch (stage) {
                 case WAITING_FOR_LANDS -> waitForLands(client);
                 case SENDING_NEXT_INFO_COMMAND -> sendNextInfoCommand(client);
@@ -416,38 +187,76 @@ public final class CheckLandsModule extends DMLSModule {
             }
         }
 
-        private void handleServerMessage(String message) {
-            String lowerMessage = message.toLowerCase(Locale.ROOT);
-            if (lowerMessage.startsWith("lands:")
-                    && lowerMessage.contains("no player with the name")
-                    && lowerMessage.contains(ign.toLowerCase(Locale.ROOT))) {
-                finish(MinecraftClient.getInstance());
+        @Override
+        public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+            if (stage != Stage.WAITING_FOR_LANDS || message.origin() != MessageOrigin.SERVER_SYSTEM) return;
+            String lower = message.cleanText().toLowerCase(java.util.Locale.ROOT);
+            if (lower.startsWith("lands:") && lower.contains("no player with the name")
+                    && lower.contains(ign.toLowerCase(java.util.Locale.ROOT))) {
+                finishPlayer(client);
             }
         }
 
+        @Override
+        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+            ScreenUtils.closeHandledScreen(client);
+            remainingPlayers.clear();
+            if (activeSession == this) activeSession = null;
+            if (reason != OperationCancelReason.MODULE_REQUESTED) {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.session.cancelled");
+            }
+        }
+
+        private void startNextPlayer(MinecraftClient client) {
+            ign = remainingPlayers.poll();
+            if (ign == null) {
+                finishAll(client);
+                return;
+            }
+            resetPlayerState();
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_lands.checking", ign);
+            activeQuery = new MenuCommandQuery("la player " + ign, "Player " + ign,
+                    MENU_TIMEOUT_TICKS, LAND_LIST_SLOT);
+            initialDispatch = activeQuery.start(client, handle::dispatchCommand);
+            if (initialDispatch == CommandDispatch.BLOCKED) {
+                handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
+            }
+            stage = Stage.WAITING_FOR_LANDS;
+        }
+
+        private boolean acceptedAtStart() {
+            return initialDispatch != CommandDispatch.BLOCKED;
+        }
+
+        private void resetPlayerState() {
+            remainingClaims.clear();
+            ownedClaims.clear();
+            adminClaims.clear();
+            customRankClaims.clear();
+            memberOrUnknownClaims.clear();
+            currentClaim = null;
+        }
+
         private void waitForLands(MinecraftClient client) {
-            Optional<MenuCommandQuery.Result> queryResult = tickActiveQuery(client);
-            if (queryResult.isEmpty()) {
+            MenuCommandQuery.TickResult tick = activeQuery.tick(client);
+            if (!handleTerminalQueryStatus(client, tick, "/la player " + ign)) return;
+            if (tick.status() != MenuCommandQuery.Status.READY) return;
+
+            LandList parsed = tick.result().flatMap(result -> result.tooltip(LAND_LIST_SLOT))
+                    .map(LandsMenuParser::parseLands).orElseGet(() -> LandsMenuParser.parseLands(List.of()));
+            if (parsed.status() == LandsMenuParser.ParseStatus.MALFORMED) {
+                malformed(client, "/la player " + ign);
                 return;
             }
-
-            Optional<List<String>> parsedLands = queryResult.get().tooltip(LAND_LIST_SLOT).flatMap(CheckLandsModule::parseLands);
-            if (parsedLands.isEmpty()) {
-                return;
-            }
-
-            List<String> lands = parsedLands.get();
-            if (lands.isEmpty()) {
+            if (parsed.lands().isEmpty()) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_lands.none", ign);
-                finish(client);
+                finishPlayer(client);
                 return;
             }
-
-            remainingClaims.addAll(lands);
-            totalClaims = lands.size();
+            remainingClaims.addAll(parsed.lands());
             ChatUtils.sendTranslatedMessage(client, PREFIX,
-                    totalClaims == 1 ? "dmls.chat.check_lands.found.one" : "dmls.chat.check_lands.found.many",
-                    totalClaims, ign);
+                    parsed.lands().size() == 1 ? "dmls.chat.check_lands.found.one" : "dmls.chat.check_lands.found.many",
+                    parsed.lands().size(), ign);
             stage = Stage.SENDING_NEXT_INFO_COMMAND;
         }
 
@@ -455,62 +264,77 @@ public final class CheckLandsModule extends DMLSModule {
             currentClaim = remainingClaims.poll();
             if (currentClaim == null) {
                 report(client);
-                finish(client);
+                finishPlayer(client);
                 return;
             }
-
-            activeQuery = new MenuCommandQuery("la info " + currentClaim, currentClaim, MENU_TIMEOUT_TICKS, PLAYER_LIST_SLOT);
-            activeQuery.start(client);
+            activeQuery = new MenuCommandQuery("la info " + currentClaim, currentClaim,
+                    MENU_TIMEOUT_TICKS, PLAYER_LIST_SLOT);
+            activeQuery.start(client, handle::dispatchCommand);
             stage = Stage.WAITING_FOR_INFO;
         }
 
         private void waitForInfo(MinecraftClient client) {
-            Optional<MenuCommandQuery.Result> queryResult = tickActiveQuery(client);
-            if (queryResult.isEmpty()) {
+            MenuCommandQuery.TickResult tick = activeQuery.tick(client);
+            if (!handleTerminalQueryStatus(client, tick, "/la info " + currentClaim)) return;
+            if (tick.status() != MenuCommandQuery.Status.READY) return;
+
+            RankScan scan = tick.result().flatMap(result -> result.tooltip(PLAYER_LIST_SLOT))
+                    .map(tooltip -> LandsMenuParser.parsePlayerRank(tooltip, ign))
+                    .orElseGet(() -> LandsMenuParser.parsePlayerRank(List.of(), ign));
+            if (scan.status() == LandsMenuParser.ParseStatus.MALFORMED) {
+                malformed(client, "/la info " + currentClaim);
                 return;
             }
-
-            Optional<RankScan> parsedRank = queryResult.get().tooltip(PLAYER_LIST_SLOT)
-                    .flatMap(tooltip -> parsePlayerRank(tooltip, ign));
-            if (parsedRank.isEmpty()) {
-                return;
-            }
-
-            RankScan scan = parsedRank.get();
             RankAssignment rank = scan.assignment();
             switch (rank.type()) {
                 case OWNER -> ownedClaims.add(currentClaim);
-                case ADMIN -> {
-                    adminClaims.add(toClaimResult(currentClaim, findRankStats(scan.stats(), "Admin", Integer.MAX_VALUE)));
-                }
-                case CUSTOM -> addCustomRankClaim(rank, findRankStats(scan.stats(), rank.customRank(), rank.position()), currentClaim);
+                case ADMIN -> adminClaims.add(toClaimResult(currentClaim,
+                        findRankStats(scan.stats(), "Admin", Integer.MAX_VALUE)));
+                case CUSTOM -> addCustomRankClaim(rank,
+                        findRankStats(scan.stats(), rank.customRank(), rank.position()), currentClaim);
                 case MEMBER_OR_UNKNOWN -> memberOrUnknownClaims.add(currentClaim);
             }
-
             stage = Stage.SENDING_NEXT_INFO_COMMAND;
         }
 
-        private Optional<MenuCommandQuery.Result> tickActiveQuery(MinecraftClient client) {
-            if (activeQuery == null) {
-                fail(client, "No active menu query. Stopping.");
-                return Optional.empty();
+        /** Returns true only when the caller may continue inspecting this tick result. */
+        private boolean handleTerminalQueryStatus(MinecraftClient client, MenuCommandQuery.TickResult tick, String command) {
+            switch (tick.status()) {
+                case WAITING -> { return false; }
+                case TIMED_OUT -> {
+                    ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.timeout", command);
+                    finishAll(client);
+                    return false;
+                }
+                case CANCELLED -> {
+                    handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
+                    return false;
+                }
+                case SIMULATED -> {
+                    ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.simulated", command);
+                    finishPlayer(client);
+                    return false;
+                }
+                case READY -> { return true; }
             }
+            return false;
+        }
 
-            MenuCommandQuery.TickResult tickResult = activeQuery.tick(client);
-            if (tickResult.status() == MenuCommandQuery.Status.TIMED_OUT) {
-                fail(client, timeoutMessage());
-                return Optional.empty();
-            }
-            if (tickResult.status() == MenuCommandQuery.Status.CANCELLED) {
-                fail(client, Text.translatable("dmls.chat.session.cancelled").getString());
-                return Optional.empty();
-            }
+        private void malformed(MinecraftClient client, String command) {
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.malformed", command);
+            finishAll(client);
+        }
 
-            if (tickResult.status() == MenuCommandQuery.Status.WAITING) {
-                return Optional.empty();
-            }
+        private void finishPlayer(MinecraftClient client) {
+            ScreenUtils.closeHandledScreen(client);
+            startNextPlayer(client);
+        }
 
-            return tickResult.result();
+        private void finishAll(MinecraftClient client) {
+            ScreenUtils.closeHandledScreen(client);
+            remainingPlayers.clear();
+            if (activeSession == this) activeSession = null;
+            if (handle != null) handle.complete();
         }
 
         private void report(MinecraftClient client) {
@@ -519,54 +343,51 @@ public final class CheckLandsModule extends DMLSModule {
             ChatUtils.sendClientMessage(client, Text.translatable("dmls.chat.check_lands.owner").append(claimsText(ownedClaims)));
             ChatUtils.sendClientMessage(client, Text.translatable("dmls.chat.check_lands.admin").append(claimResultsText(adminClaims)));
             customRankClaims.stream()
-                    .sorted(Comparator.comparingInt((RankClaims rank) -> rank.position).thenComparing(rank -> rank.rank, String.CASE_INSENSITIVE_ORDER))
+                    .sorted(Comparator.comparingInt((RankClaims rank) -> rank.position)
+                            .thenComparing(rank -> rank.rank, String.CASE_INSENSITIVE_ORDER))
                     .forEach(rank -> ChatUtils.sendClientMessage(client,
-                            Text.literal(rank.formattedRank + "§r§7 (" + ordinal(rank.position) + " rank): ").append(claimResultsText(rank.claims))));
-            ChatUtils.sendClientMessage(client, Text.translatable("dmls.chat.check_lands.member_unknown").append(claimsText(memberOrUnknownClaims)));
+                            Text.literal(rank.formattedRank + "§r§7 (" + ordinal(rank.position)
+                                    + " rank): ").append(claimResultsText(rank.claims))));
+            ChatUtils.sendClientMessage(client, Text.translatable("dmls.chat.check_lands.member_unknown")
+                    .append(claimsText(memberOrUnknownClaims)));
             ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         }
 
         private void addCustomRankClaim(RankAssignment rank, Optional<RankStats> stats, String claim) {
-            for (RankClaims existingRank : customRankClaims) {
-                if (existingRank.rank.equalsIgnoreCase(rank.customRank()) && existingRank.position == rank.position()) {
-                    existingRank.addClaim(claim, stats);
-                return;
+            for (RankClaims existing : customRankClaims) {
+                if (existing.rank.equalsIgnoreCase(rank.customRank()) && existing.position == rank.position()) {
+                    existing.addClaim(claim, stats);
+                    return;
+                }
             }
-            }
+            RankClaims created = new RankClaims(rank.customRank(), rank.formattedCustomRank(), rank.position());
+            created.addClaim(claim, stats);
+            customRankClaims.add(created);
+        }
 
-            RankClaims claims = new RankClaims(rank.customRank(), rank.formattedCustomRank(), rank.position());
-            claims.addClaim(claim, stats);
-            customRankClaims.add(claims);
+        private Optional<RankStats> findRankStats(List<RankStats> stats, String rank, int position) {
+            return stats.stream().filter(value -> value.rank().equalsIgnoreCase(rank)
+                    && (position == Integer.MAX_VALUE || value.position() == position)).findFirst();
         }
 
         private MutableText claimsText(List<String> claims) {
-            if (claims.isEmpty()) {
-                return Text.translatable("dmls.chat.common.none");
-            }
-
+            if (claims.isEmpty()) return Text.translatable("dmls.chat.common.none");
             MutableText text = Text.literal("");
             for (int i = 0; i < claims.size(); i++) {
-                if (i > 0) {
-                    text.append("§7, ");
-                }
+                if (i > 0) text.append("§7, ");
                 text.append(clickableClaim(claims.get(i)));
             }
             return text;
         }
 
         private MutableText claimResultsText(List<ClaimResult> claims) {
-            if (claims.isEmpty()) {
-                return Text.translatable("dmls.chat.common.none");
-            }
-
+            if (claims.isEmpty()) return Text.translatable("dmls.chat.common.none");
             MutableText text = Text.literal("");
             for (int i = 0; i < claims.size(); i++) {
                 ClaimResult claim = claims.get(i);
-                if (i > 0) {
-                    text.append("§7, ");
-                }
+                if (i > 0) text.append("§7, ");
                 text.append(clickableClaim(claim.claim()));
-                text.append("§7 " + countSuffix(claim));
+                text.append("§7 (1/" + claim.visibleCount() + (claim.openEnded() ? "+" : "") + ")");
             }
             return text;
         }
@@ -574,60 +395,19 @@ public final class CheckLandsModule extends DMLSModule {
         private MutableText clickableClaim(String claim) {
             return Text.literal("§6" + claim).styled(style -> style
                     .withClickEvent(new ClickEvent.RunCommand("/la info " + claim))
-                    .withHoverEvent(new HoverEvent.ShowText(Text.translatable("dmls.chat.check_lands.hover_info", claim))));
-        }
-
-        private Optional<RankStats> findRankStats(List<RankStats> stats, String rank, int position) {
-            for (RankStats rankStats : stats) {
-                if (rankStats.rank.equalsIgnoreCase(rank)
-                        && (position == Integer.MAX_VALUE || rankStats.position == position)) {
-                    return Optional.of(rankStats);
-                }
-            }
-            return Optional.empty();
-        }
-
-        private String countSuffix(ClaimResult claim) {
-            return "(1/" + claim.visibleCount() + (claim.openEnded() ? "+" : "") + ")";
+                    .withHoverEvent(new HoverEvent.ShowText(
+                            Text.translatable("dmls.chat.check_lands.hover_info", claim))));
         }
 
         private String ordinal(int number) {
-            int lastTwoDigits = number % 100;
-            if (lastTwoDigits >= 11 && lastTwoDigits <= 13) {
-                return number + "th";
-            }
-
+            int lastTwo = number % 100;
+            if (lastTwo >= 11 && lastTwo <= 13) return number + "th";
             return switch (number % 10) {
                 case 1 -> number + "st";
                 case 2 -> number + "nd";
                 case 3 -> number + "rd";
                 default -> number + "th";
             };
-        }
-
-        private String timeoutMessage() {
-            if (stage == Stage.WAITING_FOR_INFO && currentClaim != null) {
-                return "Timed out waiting for §6/la info " + currentClaim + "§7. Stopping.";
-            }
-            return "Timed out waiting for §6/la player " + ign + "§7. Stopping.";
-        }
-
-        private void fail(MinecraftClient client, String reason) {
-            ChatUtils.sendClientMessage(client, PREFIX + reason);
-            finish(client);
-        }
-
-        private void cancel(MinecraftClient client, String reason) {
-            ChatUtils.sendClientMessage(client, PREFIX + reason);
-            finish(client);
-        }
-
-        private void finish(MinecraftClient client) {
-            ScreenUtils.closeHandledScreen(client);
-            if (activeSession == this) {
-                activeSession = null;
-                advanceQueue(client);
-            }
         }
     }
 }

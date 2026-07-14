@@ -1,6 +1,6 @@
 package com.duperknight.client.modules;
 
-import com.duperknight.client.gui.ChatSpamMuteScreen;
+import com.duperknight.client.gui.modules.ChatSpamMuteScreen;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
@@ -45,13 +45,25 @@ public final class ChatSpamMuteModule extends DMLSModule {
     }
 
     private boolean shouldHide(Text message) {
-        if (!DMLSConfig.staffRank().isAtLeast(StaffRank.ADMIN)) {
+        return shouldHide(
+                ChatUtils.cleanLine(message.getString()),
+                DMLSConfig.staffRank(),
+                DMLSConfig.tradeChatMuted(),
+                DMLSConfig.serverMessagesMuted());
+    }
+
+    /** Pure form of the event filter policy, shared by both chat origins and fixture tests. */
+    static boolean shouldHide(
+            String cleanMessage,
+            StaffRank rank,
+            boolean tradeChatMuted,
+            boolean serverMessagesMuted
+    ) {
+        if (cleanMessage == null || rank == null || !rank.isAtLeast(StaffRank.ADMIN)) {
             return false;
         }
-
-        String cleanMessage = ChatUtils.cleanLine(message.getString());
-        return (DMLSConfig.tradeChatMuted() && startsWithTradePrefix(cleanMessage))
-                || (DMLSConfig.serverMessagesMuted() && startsWithServerPrefix(cleanMessage));
+        return (tradeChatMuted && startsWithTradePrefix(cleanMessage))
+                || (serverMessagesMuted && startsWithServerPrefix(cleanMessage));
     }
 
     static boolean startsWithTradePrefix(String message) {

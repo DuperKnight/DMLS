@@ -1,0 +1,874 @@
+{
+ "rules": [
+  {
+   "id": "1.1",
+   "section": "Griefing",
+   "title": "Large-scale griefing within a claim is disallowed, unless it is done by the owner of the claim",
+   "punishment": "New players, 1st offense will result in a warning. 7 day ban, 2 week ban, 1 month ban. Extra days may be added if grief is severe. 1.1.b: no warning will be given. Punishable griefs should be rolled back."
+  },
+  {
+   "id": "1.2",
+   "section": "Griefing",
+   "title": "Griefing overworld roads, including taking upgraded roads' redstone blocks, will be punished",
+   "punishment": "Warning, then 7 day ban, 2 week ban, 1 month ban Punishable griefs should be rolled back."
+  },
+  {
+   "id": "1.3",
+   "section": "Griefing",
+   "title": "Building majorly irritating builds, making lavacasts, or excessively and irritatingly extracting resources within 3 chunks of a claim is considered griefing",
+   "punishment": "Participating in these builds / griefs will be punished as well 3 day ban, 7 day ban, 2 week ban, 1 month ban. Extra days may be added if grief is severe. For new players (under two weeks since joining), 1st offense will result in a warning."
+  },
+  {
+   "id": "1.4",
+   "section": "Griefing",
+   "title": "Lavacasting-using lava and water and creating large cobblestone structures-is not allowed",
+   "punishment": "However, these may be rolled back if there is no constructive or reasonable purpose for it. 2 week ban, 2 month ban, permanent ban. Lavacast should be removed and rolled back."
+  },
+  {
+   "id": "1.5",
+   "section": "Griefing",
+   "title": "Inappropriate builds are not allowed",
+   "punishment": "Warn, 7 day ban, 2 weeks, 1 month, 2 months, permanent ban 1.5 b. permanent ban Notes: - Griefs that are older than 30 days will not be moderated. - With exception of the specific circumstances of rule 1.2 and 1.3, griefs outside of a land claim will not be moderated or rolled back."
+  },
+  {
+   "id": "2.1",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "X-Raying/AutoFishing in any form is not allowed for players, including block-exploratory commands or cave-showing mods",
+   "punishment": "1 month, 6 months ban, permanent 2.1.a, b: adds two months each to player ban. Inventory and Balance will be cleared and reset Ban may be permanent if large enough quantities of money, or reduced with investigation cooperation"
+  },
+  {
+   "id": "2.2",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "Using hacked clients and any of their features are disallowed",
+   "punishment": "Permanent ban with chance for appeal. 2.2.b & 2.2.c: 1 week ban, 1 month ban, 3 month ban"
+  },
+  {
+   "id": "2.3",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "Block glitching (attempting to place or use blocks/items in protected areas and using them in order to access areas you should not be able t",
+   "punishment": "Warning, 3 day ban, 1 week ban, 3 week ban, 3 month ban. If the block glitch had negative impacts, skip the warning."
+  },
+  {
+   "id": "2.4",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "You are not allowed to use any third-party software, unauthorized modifications, or in-game bugs in order to prevent being AFK kicked",
+   "punishment": "This includes building contraptions in game, or leaving objects on your keyboard with the intent to reset the AFK timer. In the world: 1 month ban, 2 month ban, 4 month ban, permanent ban."
+  },
+  {
+   "id": "2.5",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "External programs or mods with functions that can be used in order to xray, access extra areas away from your character, access or spy into",
+   "punishment": "(Grievous) Using external programs such as clear lava, anti darkness, etc to bypass vanilla effects or see through lava is not allowed (using full bright is allowed and wont be punished) Generally: warning, 3 day ban, 2 week ban, 2 month ban. If used to xray, hack, or economically benefit, punish these exploits as those other hacks are. 2.5 a: 1 month ban, 2 month ban, 6 month ban, Permanent ban"
+  },
+  {
+   "id": "2.6",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "You are not allowed to exploit inaccessible worlds, especially to gather resources or loot",
+   "punishment": "2 week ban, 3 month ban, 6 month ban All loot will be confiscated."
+  },
+  {
+   "id": "2.7",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "Using any kinds of backdoors, or exposing any kinds of server files, player information, or plugin mechanics using backdoors or backdoor-attained info is not allowed",
+   "punishment": "Permanent ban, no appeal, potential blacklist based on severity."
+  },
+  {
+   "id": "2.8",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "Crashing, overloading or lagging the server is not allowed a",
+   "punishment": "1 month ban, 2 month ban, permanent ban with appeal 2.8.c: permanent ban with appeal The machine(s) will be destroyed entirely, entities removed, and any items used may be replaced or destroyed."
+  },
+  {
+   "id": "2.9",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "Knowingly using an exploitation of in-game mechanics or plugins in order to provide unfair advantages to one or more parties isn't allowed",
+   "punishment": "1 week ban, 1 month ban, 6 month ban, permanent ban Contents of exploitation will be rolled back."
+  },
+  {
+   "id": "2.10",
+   "section": "Hacks, Exploits & Xraying",
+   "title": "Xray Muling is not allowed-Knowingly storing and hiding money or materials obtained through xray, baritone, or other illegal means",
+   "punishment": "2 months, 6 months, permanent ban. 2.10.b: 1 month, 6 months, permanent ban. 2.10.c: permanent ban with appeal. Ban may be permanent if large enough quantities of money, or reduced with investigation cooperation Contents of exploitation will be rolled back."
+  },
+  {
+   "id": "3.1",
+   "section": "Theft & Scams",
+   "title": "Stealing any of the following items from other players' chests or land claims is not allowed (unless during wars, when looting is fully allowed)",
+   "punishment": "(Moderate) Selling or attempting to hide stolen items soon after their theft will increase the ban by 1-2 weeks, depending on value. 7 day ban, 2 week ban, 1 month, 2 month, permanent. Theft ban times can be compounded if the theft is massive in scale or exploitation. The items should be retrieved / rolled back, including any extra stolen items from the list that can be found If the thief is a new player (under 2 weeks) and the items were retrieved, first offense is a warning 3.1.c: 1-4 weeks, d"
+  },
+  {
+   "id": "3.2",
+   "section": "Theft & Scams",
+   "title": "You are not allowed to kick players from your claim for the sole purpose of removing their shop chests or stealing from them",
+   "punishment": "You are not allowed to kick players from your claim for the sole purpose of removing their shop chests or stealing from them. Warning, 3 day ban, 7 days, 2 weeks, 1 month, permanent. Warning can be skipped depends on the size of the shop theft"
+  },
+  {
+   "id": "3.3",
+   "section": "Theft & Scams",
+   "title": "Joining a land claim just to steal their items is not allowed",
+   "punishment": "(mild) New players will not be punished for this at first 7 days, 2 weeks, 1 month, permanent. Warning can be skipped depends on the size of the shop theft For new players (under two weeks since joining): Warning, 3 day ban, 7 days."
+  },
+  {
+   "id": "3.4",
+   "section": "Theft & Scams",
+   "title": "Land Coup Grand Theft is not allowed",
+   "punishment": "Generally: 2 weeks, 1 month, 2 months, then permanent with appeal."
+  },
+  {
+   "id": "3.5",
+   "section": "Theft & Scams",
+   "title": "Using server plugins (chest shops or /lore) to scam other players is not allowed",
+   "punishment": "3 day ban, 1 week ban, 2 week ban, 1 month ban, permanent"
+  },
+  {
+   "id": "3.6",
+   "section": "Theft & Scams",
+   "title": "Scamming and coercing new or returning players is not allowed",
+   "punishment": "Warning, 3 day ban, 1 week ban, 2 week ban, 1 month ban, permanent"
+  },
+  {
+   "id": "3.7",
+   "section": "Theft & Scams",
+   "title": "Serious impersonation of staff or land/nation owners for the purpose of scamming players into land deals is not allowed",
+   "punishment": "3 day ban, 1 week ban, 2 week ban, 1 month ban, permanent"
+  },
+  {
+   "id": "3.8",
+   "section": "Theft & Scams",
+   "title": "Excessive scamming is not allowed, players who are well known for scamming may be warned by senior admins and then banned if they commit another scam afterwards",
+   "punishment": "Any scamming regarding RP tokens, server contests, or warden events (such as the promise to host an event / give control over the event in a ticket) is not allowed whatsoever Warn, 1 month ban, 2 month ban, 6 month ban 3.8.c. 4 month ban Recent scams may be reversed Notes: 1."
+  },
+  {
+   "id": "4.1",
+   "section": "Duping & Economy",
+   "title": "Duping items and money using exploits or admin abuse, or spreading information about a dupe will get you permanently banned and possibly blacklisted",
+   "punishment": "Staff may temporarily ban a player in order to minimize the player's interference while they investigate them for duping. However, staff must already have reasonable cause for the investigation, they cannot do this more than once in a while per player, and the temporary ban may not exceed 72 hours. Permaban with appeal If a player's dupe offense is high enough value or used for wars-they may be blacklisted, and have their progress on the server rolled back. If the dupe-funded war is recent, its pr"
+  },
+  {
+   "id": "4.2",
+   "section": "Duping & Economy",
+   "title": "Dupe Hunter rule-players might be rewarded or protected from retaliatory bans for reporting to staff any usable evidence of other players duping or locating their proven stashes a",
+   "punishment": "If a banned duper helps track down dupers and dupe stashes afterwards, their friends may be rewarded instead."
+  },
+  {
+   "id": "4.3",
+   "section": "Duping & Economy",
+   "title": "Attempting to cover up a dupe or exploit, hiding duplicated items, covering up a player's acquisition of duped money, distributing or receiv",
+   "punishment": "1 month ban, 2 month ban, permaban with appeal. Staff may skip or completely permanently ban the player based on the value or scale of items duped High level dupe bans are not subject to the 6 week statute of limitations."
+  },
+  {
+   "id": "4.4",
+   "section": "Duping & Economy",
+   "title": "Possession or the concealing of illegal items gained from bugs, glitches or means other than duping or abuse, that can harm the server, will be punished",
+   "punishment": "7d ban, 14d ban, 1 month ban, 3 month ban, 6 month ban, permaban with appeal."
+  },
+  {
+   "id": "4.5",
+   "section": "Duping & Economy",
+   "title": "Owners may ban any player or group of players based on dire need, by consensus of both owners (likely along with some senior bans staff and community groups)",
+   "punishment": "Permanent Ban, potential blacklist based on owner sentiment and evidence."
+  },
+  {
+   "id": "5.1",
+   "section": "Farms, Machines & Redstone",
+   "title": "Autofarms are not allowed",
+   "punishment": "Warning, 3 day ban, 1 week ban, 2 week ban, 1 month, permanent, depending on severity, previous history, intent, and impact on the server. Staff may issue any length of ban they feel is appropriate."
+  },
+  {
+   "id": "5.2",
+   "section": "Farms, Machines & Redstone",
+   "title": "Leaving redstone auto machines running/constant ticking redstone running is not allowed",
+   "punishment": "Warning, 3 day ban, 1 week ban, 2 week ban, 1 month, permanent, depending on severity, previous history, intent, and impact on the server. Staff may issue any length of ban they feel is appropriate."
+  },
+  {
+   "id": "6.1",
+   "section": "PvP & Geopol Harassment",
+   "title": "Killing a player 5 times in 1 day within land claims they are trusted in is not allowed",
+   "punishment": "Excessive violations of this rule may result in skipping initial recommended ban times d. Kills per attacker are counted separately 3 day ban, 1 week, 2 week, 1 month, 2 month, permanent"
+  },
+  {
+   "id": "6.2",
+   "section": "PvP & Geopol Harassment",
+   "title": "Requesting staff assistance in game and killing them once they have arrived is disallowed",
+   "punishment": "Items lost through death will be returned Warning, 3 day ban, 1 week ban, 2 week ban, 1 month ban, permanent"
+  },
+  {
+   "id": "6.3",
+   "section": "PvP & Geopol Harassment",
+   "title": "Combat logging when using exploits, broken commands or teleports is not allowed while keepInventory is disabled",
+   "punishment": "3 day ban, 1 week ban, 2 week ban, 1 month ban, 2 months, permanent Any items from the combat-logger may be confiscated, via staff discretion."
+  },
+  {
+   "id": "6.4",
+   "section": "PvP & Geopol Harassment",
+   "title": "Trapping players in situations they can not teleport out of (soft locking) is not allowed",
+   "punishment": "1 week ban, 2 week ban, 1 month ban, 2 month ban, permanent"
+  },
+  {
+   "id": "6.5",
+   "section": "PvP & Geopol Harassment",
+   "title": "Teleport trapping and spawn trapping is not allowed",
+   "punishment": "1 week ban, 2 week ban, 1 month ban, 2 month ban, permanent 6.5.a, straight to 2 week ban."
+  },
+  {
+   "id": "6.6",
+   "section": "PvP & Geopol Harassment",
+   "title": "Use of End Crystals, Respawn Anchors, TNT Minecarts or any other mechanic that functions in the same way to kill a player is not allowed dur",
+   "punishment": "1 week ban, 2 week ban, 1 month ban, permanent"
+  },
+  {
+   "id": "6.7",
+   "section": "PvP & Geopol Harassment",
+   "title": "The usage of items with unobtainable enchants, stats or effects in war, nether, or purge-combat is not allowed",
+   "punishment": "Warning, 7 days, 2 weeks, 1 month, permanent Said items used to break the rule will be confiscated and deleted."
+  },
+  {
+   "id": "6.8",
+   "section": "PvP & Geopol Harassment",
+   "title": "Bandits are not allowed to work with non-bandit players to distract, entrap, loot players or assist at fighting with bandits in general",
+   "punishment": "3 day ban, 1 week ban, 2 week ban, 1 month ban, 2 month ban, permanent Notes: 1."
+  },
+  {
+   "id": "7.1",
+   "section": "Land Claims & Chest Shops",
+   "title": "A land claim may be transferred by ticket request if its main owner",
+   "punishment": "Has an active ban longer than 6 months and has already been banned for at least 2 weeks AND c."
+  },
+  {
+   "id": "7.2",
+   "section": "Land Claims & Chest Shops",
+   "title": "Land claims will be periodically removed if they are considered inactive",
+   "punishment": "Land claims will be periodically removed if they are considered inactive. They will be considered inactive if they do not have 1 player with 120 minutes of playtime within the past 30 days a. In order to avoid your claims being removed, players are encouraged to keep track of their citizens' activity with /la player <username>, actively recruit and integrate new players, and open a lands ticket for staff to transfer claims away from inactive owners."
+  },
+  {
+   "id": "7.3",
+   "section": "Land Claims & Chest Shops",
+   "title": "Staff will not take any tickets regarding land claims under the following circumstances",
+   "punishment": "See rulebook; staff discretion."
+  },
+  {
+   "id": "7.4",
+   "section": "Land Claims & Chest Shops",
+   "title": "Using large amounts of alts (roughly 3+) in order to increase the size of a land claim, particularly for political advantages and land-agitation, is disallowed",
+   "punishment": "Warning, 3 days, 7 days, 2 weeks, 1 month, permanent."
+  },
+  {
+   "id": "7.5",
+   "section": "Land Claims & Chest Shops",
+   "title": "Players are only allowed to be in seven land claims total-owning two, and being citizens in 5 others",
+   "punishment": "Ban until the extra land claims are removed (hopefully via an appeal or land-claims ticket)"
+  },
+  {
+   "id": "7.6",
+   "section": "Land Claims & Chest Shops",
+   "title": "Land claim coups (forcefully taking over land claims using land's internal mechanics) are currently disallowed",
+   "punishment": "7.5: permanent ban with appeal."
+  },
+  {
+   "id": "7.7",
+   "section": "Land Claims & Chest Shops",
+   "title": "Player chest shops can be unlocked upon request in a discord ticket, so long as one of the following is true",
+   "punishment": "See rulebook; staff discretion."
+  },
+  {
+   "id": "7.8",
+   "section": "Land Claims & Chest Shops",
+   "title": "Player's land claims may only be the maximum size their members allow (24 per person trusted + the original starting size)",
+   "punishment": "Players may be banned until they agree in a ticket to downsize."
+  },
+  {
+   "id": "7.9",
+   "section": "Land Claims & Chest Shops",
+   "title": "Gubey's Land Welfare System",
+   "punishment": "(serious) Abusing this system with alts or paid new players will result in a punishment In order to be eligible for receiving a welfare claim, requesting players should ideally: - Be seeking to make a new nation, although vassalage and alliances with pre-existing nations are acceptable - Not have a history of national leadership, large wealth, frequent war pvping, or have many toxicity or largescale bans - Not own or help run a land claim already, or, is clearly a struggling small-scale nation w"
+  },
+  {
+   "id": "7.10",
+   "section": "Land Claims & Chest Shops",
+   "title": "Purchasing, scamming, or re-selling land claims distributed by the lands welfare system is not allowed until 2 months after the land has bee",
+   "punishment": "See rulebook; staff discretion."
+  },
+  {
+   "id": "7.11",
+   "section": "Land Claims & Chest Shops",
+   "title": "Alt accounts may not be used to own or hold additional land claims beyond the limit of two claims per player",
+   "punishment": "Staff will provide first-time offenders with a chance to transfer their claim to another player of their choice in a lands ticket following the ban being issued if the ticket is opened within the first 24 hours of being banned. Additional violations of this rule will result in immediate claim deletion by staff. 3 days (Opportunity to change land ownership within 24 hrs of ban), 7 days, 2 weeks, 1 month, permanent with appeal."
+  },
+  {
+   "id": "8.1",
+   "section": "Proxy Claims",
+   "title": "Using land claims and claimed chunks as a disruptive geopolitical tool may be restricted by staff under the following ruleset",
+   "punishment": "See rulebook; staff discretion."
+  },
+  {
+   "id": "8.2",
+   "section": "Proxy Claims",
+   "title": "If there is a systemic issue with land claims (data loss, wrong deletions, plugin breaking, perms glitching etc), staff may create a Lands Pr",
+   "punishment": "- Opportunistic rebellions or claim coups; directly using the impactful deletion / rollback of a land claim as a pretense to rebel and join another nation / start your own / coup a land claim."
+  },
+  {
+   "id": "8.3",
+   "section": "Proxy Claims",
+   "title": "Insurgent Proxy Claims may be allowed",
+   "punishment": "This rule applies on the basis of social nations , not mechanical lands nations (what is portrayed on the world map, vassalships, etc.) 1 week ban, 2 week ban, 4 week ban, 2 month, 4 month, permanent."
+  },
+  {
+   "id": "8.4",
+   "section": "Proxy Claims",
+   "title": "Excessive Snake Claiming is not allowed",
+   "punishment": "1 week ban, 2 week ban, 4 week ban, 2 month, 4 month, permanent."
+  },
+  {
+   "id": "8.5",
+   "section": "Proxy Claims",
+   "title": "Staff will enforce the 10-chunk buffer zone around land claims from unconsensual encroachment or invasive proxy claiming, due to current issue",
+   "punishment": "Warning, 2 weeks, 2 months, 6 months, permanent ban."
+  },
+  {
+   "id": "8.6",
+   "section": "Proxy Claims",
+   "title": "Creating discord bots or scripts that track land claim borders, ownership, or activity is not allowed",
+   "punishment": "2 months, 6 months, permanent ban"
+  },
+  {
+   "id": "8.7",
+   "section": "Proxy Claims",
+   "title": "Proxy Claim Reign of Terror Rule Server owners may issue a public, official warning against select players for overusing proxy claiming strategies",
+   "punishment": "After warning-6 months, permanent ban."
+  },
+  {
+   "id": "8.8",
+   "section": "Proxy Claims",
+   "title": "Selling a proxy claim within 14 days of creating it is not allowed",
+   "punishment": "7d, 2 weeks, 1 month, 3 months, 6 months, 1 year, permanent Notes: These usages of land claims in geopolitics are explicitly allowed: - Taking over land claims using siege rules - Trading land claims, even if the owner does not consent - Launching insurrections, coups, and secessions from land claims - Extending land claims to protect roads, walls, outposts, etc."
+  },
+  {
+   "id": "9.1",
+   "section": "Roleplaying",
+   "title": "You are not allowed to demonstrate explicit inspiration from regimes, ideologies, groups, events, and governments which have committed real-",
+   "punishment": "1 week ban, 2 week ban, 1 month, 2 month, permanent."
+  },
+  {
+   "id": "9.2",
+   "section": "Roleplaying",
+   "title": "Land claims and nation names should not be crude memes or well known real-life place names",
+   "punishment": "See rulebook; staff discretion."
+  },
+  {
+   "id": "9.3",
+   "section": "Roleplaying",
+   "title": "You are not allowed to roleplay as real life or well known fictional regimes, governments, countries, peoples, or religions",
+   "punishment": "Warnings only; if player refuses to rename-3 day ban."
+  },
+  {
+   "id": "9.4",
+   "section": "Roleplaying",
+   "title": "You are not allowed to roleplay institutionalized slavery of players",
+   "punishment": "Warn, 3 days, 7 days, 1 week, 2 week, 1 month, permanent."
+  },
+  {
+   "id": "9.5",
+   "section": "Roleplaying",
+   "title": "Events posted in the discord channels #wb-announcements may have a raid protection starting from the announced starting hour, as per the admins overseeing the event",
+   "punishment": "Warning + kick (unless there is evidence of knowing wrongdoing), 1 week ban, 2 week ban, 1 month, 2 month, permanent."
+  },
+  {
+   "id": "9.6",
+   "section": "Roleplaying",
+   "title": "Staff may use mutes, kicks, and very short bans in order to stop players who are clearly disrupting roleplay events that they're running / protecting",
+   "punishment": "Kick / Mute or Ban for the duration of the event."
+  },
+  {
+   "id": "9.7",
+   "section": "Roleplaying",
+   "title": "Abusing or exploiting a staff event in order to falsely get more loot (lying about how much loot one received at an event, falsely saying the",
+   "punishment": "1 week, 2 week, 1 month, permanent."
+  },
+  {
+   "id": "9.8",
+   "section": "Roleplaying",
+   "title": "Players are not allowed to attack events that are protected and overseen by staff",
+   "punishment": "Staff will increase the ban by 1-2 weeks if they are being overtly toxic during this event attack. 2 weeks, 1 month, 2 month, permanent Removal and barring from Bandit tag 9.8.c. 6-24 hour ban. If announced in chat, 2 week ban."
+  },
+  {
+   "id": "9.9",
+   "section": "Roleplaying",
+   "title": "Dishonestly submitting builds, art, content, etc that is downloaded off the internet or taken from other people for world building contests is not allowed",
+   "punishment": "2 weeks, 1 month, 2 month, 4 months, 6 months, permanent"
+  },
+  {
+   "id": "9.10",
+   "section": "Roleplaying",
+   "title": "Players are not allowed to cheat in staff-made or assisted dungeons and events by downloading copies of them, sharing protected information,",
+   "punishment": "1 month, 2 month, 4 months, 6 months, permanent"
+  },
+  {
+   "id": "9.11",
+   "section": "Roleplaying",
+   "title": "Players are not allowed to loot, explore, or damage event areas that event staff are still working on in the event world",
+   "punishment": "Looting or griefing will be more harshly punished Warning, 3 day ban, 1 week ban Also exclusion from the event on staff discretion 9.11.b: 1 week ban, all loot and damage will be rolled back"
+  },
+  {
+   "id": "9.12",
+   "section": "Roleplaying",
+   "title": "Ban evasion to evade the wiki team's moderation is not allowed",
+   "punishment": "1 week ban, 2 week ban, 1 month ban, 4 month ban, 6 month ban, permanent ban All misbehavior on the wiki from ban evading player will be undone."
+  },
+  {
+   "id": "10.1",
+   "section": "Discord, Wiki & Chat",
+   "title": "Players are not allowed to advertise their Stoneworks discords or nations to unsolicited players",
+   "punishment": "Discord restriction + warning, then 3 day ban, 1 week ban, 2 week ban."
+  },
+  {
+   "id": "10.2",
+   "section": "Discord, Wiki & Chat",
+   "title": "DM raiding is not allowed",
+   "punishment": "The severity of the ban will reflect the offenses which occurred in the raid. Extra 1 Month to Permaban with appeal, based on staff discretion on the specific offenses."
+  },
+  {
+   "id": "10.3",
+   "section": "Discord, Wiki & Chat",
+   "title": "Sending scam links or advertising anywhere in the Stoneworks Community will result in a permanent discord and in-game ban",
+   "punishment": "Permaban with appeal."
+  },
+  {
+   "id": "10.4",
+   "section": "Discord, Wiki & Chat",
+   "title": "Advertising competitor Minecraft servers or their main discords is not allowed",
+   "punishment": "Permaban with appeal."
+  },
+  {
+   "id": "10.5",
+   "section": "Discord, Wiki & Chat",
+   "title": "Advertising Nations, Religions, and/or Markets outside of the correct channels in the main discord is not allowed, and will result in a mute/restriction",
+   "punishment": "Advertising Nations, Religions, and/or Markets outside of the correct channels in the main discord is not allowed, and will result in a mute/restriction."
+  },
+  {
+   "id": "10.6",
+   "section": "Discord, Wiki & Chat",
+   "title": "In posting in the #suggestions channel, you must adhere to the following rules",
+   "punishment": "No ban/unban petitions 2."
+  },
+  {
+   "id": "10.7",
+   "section": "Discord, Wiki & Chat",
+   "title": "Evading a permanent punishment on the discord server such as Discord restrictions and Feedback muted, and may result in a temporary ban from the discord",
+   "punishment": "Evading a permanent punishment on the discord server such as Discord restrictions and Feedback muted, and may result in a temporary ban from the discord. 7 day, 14 day, 1 month, double ban time after that"
+  },
+  {
+   "id": "10.8",
+   "section": "Discord, Wiki & Chat",
+   "title": "By playing on Stoneworks, you are liable to the potential condition of being recorded in voice calls by either server staff or players without your knowledge or consent",
+   "punishment": "See rulebook; staff discretion."
+  },
+  {
+   "id": "10.9",
+   "section": "Discord, Wiki & Chat",
+   "title": "Publicly pasting another person's hateful or toxic messages/memes is punishable, as if you wrote the toxicity yourself",
+   "punishment": "10.9.a- 1-4 week ban depending on the content and clearness of intent"
+  },
+  {
+   "id": "10.10",
+   "section": "Discord, Wiki & Chat",
+   "title": "If you are the owner of an affiliated discord or are the leader of the nation/religion/faction of that discord, you must help us keep the community clean of the worst rule breakers",
+   "punishment": "(Grievous) This will also be an immediate permaban and blacklist if there is clear evidence of you as the discord owner encouraged these rule breaks. 1 month, 2 month, Permanent ban with appeal. 10.10.c: 1 month extra ban 10.10.d: Permanent ban with appeal. 10.10.e: Permanent ban + Blacklist."
+  },
+  {
+   "id": "10.11",
+   "section": "Discord, Wiki & Chat",
+   "title": "Server owners are allowed to permanently mute or uphold bans for discord players for prolonged negativity and toxicity, but only if there ha",
+   "punishment": "Server owners are allowed to permanently mute or uphold bans for discord players for prolonged negativity and toxicity, but only if there have been other instances of mutings, warnings, and kicks for over 3 months. Permanent Discord mute"
+  },
+  {
+   "id": "10.12",
+   "section": "Discord, Wiki & Chat",
+   "title": "Deliberately contacting Stoneworks service (discord/wiki) providers in order to reverse or override decisions made by Stoneworks staff is not allowed",
+   "punishment": "Wiki ban + 1 week server ban, 2 week ban, 1 month ban, 2 month ban."
+  },
+  {
+   "id": "10.13",
+   "section": "Discord, Wiki & Chat",
+   "title": "Staff may set discussion chats in the discord into an extended slowmode when extremely controversial and significant real-life political even",
+   "punishment": "Staff may mute or time-out players for up to 1 day if they get too toxic over real-life political issues during these events, even if not in a regular discussion channel b. No players should be banned for this situation, unless their conduct violates a separate rule."
+  },
+  {
+   "id": "11.1",
+   "section": "Verbal Toxicity",
+   "title": "Excessively hostile language is not allowed",
+   "punishment": "1 week ban, 2 week ban, 1 month, 2 month, permanent ban. Staff can increase ban times if a single message is insanely toxic. 11.1.c: 2 months, 6 months, permanent. If wrapped up in other present toxicity cases between the players in question-permanent ban first. 11.1.d. and 11.1.e: Permanent ban, if verified."
+  },
+  {
+   "id": "11.2",
+   "section": "Verbal Toxicity",
+   "title": "Making serious false accusations, or starting / knowingly spreading rumors is not allowed",
+   "punishment": "(grievous) If there is proof that a player is spreading this kind of misinformation for geopolitical purposes, it will be harshly punished 2 weeks, 1 month, 2 months, permanent 11.2.e: +2 weeks 11.2.f: +2 months 11.2.g: +6 months"
+  },
+  {
+   "id": "11.3",
+   "section": "Verbal Toxicity",
+   "title": "Staff may punish a player with a public \"Restraining Order\" or \"Staff Enforced Block\" if they are deemed to be habitually toxic or harassing to another player",
+   "punishment": "3d upon application of the Restraining Order, along with a public notification 11.4.a: 2 month ban, 6 month ban, permanent ban. Players should be banned from Stoneworks discord 11.5.b: Permanent ban with appeal."
+  },
+  {
+   "id": "11.4",
+   "section": "Verbal Toxicity",
+   "title": "If a player tells another player that they do not wish to be contacted, especially if they block them on discord as well as other platforms,",
+   "punishment": "2 weeks, 1 month, 2 month, 6 month permanent."
+  },
+  {
+   "id": "11.5",
+   "section": "Verbal Toxicity",
+   "title": "Serious social manipulation using mental health crises is not allowed",
+   "punishment": "If a player speaks of self harm from a real mental health issue, staff may contact them, and potentially consensually ban them in order to provide a break from the intensity of the server, and take further necessary actions to help them. Staff should first try to talk with the player in crisis for context. Warning, 1 month, permanent ban. 11.7.a if clear and concrete: 1 month, permanent ban."
+  },
+  {
+   "id": "11.6",
+   "section": "Verbal Toxicity",
+   "title": "If a player is a habitually toxic problem player, staff may ban them for an extended period of time for a minor toxicity infraction",
+   "punishment": "If the owners deem that a single group is becoming too toxic, the owners must warn this group, and then all future toxicity accusations against them may be punishable with a lower standard of evidence. Permanent ban. Staff may blacklist players with habitual toxicity issues with owner approval."
+  },
+  {
+   "id": "11.7",
+   "section": "Verbal Toxicity",
+   "title": "Prolonged group campaigns to harass individual players are not allowed, especially if done so by identified, international, high-level geopol and mercenary groups",
+   "punishment": "Permanent ban. If the group was warned, no appeal. Players should be fully banned off the discord, and not unbanned from it."
+  },
+  {
+   "id": "11.8",
+   "section": "Verbal Toxicity",
+   "title": "Staff can mute players in-game for 15 minutes for the following reasons",
+   "punishment": "Staff can mute players in-game for 15 minutes for the following reasons: - Sending the same message about 4+ times (or repeating the same message in multiple bursts to get around this) - Sending the same textwall / repeating message about 3+ times - Sending glitched images or UI's that break or obscure the chat - Advertising sales, a market, nation, town, etc to the global chat broadly (this also includes emojis) - If a player keeps speaking a non-english language in global chat after several war"
+  },
+  {
+   "id": "12.1",
+   "section": "Bigotry",
+   "title": "No blatant/insensitive discrimination or comments based on race, gender, sexuality or religion",
+   "punishment": "180 day ban, permanent ban with appeal."
+  },
+  {
+   "id": "12.2",
+   "section": "Bigotry",
+   "title": "Using hard derogatory slurs or symbols is not allowed",
+   "punishment": "3 months, 6 months, permanent"
+  },
+  {
+   "id": "12.3",
+   "section": "Bigotry",
+   "title": "Using soft slurs is not allowed",
+   "punishment": "7 day ban, 30d ban, permanent ban. 12.3.a: 7 day, 30d ban, permanent ban (If it's the soft n-word, warning will be skipped) 12.3.e: 180 day ban, permanent ban with appeal."
+  },
+  {
+   "id": "12.4",
+   "section": "Bigotry",
+   "title": "Purposefully deadnaming a transgender player (using their non-preferred name, specifically one of the opposite gender) or misgendering them is not allowed",
+   "punishment": "Staff can reduce or repeal a ban if the rule violation has no direct victim, and if it was clearly not meant to be harmful, edgy, or exploitative (such as-sharing evidence of another rule violation, accidentally linking media with inappropriate content, joking around among friends, etc.) 13."
+  },
+  {
+   "id": "13.1",
+   "section": "Edginess, Politics & Skins",
+   "title": "Needlessly edgy statements, jokes, memes and language are not allowed on Stoneworks",
+   "punishment": "This does not include non-antisemitic posts referencing or memeing about Israel or related topics, but staff may mute for these. Warning, 7 day mute, 14 day mute, 3-7 day ban, 2 week ban, 1 month ban, 2 month ban , Permanent ban with appeal. Staff may skip to a 1-2w ban if the edgy statement is clearly meant to be offensive or shocking. 13.1.a: 2 week ban 13.1.b: 7 day ban, 2 week ban, 1 month ban, 2 month ban."
+  },
+  {
+   "id": "13.2",
+   "section": "Edginess, Politics & Skins",
+   "title": "Denial, apologia, whitewashing, or affiliation of relevant and widely recognized historical atrocities, genocides, man made famines, and human rights violations will not be tolerated",
+   "punishment": "(Grievous) Genuine naziism is not allowed and will be punished more harshly 6 month ban, Permanent ban with appeal. 13.2.a If arguing in favor of genocidal regime: 1-4 weeks, based on staff discretion, 6 weeks, 4 months, permanent ban. 13.2.c: Permanent ban with appeal"
+  },
+  {
+   "id": "13.3",
+   "section": "Edginess, Politics & Skins",
+   "title": "Edgy or bigoted skins, profile pictures, discord names or bios, or any personal avatar identification are not allowed",
+   "punishment": "Permanent ban until changed 13.3.c: Permanent with appeal 13 Notes: 1."
+  },
+  {
+   "id": "14.1",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "DMing or VCing another player with unsolicited messages of sexual or suggestive content is not allowed",
+   "punishment": "Permanent ban with appeal."
+  },
+  {
+   "id": "14.2",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Sexually graphic or erotic comments, media, or linked sites on the Stoneworks server or any affiliated Discord servers will be punished",
+   "punishment": "1 month, 2 months, 6 months, permanent ban with appeal. 14.2.d. Permanent ban with appeal, blacklist if minors are present Ban duration is up to the discretion of senior bans staff, applied through the rules below acting as guidelines."
+  },
+  {
+   "id": "14.3",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Repeated inappropriate sexually explicit comments towards or about someone, especially if they show discomfort or are defensively unresponsive, are not allowed",
+   "punishment": "Permanent ban with appeal 14.3.a: Permanent ban + blacklist 14.3.b: 180d, or permanent ban with blacklist (if sexual context around it) 14.3.c: 180d, or permanent ban with blacklist (if sexual context around it) 14.3.d: 2-6 months, depending on the severity of the comments."
+  },
+  {
+   "id": "14.4",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Adults e-dating, being consistently romantic with, or having sexual interactions involving a minor is not allowed",
+   "punishment": "ERPing or seeking sexual interaction as a minor will be punished Permanent ban with blacklist 14.4.d: 4 months, permanent ban"
+  },
+  {
+   "id": "14.5",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Adults e-dating, being consistently romantic with, or overtly attempting to enter an emotional/romantic relationship with a minor is not allowed",
+   "punishment": "Reaching out seeking romantic interaction as a minor will also be punished Permanent ban with blacklist 14.5.e: 4 months, permanent ban"
+  },
+  {
+   "id": "14.6",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Sexual grooming or exploitation is not allowed",
+   "punishment": "Permanent ban + Blacklist"
+  },
+  {
+   "id": "14.7",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Sexual Roleplay is not allowed within the Stoneworks Community",
+   "punishment": "Permanent ban with appeal"
+  },
+  {
+   "id": "14.8",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Stoneworks-affiliated discords are not allowed to have channels dedicated to NSFW interactions like erotic roleplay, pornography, etc",
+   "punishment": "2 month ban, Permanent ban with appeal"
+  },
+  {
+   "id": "14.9",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Writing and/or distributing sexual content (books, stories, art, nude pictures) in Stoneworks is not allowed",
+   "punishment": "Distributing explicit sexual material of players, especially if they are minors or unconsenting, is not allowed Permanent ban with appeal 14.9.b Permanent ban with Blacklist"
+  },
+  {
+   "id": "14.10",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Being a creep is not allowed",
+   "punishment": "2 week ban, 1 month ban, 2 month ban, permanent ban with appeal. 14.10.a, Permanent ban, possible blacklist depending on the content 14.10.b, up to staff discretion. If a minor feels unsafe or bullied from this, staff could issue a permaban + blacklist with owner approval. 14.10.c, Staff may decide on the ban duration, depending on the content and if it is potentially harmful to minors on the server."
+  },
+  {
+   "id": "14.11",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Players may be preemptively banned from the server for exhibiting clear pedophilic, sexually exploitative, or behavior on outside platforms",
+   "punishment": "Permanent ban or blacklist if clear and present threat Players should have the chance to try and defend themselves or give further context in this case. 14.11.a Permaban + Possible blacklist"
+  },
+  {
+   "id": "14.12",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Players and staff are not allowed to engage in casual, slightly sexual banter with players under most circumstances",
+   "punishment": "1 week ban, 4 week ban, 4 month ban, permaban. Demotion of staff if a clear case or repeated. 14.12.d: permanent ban and potential blacklist, with chance to appeal to provide further context 14.12.e: permanent ban and blacklist"
+  },
+  {
+   "id": "14.13",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Players are not allowed to directly link to pornographic, ERP, or sexually explicit content pages or feeds on their discord bios, including social media links",
+   "punishment": "1 week ban, and Staff will ask the user to remove this link from their discord bio for the Stoneworks discord server. 14.13.a: Permanent ban. 14.13.b: Permanent ban, + Blacklist if advertised to a minor"
+  },
+  {
+   "id": "14.14",
+   "section": "Sexual Harassment & Pedophilia",
+   "title": "Creating suggestive or sexualised map arts or sprays is not allowed",
+   "punishment": "Staff is obligated to ban players for any instances of pedophilia or major sexual misconduct if they have valid evidence of it, regardless of if the victim may not want them to. Victim players, of course, may request that staff wait or do the ban in a certain way as to avoid repercussions by the perpetrator, but staff must weed these perpetrators out of the community at all costs."
+  },
+  {
+   "id": "16.1",
+   "section": "Doxxing & Threats",
+   "title": "Doxxing and threatening to dox is strictly forbidden",
+   "punishment": "Permanent ban + Blacklist 16.1.a: Based on staff discretion-6 weeks or Permanent ban and maybe blacklist."
+  },
+  {
+   "id": "16.2",
+   "section": "Doxxing & Threats",
+   "title": "Players are not allowed to take or spread real-life pictures of other players, even if they are taken from a public or affiliated chat",
+   "punishment": "16.2.a: 2 months, 6 months, permanent ban. 16.2.b: 4 months, 8 months, permanent ban."
+  },
+  {
+   "id": "16.3",
+   "section": "Doxxing & Threats",
+   "title": "Any reported jokes that involve doxxing or the distribution of random, valid IP addresses (IPv4 format xxx.xxx.xxx.xxx, or IPv6 format",
+   "punishment": "3 days, 1 week, 2 weeks, 1 month, Permanent ban"
+  },
+  {
+   "id": "16.4",
+   "section": "Doxxing & Threats",
+   "title": "Threatening to dox a player, find their address, or other form of threat regarding personal information is not allowed",
+   "punishment": "Permanent ban + maybe Blacklist"
+  },
+  {
+   "id": "16.5",
+   "section": "Doxxing & Threats",
+   "title": "Threatening any serious crimes on anybody, such as physical harm, swatting, assault, kidnapping, etc, is not allowed",
+   "punishment": "Permanent ban + Blacklist"
+  },
+  {
+   "id": "16.6",
+   "section": "Doxxing & Threats",
+   "title": "Purposefully distributing IP Grabbers or spreading viruses are strictly forbidden",
+   "punishment": "Permanent ban + Blacklist 17."
+  },
+  {
+   "id": "17.1",
+   "section": "Illegal Behavior & ToS",
+   "title": "All laws regarding Minecraft as a medium apply on the server",
+   "punishment": "Permanent with appeal."
+  },
+  {
+   "id": "17.2",
+   "section": "Illegal Behavior & ToS",
+   "title": "Encouraging illegal behavior or the exchange of real life goods in Stoneworks or Stoneworks-related Discords is not allowed",
+   "punishment": "Permanent with appeal."
+  },
+  {
+   "id": "17.3",
+   "section": "Illegal Behavior & ToS",
+   "title": "Committing clearly illegal or physically harmful acts within the community or server is punishable",
+   "punishment": "However, if staff obtains evidence that a player is clearly being violent or abusive to another player, then staff may choose to ban the perpetrator for the sake of the victim, even if the acts were not done in context of the server. Due to the sensitive nature of abuse, this should only be done with consent and coordination of the victim player. Permanent with appeal (depending on crime). Report to local police, depending on severity. Players may be banned during an investigation for this rule, i"
+  },
+  {
+   "id": "17.4",
+   "section": "Illegal Behavior & ToS",
+   "title": "Players found to be violating the Minecraft, Discord, or Fandom terms of service will be punished based on staff discretion",
+   "punishment": "This may also apply to social game-related behavior as well as material in-game circumstances, such as: bans and ban reports, ban appeals, harassment and toxicity campaigns, staff adjudication, staff permissions or promotion structures, etc. Permanent with appeal, potential blacklist if mixed with other malicious rulebreaks."
+  },
+  {
+   "id": "17.5",
+   "section": "Illegal Behavior & ToS",
+   "title": "Players who message other players to attempt to sell unwanted goods (such as art) or services for real life money in direct messages, unprom",
+   "punishment": "Players who message other players to attempt to sell unwanted goods (such as art) or services for real life money in direct messages, unprompted, will be permanently banned from the Discord. Permanent Discord ban with appeal."
+  },
+  {
+   "id": "17.6",
+   "section": "Illegal Behavior & ToS",
+   "title": "Messing with the fundamental means of the Stoneworks server",
+   "punishment": "Permanent ban + blacklist Administration Rules 18. Ban Evasion, Weaponization, and Retaliation"
+  },
+  {
+   "id": "18.1",
+   "section": "Ban Evasion & Retaliation",
+   "title": "Ban Evasion is not allowed on Stoneworks",
+   "punishment": "If a player ban evades multiple times under the guise of sharing IPs or computers, then staff may simply ban all accounts that alert the ban evasion system. g. Using an alternative discord account to ban evade a ticket-blacklist may count as bannable ban evasion. h. Owners may permaban and blacklist any account that shows serious signs of ban evasion or account sharing, so long as they have committed pedophilic or other blacklistable offenses on their main accounts. Permanent with appeal. Staff ma"
+  },
+  {
+   "id": "18.2",
+   "section": "Ban Evasion & Retaliation",
+   "title": "Ban tanking is not allowed",
+   "punishment": "Ban tanking is not allowed. If there is evidence that a player purposefully breaks the rules and willingly accepts a temporary ban for long-term benefit, they will be punished. a. Players may not be punished for this rule without direct evidence that they are purposely tanking a ban, and evidence that they greatly profited in geopolitical standing or money from their rulebreak. 180 day ban, or permaban + blacklist for excessive rulebreaks"
+  },
+  {
+   "id": "18.3",
+   "section": "Ban Evasion & Retaliation",
+   "title": "Withholding Evidence & Target Banning",
+   "punishment": "3 Months, 6 months, Permanent. 18.3.d and 18.3.e - Permanent, potential blacklist 18.3.h (requires senior bans approval): 1 month, 3 months, 6 months, permanent ban with appeal"
+  },
+  {
+   "id": "18.4",
+   "section": "Ban Evasion & Retaliation",
+   "title": "Players who are long-term banned are not allowed to partake in geopol",
+   "punishment": "(Grievous) Doing geopol explicitly on behalf of players that are banned or blacklisted will be punished much more harshly. d. (Grievous) Hosting log-ons who are blacklisted in war voicechats will result in a permanent ban for the war's leaders and organizers 2 weeks, 1 month, 2 months, permanent with appeal. 18.4.c: 3 months, permanent ban. 18.4.d: Permanent ban."
+  },
+  {
+   "id": "18.5",
+   "section": "Ban Evasion & Retaliation",
+   "title": "Spreading false information about the rules to new or returning players is not allowed",
+   "punishment": "2 weeks, 1 month, 2 months, permanent with appeal. 18.5.b: 1 month, 2 months, permanent with appeal."
+  },
+  {
+   "id": "18.6",
+   "section": "Ban Evasion & Retaliation",
+   "title": "Ban / Staff retaliation geopol",
+   "punishment": "1 month ban, 2 month ban, Permanent ban with appeal"
+  },
+  {
+   "id": "18.7",
+   "section": "Ban Evasion & Retaliation",
+   "title": "Ban retaliation harassment",
+   "punishment": "1 month ban, 2 month ban, Permanent ban with appeal 18.7.c: 6 month ban, permanent ban 19."
+  },
+  {
+   "id": "19.1",
+   "section": "Staff Harassment & Impersonation",
+   "title": "Harassing or targeting staff about the result of a ticket/other situation regarding their involvement is not allowed",
+   "punishment": "2 weeks, 1 month, 2 months, permanent. 19.1.b: +1 week ban, or +2 weeks if the content of the spam messages is independently bannable. 19.1.d: +1 week - 1 month ban, depending on the scale of the brigadin harassment."
+  },
+  {
+   "id": "19.2",
+   "section": "Staff Harassment & Impersonation",
+   "title": "Frequently spreading false information or \"mald docs\" may be considered disallowed staff harassment",
+   "punishment": "This rule will only go into effect with the approval of an owner and a warning to the community at large. 2 weeks, 1 month, 2 months, permanent. 19.2.b: 2 months, 4 months, permanent."
+  },
+  {
+   "id": "19.3",
+   "section": "Staff Harassment & Impersonation",
+   "title": "Impersonating members of staff is not allowed, particularly for in game advantages or trolling",
+   "punishment": "Accounts may be banned by staff until they are renamed."
+  },
+  {
+   "id": "19.4",
+   "section": "Staff Harassment & Impersonation",
+   "title": "Knowingly goading a staff member into abusing their staff permissions for geopolitical reasons or under false pretenses is not allowed",
+   "punishment": "Staff may not know they are using their perms for false conditions, so a ban is not conditional on their complicity."
+  },
+  {
+   "id": "19.5",
+   "section": "Staff Harassment & Impersonation",
+   "title": "Creating false evidence for use in staff matters (to report a ban, punishable act, OOC harassment, appealing a ban, creating fabricated claims for a casus belli, etc) is not allowed",
+   "punishment": "Permaban + Blacklist 19.5.c: 2-6 month ban if staff sees fit 20."
+  },
+  {
+   "id": "20.1",
+   "section": "Staff Investigations & Bans",
+   "title": "Interfering with or lying to staff during staff investigations of rule breaking, even surrounding the context of the rules, may result in a ba",
+   "punishment": "Interfering with or lying to staff during staff investigations of rule breaking, even surrounding the context of the rules, may result in a ban, especially when the investigation surrounds a serious issue. 2 month ban, permanent ban."
+  },
+  {
+   "id": "20.2",
+   "section": "Staff Investigations & Bans",
+   "title": "Modifying evidence (screenshots, logs, etc.) for an appeal, to cause reputational damage to another player, to gain a benefit from staff, to",
+   "punishment": "Permanent ban."
+  },
+  {
+   "id": "20.3",
+   "section": "Staff Investigations & Bans",
+   "title": "Blackmail using ban evidence is not allowed",
+   "punishment": "90d, 180d, permanent ban."
+  },
+  {
+   "id": "20.4",
+   "section": "Staff Investigations & Bans",
+   "title": "Purposefully lying to staff in a ticket or abusing rollback, refund, or land transfer rules for financial or political gain is not allowed",
+   "punishment": "Purposefully lying to staff in a ticket or abusing rollback, refund, or land transfer rules for financial or political gain is not allowed. 1 month ban, 2 month ban, permanent ban. If violation is financial, player's balance may be reset"
+  },
+  {
+   "id": "20.5",
+   "section": "Staff Investigations & Bans",
+   "title": "Evidently harassing, threatening, or blackmailing staff over a ban / in order to get a ban is not allowed",
+   "punishment": "Evidently harassing, threatening, or blackmailing staff over a ban / in order to get a ban is not allowed. Permanent ban"
+  },
+  {
+   "id": "20.6",
+   "section": "Staff Investigations & Bans",
+   "title": "Threatening to sue or report the server over its legitimate, well-practiced, and good faith administration, rule enforcement, or donation po",
+   "punishment": "1 month ban, 2 month ban, 6 month ban."
+  },
+  {
+   "id": "20.7",
+   "section": "Staff Investigations & Bans",
+   "title": "Falsely and knowingly claiming that a ban is illegitimate because the discord-text evidence is faked or forged is not allowed",
+   "punishment": "Staff cannot ban for this unless this is actively proven like this. 3 month ban, 6 month ban, permaban with appeal."
+  },
+  {
+   "id": "20.8",
+   "section": "Staff Investigations & Bans",
+   "title": "Abusing staff's usual good-faith protections for player reporters for political gain is not allowed, such as the rules on geopolitical retali",
+   "punishment": "3 month ban, 6 month ban, permaban with appeal."
+  },
+  {
+   "id": "20.9",
+   "section": "Staff Investigations & Bans",
+   "title": "Insider trading and activity is not allowed",
+   "punishment": "(severe) If the activity does not have clear significance to geopolitics or war, staff should gauge the ban time due to its scope. 6 month ban, permaban with appeal. 20.10.c: 1-3 months ban, permaban with appeal."
+  },
+  {
+   "id": "20.11",
+   "section": "Staff Investigations & Bans",
+   "title": "Bans staff are allowed to demand a higher standard when judging unban appeals from players who are clearly prolific in-game war mercenaries",
+   "punishment": "This rule does not impact a mercenary's right to present evidence that they are wrongly banned, their ban is mischaracterized, or that staff abuse has occurred."
+  }
+ ]
+}

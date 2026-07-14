@@ -3,6 +3,9 @@ package com.duperknight.client.utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.net.ConnectException;
+import java.net.http.HttpTimeoutException;
+import java.util.concurrent.CompletionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,12 +26,12 @@ class MojangProfileLookupTest {
     }
 
     @Test void rejectsMalformedUnexpectedOrDuplicateProfiles() {
-        assertEquals(MojangProfileLookup.Status.ERROR,
+        assertEquals(MojangProfileLookup.Status.MALFORMED_RESPONSE,
                 MojangProfileLookup.parseSuccess("{}", List.of("DuperKnight")).status());
-        assertEquals(MojangProfileLookup.Status.ERROR,
+        assertEquals(MojangProfileLookup.Status.MALFORMED_RESPONSE,
                 MojangProfileLookup.parseSuccess("[{\"id\":\"bad\",\"name\":\"DuperKnight\"}]",
                         List.of("DuperKnight")).status());
-        assertEquals(MojangProfileLookup.Status.ERROR,
+        assertEquals(MojangProfileLookup.Status.MALFORMED_RESPONSE,
                 MojangProfileLookup.parseSuccess("[{\"id\":\"f1a1f93b64bd4ea5b40ba71a335c064b\",\"name\":\"OtherUser\"}]",
                         List.of("DuperKnight")).status());
         assertThrows(IllegalArgumentException.class, () -> MojangProfileLookup.hyphenateUuid("bad"));
@@ -37,5 +40,12 @@ class MojangProfileLookupTest {
     @Test void enforcesSmallValidBatchesBeforeNetworkUse() {
         assertTrue(MojangProfileLookup.MAX_USERNAMES > 1);
         assertEquals(10, MojangProfileLookup.MAX_USERNAMES);
+    }
+
+    @Test void classifiesExceptionalCompletionCauses() {
+        assertEquals(MojangProfileLookup.Status.TIMEOUT,
+                MojangProfileLookup.failureResult(new CompletionException(new HttpTimeoutException("slow"))).status());
+        assertEquals(MojangProfileLookup.Status.NETWORK_ERROR,
+                MojangProfileLookup.failureResult(new ConnectException("offline")).status());
     }
 }
