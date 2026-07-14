@@ -1,13 +1,16 @@
 # DMLS — Duper's Mod for Lazy Staff
 
-DMLS is a client-only Fabric mod for Stoneworks staff workflows on Minecraft 1.21.11. It validates and coordinates staff commands, but it never grants permissions or infers the permissions of the logged-in account. The server is always authoritative.
+DMLS is a client-only Fabric mod for Stoneworks staff workflows on Minecraft 1.21.11. It validates and coordinates staff commands, while the server remains authoritative.
 
 ## Install and configure
 
 1. Install Fabric Loader, Fabric API, and the DMLS JAR on the client. Mod Menu is optional.
 2. Start Minecraft once to create `config/dmls.properties`. `play.stoneworks.gg` is allowed by default.
-3. Select your staff rank in Mod Options or with `/dmls rank`. The selected rank controls client-side visibility and safety gates only.
+3. Join through `play.stoneworks.gg`. DMLS reads and stores your staff rank from the hub scoreboard; an unrecognized rank locks the module menu.
 4. Add alert words, one per line, to `config/dmls-alerts.txt`, then run `/dmls alerts reload`.
+
+The first verified staff rank opens a welcome module grid. Later promotions open the same grid with newly unlocked modules highlighted.
+Module messages intended for global chat temporarily switch to `public` when needed, then restore the previous channel; the channel-list probe is hidden from chat.
 
 ## Canonical commands ( its recommended that you use the GUI )
 
@@ -15,8 +18,8 @@ The supported command namespace is `/dmls`:
 
 - `/dmls` — open the module menu.
 - `/dmls help` — show in-game command help.
-- `/dmls rank [rank]` — show or set the local selected rank.
-- `/dmls dryrun [on|off]` — show or toggle session-only dry-run mode; changing it requires the Admin selection.
+- `/dmls rank` — show the staff rank last detected in the Stoneworks hub.
+- `/dmls dryrun [on|off]` — show or toggle session-only dry-run mode; changing it requires a detected Admin rank.
 - `/dmls cancel` — cancel the active response-tracked operation.
 - `/dmls lands <ign...>`
 - `/dmls members <land>`

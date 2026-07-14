@@ -1,6 +1,8 @@
 package com.duperknight.client.gui;
 
 import com.duperknight.client.modules.DMLSModule;
+import com.duperknight.client.modules.StaffRank;
+import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -18,24 +20,52 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private static final int CARD_MARGIN = scaled(24);
     private static final int MIN_CARD_SIZE = scaled(70);
     private static final int MAX_CARD_SIZE = scaled(120);
+    private static final int ANNOUNCEMENT_HEIGHT = scaled(78);
 
     private final List<DMLSModule> registeredModules;
+    private final RankAnnouncement announcement;
     private List<DMLSModule> visibleModules = List.of();
     private int scrollOffset;
     private int maxScroll;
     private boolean draggingScrollbar;
+    private boolean accessAtInit;
 
     public DMLSHomeScreen(List<DMLSModule> registeredModules) {
         this(registeredModules, null);
     }
 
     public DMLSHomeScreen(List<DMLSModule> registeredModules, Screen parent) {
+        this(registeredModules, parent, null);
+    }
+
+    private DMLSHomeScreen(List<DMLSModule> registeredModules, Screen parent, RankAnnouncement announcement) {
         super(Text.translatable("dmls.title.home"), parent);
         this.registeredModules = List.copyOf(registeredModules);
+        this.announcement = announcement;
+    }
+
+    public static DMLSHomeScreen welcome(List<DMLSModule> registeredModules, StaffRank currentRank) {
+        return new DMLSHomeScreen(registeredModules, null,
+                new RankAnnouncement(AnnouncementType.WELCOME, StaffRank.NONE, currentRank));
+    }
+
+    public static DMLSHomeScreen promotion(
+            List<DMLSModule> registeredModules,
+            StaffRank previousRank,
+            StaffRank currentRank
+    ) {
+        return new DMLSHomeScreen(registeredModules, null,
+                new RankAnnouncement(AnnouncementType.PROMOTION, previousRank, currentRank));
     }
 
     @Override
     protected void init() {
+        accessAtInit = DMLSConfig.hasRecognizedStaffRank();
+        if (!accessAtInit) {
+            addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.exit"), button -> close())
+                    .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
+            return;
+        }
         addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.options"), button -> client.setScreen(new DMLSOptionsScreen(this)))
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.exit"), button -> close())
@@ -44,8 +74,15 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        if (accessAtInit != DMLSConfig.hasRecognizedStaffRank()) {
+            clearChildren();
+            init();
+        }
         renderMenuBackground(context);
-        visibleModules = registeredModules.stream().filter(DMLSModule::isAvailableToSelectedRank).toList();
+        visibleModules = registeredModules.stream().filter(DMLSModule::isAvailableToDetectedRank).toList();
+        if (announcement != null) {
+            renderRankAnnouncement(context);
+        }
         GridLayout layout = layoutFor(visibleModules.size());
         scrollOffset = Math.min(scrollOffset, maxScroll);
 
@@ -56,7 +93,10 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         context.disableScissor();
 
         if (visibleModules.isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.message.no_modules"),
+            Text message = DMLSConfig.hasRecognizedStaffRank()
+                    ? Text.translatable("dmls.message.no_modules")
+                    : Text.translatable("dmls.message.staff_required");
+            context.drawCenteredTextWithShadow(textRenderer, message,
                     width / 2, layout.viewportY() + layout.viewportHeight() / 2 - 4, 0xFFAAAAAA);
         }
         if (layout.scrollable()) {
@@ -72,8 +112,23 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         boolean hovered = mouseX >= cardX && mouseX < cardX + layout.cardSize()
                 && mouseY >= cardY && mouseY < cardY + layout.cardSize()
                 && mouseY >= layout.viewportY() && mouseY < layout.viewportBottom();
-        context.fill(cardX, cardY, cardX + layout.cardSize(), cardY + layout.cardSize(), hovered ? 0xB8202020 : 0xA8000000);
-        context.drawStrokedRectangle(cardX, cardY, layout.cardSize(), layout.cardSize(), hovered ? 0xFFFFFFFF : 0xFFAAAAAA);
+        boolean newlyUnlocked = isNewlyUnlocked(module);
+        int backgroundColor = newlyUnlocked
+                ? (hovered ? 0xB82A402A : 0xA8122812)
+                : (hovered ? 0xB8202020 : 0xA8000000);
+        int borderColor = hovered ? 0xFFFFFFFF : newlyUnlocked ? 0xFF55FF55 : 0xFFAAAAAA;
+        context.fill(cardX, cardY, cardX + layout.cardSize(), cardY + layout.cardSize(), backgroundColor);
+        context.drawStrokedRectangle(cardX, cardY, layout.cardSize(), layout.cardSize(), borderColor);
+
+        if (newlyUnlocked) {
+            Text badge = Text.translatable("dmls.promotion.new");
+            int badgeWidth = textRenderer.getWidth(badge) + scaled(8);
+            int badgeX = cardX + layout.cardSize() - badgeWidth - scaled(4);
+            int badgeY = cardY + scaled(4);
+            context.fill(badgeX, badgeY, badgeX + badgeWidth, badgeY + textRenderer.fontHeight + scaled(4), 0xD0206020);
+            context.drawCenteredTextWithShadow(textRenderer, badge,
+                    badgeX + badgeWidth / 2, badgeY + scaled(2), 0xFFFFFFFF);
+        }
 
         ItemStack icon = module.icon();
         float iconScale = 1.5F * UI_SCALE;
@@ -159,26 +214,71 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private GridLayout layoutFor(int moduleCount) {
         int panelWidth = Math.clamp(width - scaled(32), scaled(300), scaled(470));
         int panelX = (width - panelWidth) / 2;
-        int viewportY = HEADER_HEIGHT;
-        int viewportHeight = Math.max(scaled(80), height - FOOTER_TOP_OFFSET - viewportY);
-        int cardAreaWidth = panelWidth - CARD_MARGIN * 2;
-        int cardSize = Math.clamp((cardAreaWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS, MIN_CARD_SIZE, MAX_CARD_SIZE);
+        int viewportY = HEADER_HEIGHT + (announcement == null ? 0 : ANNOUNCEMENT_HEIGHT);
+        int minimumViewportHeight = announcement == null ? scaled(80) : scaled(40);
+        int viewportHeight = Math.max(minimumViewportHeight, height - FOOTER_TOP_OFFSET - viewportY);
+        int cardMargin = announcement == null ? CARD_MARGIN : scaled(8);
+        int minimumCardSize = announcement == null ? MIN_CARD_SIZE : scaled(58);
+        int maximumCardSize = announcement == null
+                ? MAX_CARD_SIZE
+                : Math.max(minimumCardSize, viewportHeight - cardMargin * 2);
+        int cardAreaWidth = panelWidth - cardMargin * 2;
+        int cardSize = Math.clamp((cardAreaWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS,
+                minimumCardSize, maximumCardSize);
         int rows = (moduleCount + COLUMNS - 1) / COLUMNS;
         int contentHeight = rows == 0 ? 0
-                : CARD_MARGIN * 2 + rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
+                : cardMargin * 2 + rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
         maxScroll = Math.max(0, contentHeight - viewportHeight);
         boolean scrollable = maxScroll > 0;
-        int viewportWidth = panelWidth - CARD_MARGIN * 2 - (scrollable ? scaled(14) : 0);
-        cardSize = Math.clamp(cardSize, MIN_CARD_SIZE, (viewportWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS);
+        int viewportWidth = panelWidth - cardMargin * 2 - (scrollable ? scaled(14) : 0);
+        cardSize = Math.clamp(cardSize, minimumCardSize,
+                Math.max(minimumCardSize, (viewportWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS));
         contentHeight = rows == 0 ? 0
-                : CARD_MARGIN * 2 + rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
+                : cardMargin * 2 + rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
         maxScroll = Math.max(0, contentHeight - viewportHeight);
         if (maxScroll == 0) {
             scrollable = false;
-            viewportWidth = panelWidth - CARD_MARGIN * 2;
-            cardSize = Math.clamp((viewportWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS, MIN_CARD_SIZE, MAX_CARD_SIZE);
+            viewportWidth = panelWidth - cardMargin * 2;
+            cardSize = Math.clamp((viewportWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS,
+                    minimumCardSize, maximumCardSize);
         }
-        return new GridLayout(panelX, panelWidth, panelX + CARD_MARGIN, viewportY, viewportWidth, viewportHeight, cardSize, scrollable);
+        return new GridLayout(panelX, panelWidth, panelX + cardMargin, viewportY, viewportWidth, viewportHeight,
+                viewportY + cardMargin, cardSize, scrollable);
+    }
+
+    private void renderRankAnnouncement(DrawContext context) {
+        Text heading = Text.translatable(announcement.type == AnnouncementType.WELCOME
+                ? "dmls.welcome.title"
+                : "dmls.promotion.title");
+        context.drawCenteredTextWithShadow(textRenderer, heading,
+                width / 2, HEADER_HEIGHT + scaled(4), 0xFFFFFFFF);
+
+        int panelWidth = Math.min(scaled(220), width - scaled(48));
+        int panelX = width / 2 - panelWidth / 2;
+        int panelY = HEADER_HEIGHT + scaled(24);
+        renderPanel(context, panelX, panelY, panelWidth, STANDARD_BUTTON_HEIGHT);
+        context.drawCenteredTextWithShadow(textRenderer, announcement.currentRank.displayName(),
+                width / 2, panelY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2, 0xFFFFFFFF);
+
+        Text summary;
+        if (announcement.type == AnnouncementType.WELCOME) {
+            summary = Text.translatable("dmls.welcome.summary", visibleModules.size());
+        } else {
+            int newlyUnlocked = (int) visibleModules.stream().filter(this::isNewlyUnlocked).count();
+            summary = Text.translatable(newlyUnlocked == 1
+                            ? "dmls.promotion.summary.one"
+                            : "dmls.promotion.summary.many",
+                    announcement.previousRank.displayName(), newlyUnlocked);
+        }
+        context.drawCenteredTextWithShadow(textRenderer, summary,
+                width / 2, HEADER_HEIGHT + scaled(57), 0xFFDDDDDD);
+    }
+
+    private boolean isNewlyUnlocked(DMLSModule module) {
+        return announcement != null
+                && announcement.type == AnnouncementType.PROMOTION
+                && module.isAvailableForStaffRank(announcement.currentRank)
+                && !module.isAvailableForStaffRank(announcement.previousRank);
     }
 
     private int scrollbarThumbHeight(GridLayout layout) {
@@ -205,7 +305,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     }
 
     private record GridLayout(int panelX, int panelWidth, int viewportX, int viewportY, int viewportWidth,
-                              int viewportHeight, int cardSize, boolean scrollable) {
+                              int viewportHeight, int contentTop, int cardSize, boolean scrollable) {
         int viewportRight() {
             return viewportX + viewportWidth;
         }
@@ -214,14 +314,18 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
             return viewportY + viewportHeight;
         }
 
-        int contentTop() {
-            return viewportY + CARD_MARGIN;
-        }
-
         int cardX(int column) {
             int gridWidth = cardSize * COLUMNS + CARD_GAP * (COLUMNS - 1);
             return viewportX + (viewportWidth - gridWidth) / 2 + column * (cardSize + CARD_GAP);
         }
+    }
+
+    private enum AnnouncementType {
+        WELCOME,
+        PROMOTION
+    }
+
+    private record RankAnnouncement(AnnouncementType type, StaffRank previousRank, StaffRank currentRank) {
     }
 
 }

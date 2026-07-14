@@ -15,24 +15,47 @@
   "dmls.button.promote": "Promote",
   "dmls.button.rollback": "Roll Back",
   "dmls.button.give_pet": "Give Pet",
-  "dmls.message.no_modules": "No modules are available for your selected rank.",
+  "dmls.message.no_modules": "No modules are available for your staff rank.",
+  "dmls.message.staff_required": "You must be Stoneworks staff to use DMLS.",
+  "dmls.welcome.title": "Welcome to DMLS!",
+  "dmls.welcome.summary": "These are the %s modules available to your staff rank.",
+  "dmls.promotion.title": "Congratulations on your promotion!",
+  "dmls.promotion.summary.one": "Previously %s — %s newly unlocked module is highlighted.",
+  "dmls.promotion.summary.many": "Previously %s — %s newly unlocked modules are highlighted.",
+  "dmls.promotion.new": "NEW",
   "dmls.validation.config.save_failed": "Could not save the setting; the previous value is still active.",
   "dmls.chat.config.save_failed": "Could not save the setting; the previous value is still active.",
   "dmls.update.available": "DMLS update available: %s — please update the mod!",
   "dmls.option.on": "On",
   "dmls.option.off": "Off",
   "dmls.option.staff_rank": "Staff Rank",
+  "dmls.option.departments": "Departments",
   "dmls.option.allowed_servers": "Allowed Servers...",
   "dmls.option.allowed_servers.description": "Stoneworks commands run only on these exact hosts or explicit *.host rules. Click an existing entry to remove it.",
   "dmls.option.allowed_servers.remove": "Remove: %s",
   "dmls.dropdown.usage.closed": "Press Enter to open the choices.",
   "dmls.dropdown.usage.open": "Use Up and Down to choose, Enter to select, and Escape to close.",
 
+  "dmls.staff_rank.none": "STAFF RANK NOT DETECTED",
   "dmls.staff_rank.helper": "HELPER",
   "dmls.staff_rank.moderator": "MODERATOR",
   "dmls.staff_rank.senior_moderator": "SR MOD",
   "dmls.staff_rank.support": "SUPPORT",
   "dmls.staff_rank.admin": "ADMIN",
+
+  "dmls.department.bans": "Bans",
+  "dmls.department.events": "Events",
+  "dmls.department.war": "War",
+  "dmls.department_rank.not_assigned": "Not assigned",
+  "dmls.department_rank.senior_bans_staff": "Senior Bans Staff",
+  "dmls.department_rank.bans_staff": "Bans Staff",
+  "dmls.department_rank.jr_bans_staff": "Jr Bans Staff",
+  "dmls.department_rank.senior_war_staff": "Senior War Staff",
+  "dmls.department_rank.war_staff": "War Staff",
+  "dmls.department_rank.jr_war_staff": "Jr War Staff",
+  "dmls.department_rank.events_admin": "Events Admin",
+  "dmls.department_rank.events_moderator": "Events Moderator",
+  "dmls.department_rank.events_helper": "Events Helper",
 
   "dmls.module.chat_alerts.name": "Chat Alerts",
   "dmls.module.chat_alerts.description": "Receive an alert when a configured word appears in chat.",
@@ -110,10 +133,13 @@
   ,"dmls.placeholder.server_address": "play.stoneworks.gg or *.proxy.example.org:25565"
   ,"dmls.placeholder.prefix_id": "prefixid"
   ,"dmls.placeholder.prefix_text": "&aHelper <gold>Team"
-  ,"dmls.chat.rank.current": "§7Your rank is set to %s§r§7. Change it with §6/dmls rank <rank>§7."
+  ,"dmls.chat.rank.current": "§7Your hub-detected staff rank is %s§r§7."
   ,"dmls.chat.rank.unknown": "§7Unknown rank §6%s§7. Options: §6%s§7."
   ,"dmls.chat.rank.set": "§7Rank set to %s§r§7."
-  ,"dmls.chat.rank.required": "§7This requires %s§r§7 or higher, but your rank is set to %s§r§7. Change it with §6/dmls rank <rank>§7."
+  ,"dmls.chat.rank.required": "§7This requires %s§r§7 or higher, but your hub-detected rank is %s§r§7."
+  ,"dmls.chat.staff.required": "§7You must have a recognized Stoneworks staff rank to use this module."
+  ,"dmls.chat.department_rank.required": "§7This requires %s§r§7 in %s§r§7, but your configured department rank is %s§r§7."
+  ,"dmls.chat.department.required": "§7This requires an assigned rank in the %s§r§7 department."
   ,"dmls.chat.alerts.status": "§7Chat alerts are %s§7 with §6%s§7 words loaded. Use §6/dmls alerts <on|off|reload>§7."
   ,"dmls.chat.alerts.enabled": "§7Chat alerts §aenabled§7."
   ,"dmls.chat.alerts.disabled": "§7Chat alerts §cdisabled§7."
@@ -129,12 +155,12 @@
   ,"dmls.help.prefix": "Creates a formatted prefix and sets its player limit and manager. Requires %s§r."
   ,"dmls.help.donorpet": "Gives a donor permission for their elite mount pet. Requires %s§r."
   ,"dmls.help.promowave": "Stages a paced, response-confirmed promotion wave for review. Requires %s§r."
-  ,"dmls.help.rank": "Shows or sets the local rank used to display modules; it does not grant or detect server permissions."
+  ,"dmls.help.rank": "Shows the staff rank last detected from the Stoneworks hub scoreboard."
   ,"dmls.help.alerts": "Shows or toggles chat alerts. Words are configured in config/dmls-alerts.txt."
   ,"dmls.help.say": "Sends a pre-written staff reply in chat."
   ,"dmls.help.menu": "Opens the DMLS menu."
   ,"dmls.help.hover": "%s\n§8Click to put the command in your chat bar."
-  ,"dmls.validation.required_rank": "This module is hidden for the locally selected rank; server permissions are authoritative."
+  ,"dmls.validation.required_rank": "This module is hidden for the hub-detected staff rank; server permissions are authoritative."
   ,"dmls.validation.prefix.active": "A prefix creation is still running; wait for it to finish."
   ,"dmls.validation.prefix.ign": "Enter a valid player IGN."
   ,"dmls.validation.prefix.limit": "The player limit must be a whole number from 1 to 2147483647."
@@ -208,6 +234,10 @@
   ,"dmls.chat.check_alts.skipped": "§8Skipped because of the account limit: %s"
   ,"dmls.chat.server_guard.blocked": "Stoneworks command blocked (%s): §6%s§7. Configure allowedServers in config/dmls.properties."
   ,"dmls.chat.command.not_sent": "Command was not sent because the connection or allowed server changed."
+  ,"dmls.chat.global_channel.query_failed": "Could not read your active chat channel; the global message was not sent."
+  ,"dmls.chat.global_channel.switch_failed": "Could not switch to public chat; the global message was not sent."
+  ,"dmls.chat.global_channel.send_failed": "The global chat message could not be sent."
+  ,"dmls.chat.global_channel.restore_failed": "The message was sent, but DMLS could not return you to channel %s."
   ,"dmls.chat.donor_pet.sent": "Permission command sent for §6%s§7 / §6%s§7 (§8%s§7); server confirmation was not observed."
   ,"dmls.chat.donor_pet.waiting": "Permission command sent for §6%s§7 / §6%s§7; waiting for LuckPerms confirmation."
   ,"dmls.chat.donor_pet.confirmed": "Confirmed pet permission for §6%s§7 / §6%s§7 (§8%s§7)."
@@ -457,7 +487,7 @@
   ,"dmls.chat.operation.start_failed": "The operation could not start safely; nothing was sent."
   ,"dmls.validation.operation.blocked": "This action is blocked by rank, connection, or server safety. See chat for details."
   ,"dmls.validation.operation.busy": "Another response-tracked operation is active. Finish or cancel it first."
-  ,"dmls.validation.operation.rank_blocked": "The locally selected rank cannot run this action."
+  ,"dmls.validation.operation.rank_blocked": "The hub-detected rank cannot run this action."
   ,"dmls.validation.operation.start_failed": "The operation could not start safely; nothing was sent."
   ,"dmls.screen.confirmation.failed": "Confirmation failed; nothing was sent. Check chat, then edit or try again."
   ,"dmls.screen.confirmation.expired": "Confirmation expired or became stale; nothing was sent."

@@ -27,8 +27,8 @@ public final class EventProtectModule extends DMLSModule{
         SERVER_BLOCKED
     }
 
-    public EventProtectModule(){
-        super(StaffRank.SENIOR_MODERATOR);
+    public EventProtectModule() {
+        super(StaffDepartment.EVENTS);
     }
 
     @Override

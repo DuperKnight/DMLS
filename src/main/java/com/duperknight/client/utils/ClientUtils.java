@@ -97,6 +97,16 @@ public final class ClientUtils {
             boolean dryRunCaptured,
             ConnectionSnapshot expectedConnection
     ) {
+        return GlobalChatMessenger.dispatch(client, message, dryRunCaptured, expectedConnection);
+    }
+
+    /** Sends directly to the currently active chat channel; only the global-chat coordinator should call this live. */
+    static CommandDispatch dispatchChatMessageDirect(
+            MinecraftClient client,
+            String message,
+            boolean dryRunCaptured,
+            ConnectionSnapshot expectedConnection
+    ) {
         if (message == null || message.isBlank() || expectedConnection == null
                 || !expectedConnection.matches(client)) {
             return CommandDispatch.BLOCKED;

@@ -173,7 +173,7 @@ public final class PunishmentHelperModule extends DMLSModule {
         return rules().stream().filter(rule -> rule.matches(needle)).collect(Collectors.toList());
     }
 
-    /** Whether the selected rank may issue bans. */
+    /** Whether the hub-detected rank may issue bans. */
     public static boolean canBan() {
         return DMLSConfig.staffRank().isAtLeast(BAN_RANK);
     }

@@ -70,7 +70,7 @@ public final class ChatAlertsModule extends DMLSModule {
     }
 
     private void check(ServerMessage message) {
-        if (!DMLSConfig.alertsEnabled()) {
+        if (!DMLSConfig.hasRecognizedStaffRank() || !DMLSConfig.alertsEnabled()) {
             return;
         }
 

@@ -76,6 +76,7 @@ class DMLSClientCommandTreeTest {
         assertChildren(root.getChild("brb"), Set.of("off", "duration"));
         assertChildren(root.getChild("dnd"), Set.of("on", "off"));
         assertChildren(root.getChild("say"), Set.copyOf(CannedReplies.names()));
+        assertChildren(root.getChild("rank"), Set.of());
     }
 
     @Test

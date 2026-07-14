@@ -115,7 +115,7 @@ public final class GreeterModule extends DMLSModule {
     }
 
     private Text appendWelcomeAction(Text message, boolean overlay) {
-        if (overlay || !enabled() || !isAvailableToSelectedRank()) {
+        if (overlay || !enabled() || !isAvailableToDetectedRank()) {
             return message;
         }
 

@@ -4,10 +4,10 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
 /**
- * Represents the different staff ranks in the game. In the future this will allow the staff member to configure
- * their current rank and with that the commands available to them.
+ * Represents the Stoneworks staff ranks recognized from the hub scoreboard.
  */
 public enum StaffRank {
+    NONE("dmls.staff_rank.none", Formatting.GRAY, -1),
     HELPER("dmls.staff_rank.helper", Formatting.AQUA, 0),
     MODERATOR("dmls.staff_rank.moderator", Formatting.DARK_GREEN, 1),
     SENIOR_MODERATOR("dmls.staff_rank.senior_moderator", Formatting.GOLD, 2),
@@ -50,5 +50,10 @@ public enum StaffRank {
      */
     public boolean isAtLeast(StaffRank minimumRank) {
         return level >= minimumRank.level;
+    }
+
+    /** Returns whether this value represents a recognized Stoneworks staff rank. */
+    public boolean isStaff() {
+        return this != NONE;
     }
 }

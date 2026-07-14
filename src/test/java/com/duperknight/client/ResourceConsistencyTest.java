@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ResourceConsistencyTest {
     private static final String LANGUAGE_RESOURCE = "/assets/dmls/lang/en_us.json";
     private static final Pattern TRANSLATION_LITERAL = Pattern.compile(
-            "\"((?:dmls\\.(?:button|chat|dropdown|field|help|message|module|option|placeholder|prefix|screen|staff_rank|title|update|validation)|key\\.dmls)\\.[A-Za-z0-9_.-]+)\"");
+            "\"((?:dmls\\.(?:button|chat|department|department_rank|dropdown|field|help|message|module|option|placeholder|prefix|promotion|screen|staff_rank|title|update|validation|welcome)|key\\.dmls)\\.[A-Za-z0-9_.-]+)\"");
     private static final Set<String> CONSTRUCTED_NAMESPACES = Set.of(
             "dmls.chat.promo.",
             "dmls.chat.demo.",

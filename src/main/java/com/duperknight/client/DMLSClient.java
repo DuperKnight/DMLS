@@ -30,6 +30,8 @@ import com.duperknight.client.utils.CannedReplies;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
+import com.duperknight.client.utils.HubStaffRankDetector;
+import com.duperknight.client.utils.GlobalChatMessenger;
 import com.duperknight.client.utils.UpdateChecker;
 import com.duperknight.client.message.ServerMessageRouter;
 import com.duperknight.client.session.CommandDispatch;
@@ -56,7 +58,6 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.Formatting;
 
 import java.util.List;
-import java.util.Optional;
 
 public class DMLSClient implements ClientModInitializer {
     private static final String PREFIX = "§8[§6DMLS§8] §7";
@@ -68,6 +69,8 @@ public class DMLSClient implements ClientModInitializer {
         OperationCoordinator.global().register();
         registerDmlsCommand();
         registerMenuKeybind();
+        GlobalChatMessenger.register();
+        HubStaffRankDetector.register();
         UpdateChecker.register();
         modules().forEach(DMLSModule::register);
     }
@@ -89,26 +92,7 @@ public class DMLSClient implements ClientModInitializer {
                                     ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
                                             "dmls.chat.rank.current", DMLSConfig.staffRank().displayName());
                                     return 1;
-                                })
-                                .then(ClientCommandManager.argument("rank", StringArgumentType.greedyString())
-                                        .suggests((context, builder) -> CommandSource.suggestMatching(DMLSConfig.RANK_SUGGESTIONS, builder))
-                                        .executes(context -> {
-                                            MinecraftClient client = context.getSource().getClient();
-                                            String input = StringArgumentType.getString(context, "rank");
-                                            Optional<StaffRank> rank = DMLSConfig.parseRank(input);
-                                            if (rank.isEmpty()) {
-                                                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.rank.unknown",
-                                                        input, String.join(", ", DMLSConfig.RANK_SUGGESTIONS));
-                                                return 0;
-                                            }
-
-                                            if (!DMLSConfig.setStaffRank(rank.get())) {
-                                                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.config.save_failed");
-                                                return 0;
-                                            }
-                                            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.rank.set", rank.get().displayName());
-                                            return 1;
-                                        })))
+                                }))
                         .then(ClientCommandManager.literal("help")
                                 .executes(context -> sendHelp(context.getSource().getClient())))
                         .then(ClientCommandManager.literal("cancel")
@@ -425,7 +409,7 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls promowave <rank> <igns>|confirm|cancel", Text.translatable("dmls.help.promowave", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls demowave <rank> <igns>|confirm|cancel", Text.translatable("dmls.help.demowave", StaffRank.ADMIN.displayName()));
         helpLine(client, "/dmls activity <igns>|cancel", Text.translatable("dmls.help.activity", StaffRank.ADMIN.displayName()));
-        helpLine(client, "/dmls rank [rank]", Text.translatable("dmls.help.rank"));
+        helpLine(client, "/dmls rank", Text.translatable("dmls.help.rank"));
         helpLine(client, "/dmls alerts [on|off|reload]", Text.translatable("dmls.help.alerts"));
         helpLine(client, "/dmls chatlog [filter]", Text.translatable("dmls.help.chatlog"));
         helpLine(client, "/dmls dryrun <on|off>", Text.translatable("dmls.help.dryrun", StaffRank.ADMIN.displayName()));

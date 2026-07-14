@@ -1,6 +1,8 @@
 package com.duperknight.client.utils;
 
 import com.duperknight.DMLS;
+import com.duperknight.client.modules.DepartmentRank;
+import com.duperknight.client.modules.StaffDepartment;
 import com.duperknight.client.modules.StaffRank;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -10,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.EnumMap;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -17,18 +21,22 @@ import java.util.Properties;
  * Handles durable DMLS preferences, stored in config/dmls.properties.
  */
 public final class DMLSConfig {
-    public static final List<String> RANK_SUGGESTIONS = List.of("helper", "moderator", "senior_moderator", "support", "admin");
-
     private static final String RANK_KEY = "staffRank";
+    private static final String BANS_RANK_KEY = "bansRank";
+    private static final String EVENTS_RANK_KEY = "eventsRank";
+    private static final String WAR_RANK_KEY = "warRank";
     private static final String ALERTS_KEY = "chatAlerts";
     private static final String TRADE_CHAT_MUTED_KEY = "tradeChatMuted";
     private static final String SERVER_MESSAGES_MUTED_KEY = "serverMessagesMuted";
     private static final String GREETER_ENABLED_KEY = "greeterEnabled";
     private static final String ALLOWED_SERVERS_KEY = "allowedServers";
-    private static final StaffRank DEFAULT_RANK = StaffRank.HELPER;
+    private static final StaffRank DEFAULT_RANK = StaffRank.NONE;
 
     private static boolean loaded;
     private static StaffRank staffRank = DEFAULT_RANK;
+    private static StaffRank persistedStaffRank = DEFAULT_RANK;
+    private static boolean storedStaffRankPresent;
+    private static final Map<StaffDepartment, DepartmentRank> departmentRanks = defaultDepartmentRanks();
     private static boolean alertsEnabled = true;
     private static boolean tradeChatMuted;
     private static boolean serverMessagesMuted;
@@ -46,12 +54,56 @@ public final class DMLSConfig {
         return staffRank;
     }
 
-    public static boolean setStaffRank(StaffRank rank) {
+    /** Returns the last rank stored in config, even while live access is temporarily locked for HUB verification. */
+    public static StaffRank storedStaffRank() {
         ensureLoaded();
-        StaffRank previous = staffRank;
+        return persistedStaffRank;
+    }
+
+    /** Returns whether the loaded config contained a previously recognized staff rank. */
+    public static boolean hasStoredStaffRank() {
+        ensureLoaded();
+        return storedStaffRankPresent;
+    }
+
+    /** Locks rank-gated features while the hub scoreboard is loading without overwriting the previous rank on disk. */
+    public static void clearStaffRankForHubVerification() {
+        ensureLoaded();
+        staffRank = StaffRank.NONE;
+    }
+
+    /**
+     * Applies a rank read from the hub. The in-memory access state is never rolled back if persistence fails;
+     * showing the detected access level safely is more important than retaining a stale value.
+     */
+    public static boolean setDetectedStaffRank(StaffRank rank) {
+        ensureLoaded();
         staffRank = rank;
+        persistedStaffRank = rank;
+        boolean saved = save();
+        if (saved) {
+            storedStaffRankPresent = rank.isStaff();
+        }
+        return saved;
+    }
+
+    public static boolean hasRecognizedStaffRank() {
+        return staffRank().isStaff();
+    }
+
+    public static DepartmentRank departmentRank(StaffDepartment department) {
+        ensureLoaded();
+        return departmentRanks.getOrDefault(department, DepartmentRank.NOT_ASSIGNED);
+    }
+
+    public static boolean setDepartmentRank(StaffDepartment department, DepartmentRank rank) {
+        ensureLoaded();
+        if (!rank.belongsTo(department)) {
+            return false;
+        }
+        DepartmentRank previous = departmentRanks.put(department, rank);
         if (save()) return true;
-        staffRank = previous;
+        departmentRanks.put(department, previous);
         return false;
     }
 
@@ -139,7 +191,7 @@ public final class DMLSConfig {
     }
 
     /**
-     * Parses a staff rank from user input, also accepting aliases like "mod" and "srmod".
+     * Parses a staff rank from persisted or scoreboard text, also accepting aliases like "mod" and "srmod".
      *
      * @param input the input to parse
      * @return the parsed rank, or empty if the input is not a valid rank
@@ -179,6 +231,14 @@ public final class DMLSConfig {
         }
 
         staffRank = parseRank(properties.getProperty(RANK_KEY, "")).orElse(DEFAULT_RANK);
+        persistedStaffRank = staffRank;
+        storedStaffRankPresent = properties.containsKey(RANK_KEY) && staffRank.isStaff();
+        departmentRanks.put(StaffDepartment.BANS, parseDepartmentRank(
+                properties.getProperty(BANS_RANK_KEY, ""), StaffDepartment.BANS));
+        departmentRanks.put(StaffDepartment.EVENTS, parseDepartmentRank(
+                properties.getProperty(EVENTS_RANK_KEY, ""), StaffDepartment.EVENTS));
+        departmentRanks.put(StaffDepartment.WAR, parseDepartmentRank(
+                properties.getProperty(WAR_RANK_KEY, ""), StaffDepartment.WAR));
         alertsEnabled = Boolean.parseBoolean(properties.getProperty(ALERTS_KEY, "true"));
         tradeChatMuted = Boolean.parseBoolean(properties.getProperty(TRADE_CHAT_MUTED_KEY, "false"));
         serverMessagesMuted = Boolean.parseBoolean(properties.getProperty(SERVER_MESSAGES_MUTED_KEY, "false"));
@@ -208,7 +268,10 @@ public final class DMLSConfig {
 
     static Properties propertiesSnapshot() {
         Properties properties = new Properties();
-        properties.setProperty(RANK_KEY, staffRank.name());
+        properties.setProperty(RANK_KEY, persistedStaffRank.name());
+        properties.setProperty(BANS_RANK_KEY, departmentRanks.get(StaffDepartment.BANS).name());
+        properties.setProperty(EVENTS_RANK_KEY, departmentRanks.get(StaffDepartment.EVENTS).name());
+        properties.setProperty(WAR_RANK_KEY, departmentRanks.get(StaffDepartment.WAR).name());
         properties.setProperty(ALERTS_KEY, Boolean.toString(alertsEnabled));
         properties.setProperty(TRADE_CHAT_MUTED_KEY, Boolean.toString(tradeChatMuted));
         properties.setProperty(SERVER_MESSAGES_MUTED_KEY, Boolean.toString(serverMessagesMuted));
@@ -219,5 +282,23 @@ public final class DMLSConfig {
 
     private static Path configPath() {
         return FabricLoader.getInstance().getConfigDir().resolve("dmls.properties");
+    }
+
+    private static DepartmentRank parseDepartmentRank(String input, StaffDepartment department) {
+        String normalized = input.trim().toUpperCase(Locale.ROOT).replace(' ', '_').replace('-', '_');
+        try {
+            DepartmentRank rank = DepartmentRank.valueOf(normalized);
+            return rank.belongsTo(department) ? rank : DepartmentRank.NOT_ASSIGNED;
+        } catch (IllegalArgumentException exception) {
+            return DepartmentRank.NOT_ASSIGNED;
+        }
+    }
+
+    private static Map<StaffDepartment, DepartmentRank> defaultDepartmentRanks() {
+        Map<StaffDepartment, DepartmentRank> ranks = new EnumMap<>(StaffDepartment.class);
+        for (StaffDepartment department : StaffDepartment.values()) {
+            ranks.put(department, DepartmentRank.NOT_ASSIGNED);
+        }
+        return ranks;
     }
 }
