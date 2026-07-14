@@ -20,7 +20,9 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private static final int CARD_MARGIN = scaled(24);
     private static final int MIN_CARD_SIZE = scaled(70);
     private static final int MAX_CARD_SIZE = scaled(120);
-    private static final int ANNOUNCEMENT_HEIGHT = scaled(78);
+    private static final int PROMOTION_ANNOUNCEMENT_HEIGHT = scaled(78);
+    private static final int WELCOME_TOP_PADDING = scaled(6);
+    private static final int WELCOME_ANNOUNCEMENT_HEIGHT = scaled(102) + WELCOME_TOP_PADDING;
 
     private final List<DMLSModule> registeredModules;
     private final RankAnnouncement announcement;
@@ -214,7 +216,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private GridLayout layoutFor(int moduleCount) {
         int panelWidth = Math.clamp(width - scaled(32), scaled(300), scaled(470));
         int panelX = (width - panelWidth) / 2;
-        int viewportY = HEADER_HEIGHT + (announcement == null ? 0 : ANNOUNCEMENT_HEIGHT);
+        int viewportY = HEADER_HEIGHT + announcementHeight();
         int minimumViewportHeight = announcement == null ? scaled(80) : scaled(40);
         int viewportHeight = Math.max(minimumViewportHeight, height - FOOTER_TOP_OFFSET - viewportY);
         int cardMargin = announcement == null ? CARD_MARGIN : scaled(8);
@@ -247,18 +249,19 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     }
 
     private void renderRankAnnouncement(DrawContext context) {
+        int topPadding = announcement.type == AnnouncementType.WELCOME ? WELCOME_TOP_PADDING : 0;
         Text heading = Text.translatable(announcement.type == AnnouncementType.WELCOME
                 ? "dmls.welcome.title"
                 : "dmls.promotion.title");
         context.drawCenteredTextWithShadow(textRenderer, heading,
-                width / 2, HEADER_HEIGHT + scaled(4), 0xFFFFFFFF);
+                width / 2, HEADER_HEIGHT + scaled(4) + topPadding, 0xFFFFFFFF);
 
         int panelWidth = Math.min(scaled(220), width - scaled(48));
         int panelX = width / 2 - panelWidth / 2;
-        int panelY = HEADER_HEIGHT + scaled(24);
+        int panelY = HEADER_HEIGHT + scaled(24) + topPadding;
         renderPanel(context, panelX, panelY, panelWidth, STANDARD_BUTTON_HEIGHT);
         context.drawCenteredTextWithShadow(textRenderer, announcement.currentRank.displayName(),
-                width / 2, panelY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2, 0xFFFFFFFF);
+                width / 2, panelY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2 + scaled(2), 0xFFFFFFFF);
 
         Text summary;
         if (announcement.type == AnnouncementType.WELCOME) {
@@ -271,7 +274,24 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                     announcement.previousRank.displayName(), newlyUnlocked);
         }
         context.drawCenteredTextWithShadow(textRenderer, summary,
-                width / 2, HEADER_HEIGHT + scaled(57), 0xFFDDDDDD);
+                width / 2, HEADER_HEIGHT + scaled(57) + topPadding, 0xFFDDDDDD);
+
+        if (announcement.type == AnnouncementType.WELCOME) {
+            Text hint = Text.translatable("dmls.welcome.open_menu_hint");
+            int hintWidth = Math.min(scaled(430), width - scaled(32));
+            int hintY = HEADER_HEIGHT + scaled(73) + topPadding;
+            for (OrderedText line : textRenderer.wrapLines(hint, hintWidth)) {
+                context.drawCenteredTextWithShadow(textRenderer, line, width / 2, hintY, 0xFFAAAAAA);
+                hintY += scaled(11);
+            }
+        }
+    }
+
+    private int announcementHeight() {
+        if (announcement == null) return 0;
+        return announcement.type == AnnouncementType.WELCOME
+                ? WELCOME_ANNOUNCEMENT_HEIGHT
+                : PROMOTION_ANNOUNCEMENT_HEIGHT;
     }
 
     private boolean isNewlyUnlocked(DMLSModule module) {

@@ -21,7 +21,7 @@ public final class GlobalChatMessenger {
     private static final String CHANNELS_LIST_COMMAND = "channels list";
     private static final String PUBLIC_CHANNEL = "public";
     private static final int RESPONSE_TIMEOUT_TICKS = 60;
-    private static final int RESPONSE_QUIET_TICKS = 4;
+    private static final int RESPONSE_QUIET_TICKS = 20;
     private static final int ACTION_DELAY_TICKS = 2;
     private static final Pattern LIST_HEADER = Pattern.compile("(?i)^channel\\s+list\\s*:?$");
     private static final Pattern STATUS_LINE = Pattern.compile(
@@ -79,8 +79,10 @@ public final class GlobalChatMessenger {
         if (parsed.isEmpty()) return true;
 
         ChannelListLine line = parsed.get();
-        active.sawResponse = true;
-        active.quietTicks = RESPONSE_QUIET_TICKS;
+        if (line.kind != LineKind.HEADER) {
+            active.sawStatusLine = true;
+            active.quietTicks = RESPONSE_QUIET_TICKS;
+        }
         if (line.kind == LineKind.TRANSMITTING) {
             active.previousChannel = line.channel;
         }
@@ -108,7 +110,7 @@ public final class GlobalChatMessenger {
 
     private static void tickQuery(MinecraftClient client) {
         active.elapsedTicks++;
-        if (active.sawResponse) {
+        if (active.sawStatusLine) {
             if (--active.quietTicks <= 0) {
                 prepareToSend(client);
             }
@@ -234,7 +236,7 @@ public final class GlobalChatMessenger {
         private int elapsedTicks;
         private int quietTicks;
         private int delayTicks;
-        private boolean sawResponse;
+        private boolean sawStatusLine;
 
         private ActiveSend(Request request) {
             this.request = request;

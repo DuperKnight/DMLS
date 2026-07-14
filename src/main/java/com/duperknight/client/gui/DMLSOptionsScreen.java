@@ -32,12 +32,12 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         rankX = width / 2 - rankWidth / 2;
         int footerTop = height - FOOTER_TOP_OFFSET;
         int contentTop = HEADER_HEIGHT + scaled(25);
-        int contentHeight = scaled(124);
+        int contentHeight = scaled(130);
         rankY = contentTop + Math.max(0, (footerTop - contentTop - contentHeight) / 2);
 
         departmentsWidth = Math.min(scaled(480), width - scaled(32));
         departmentsX = width / 2 - departmentsWidth / 2;
-        dividerY = rankY + scaled(34);
+        dividerY = rankY + scaled(40);
         departmentsY = dividerY + scaled(14);
         departmentDropdownY = departmentsY + scaled(15);
         allowedServersY = departmentDropdownY + STANDARD_BUTTON_HEIGHT + scaled(14);
@@ -74,7 +74,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
 
         renderPanel(context, rankX, rankY, rankWidth, STANDARD_BUTTON_HEIGHT);
         context.drawCenteredTextWithShadow(textRenderer, DMLSConfig.staffRank().displayName(),
-                width / 2, rankY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2, 0xFFFFFFFF);
+                width / 2, rankY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2 + scaled(2), 0xFFFFFFFF);
 
         Text departmentsTitle = Text.translatable("dmls.option.departments");
         int titleHalfWidth = textRenderer.getWidth(departmentsTitle) / 2;

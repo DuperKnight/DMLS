@@ -19,6 +19,7 @@
   "dmls.message.staff_required": "You must be Stoneworks staff to use DMLS.",
   "dmls.welcome.title": "Welcome to DMLS!",
   "dmls.welcome.summary": "These are the %s modules available to your staff rank.",
+  "dmls.welcome.open_menu_hint": "Reopen this menu with /dmls, or assign the Open DMLS Menu keybind under Options → Controls → Key Binds.",
   "dmls.promotion.title": "Congratulations on your promotion!",
   "dmls.promotion.summary.one": "Previously %s — %s newly unlocked module is highlighted.",
   "dmls.promotion.summary.many": "Previously %s — %s newly unlocked modules are highlighted.",
