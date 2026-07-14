@@ -484,27 +484,27 @@ public class DMLSClient implements ClientModInitializer {
     /** Defers config-backed module construction until normal client initialization. */
     private static final class ModulesHolder {
         private static final List<DMLSModule> ALL = List.of(
-                new CheckLandsModule(),
-                new CheckMembersModule(),
-                new CheckAltsModule(),
-                new XrayRollbackModule(),
-                new PrefixCreateModule(),
-                new DonorPetModule(),
-                new EventProtectModule(),
-                new PromoWaveModule(),
-                new DemoWaveModule(),
-                new UuidLookupModule(),
-                new ChatAlertsModule(),
-                new ChatSpamMuteModule(),
                 new AwayModule(),
                 new ActivityWaveModule(),
+                new ChatAlertsModule(),
                 new ChatReplayModule(),
-                new GreeterModule(),
-                new LocationsModule(),
-                new CoreProtectBuilderModule(),
+                new ChatSpamMuteModule(),
+                new CheckAltsModule(),
+                new CheckLandsModule(),
+                new CheckMembersModule(),
                 new ContainerScanModule(),
+                new CoreProtectBuilderModule(),
+                new DemoWaveModule(),
+                new DonorPetModule(),
+                new EventProtectModule(),
+                new GreeterModule(),
                 new GriefScanModule(),
-                new PunishmentHelperModule()
+                new LocationsModule(),
+                new PrefixCreateModule(),
+                new PromoWaveModule(),
+                new PunishmentHelperModule(),
+                new UuidLookupModule(),
+                new XrayRollbackModule()
         );
     }
 }
