@@ -18,11 +18,13 @@ import java.util.Optional;
 public final class EventProtectModule extends DMLSModule{
     private static final String PREFIX = "§8[§6DMLS - Event Protect§8] §7";
     public static final int MAX_EVENT_NAME_CODE_POINTS = 64;
+    public static final int MAX_LAND_NAME_CODE_POINTS = 64;
 
     public enum BroadcastResult {
         SENT,
         SIMULATED,
-        INVALID,
+        INVALID_EVENT,
+        INVALID_LAND,
         RANK_BLOCKED,
         SERVER_BLOCKED
     }
@@ -60,17 +62,22 @@ public final class EventProtectModule extends DMLSModule{
      * Issues /broadcastraw with a protection notice after validating the
      * immutable value supplied by this submission.
      */
-    public BroadcastResult broadcastProtection(MinecraftClient client, String eventName) {
-        Optional<String> validatedName = validateEventName(eventName);
-        if (validatedName.isEmpty()) {
-            return BroadcastResult.INVALID;
+    public BroadcastResult broadcastProtection(MinecraftClient client, String eventName, String landName) {
+        Optional<String> validatedEventName = validateEventName(eventName);
+        if (validatedEventName.isEmpty()) {
+            return BroadcastResult.INVALID_EVENT;
+        }
+        Optional<String> validatedLandName = validateLandName(landName);
+        if (validatedLandName.isEmpty()) {
+            return BroadcastResult.INVALID_LAND;
         }
 
         if (!hasRequiredRank(client)) {
             return BroadcastResult.RANK_BLOCKED;
         }
 
-        CommandDispatch dispatch = ClientUtils.dispatchCommand(client, buildBroadcastCommand(validatedName.get()));
+        CommandDispatch dispatch = ClientUtils.dispatchCommand(client,
+                buildBroadcastCommand(validatedEventName.get(), validatedLandName.get()));
         if (dispatch == CommandDispatch.BLOCKED) {
             ServerGuard.GuardResult guard = ServerGuard.check(client);
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.server_guard.blocked",
@@ -82,13 +89,22 @@ public final class EventProtectModule extends DMLSModule{
 
     /** Trims and validates a 1-64 code-point event name safe for command use. */
     public static Optional<String> validateEventName(String eventName) {
-        if (eventName == null) {
+        return validateBroadcastField(eventName, MAX_EVENT_NAME_CODE_POINTS);
+    }
+
+    /** Trims and validates a 1-64 code-point land claim name safe for command use. */
+    public static Optional<String> validateLandName(String landName) {
+        return validateBroadcastField(landName, MAX_LAND_NAME_CODE_POINTS);
+    }
+
+    private static Optional<String> validateBroadcastField(String input, int maximumCodePoints) {
+        if (input == null) {
             return Optional.empty();
         }
 
-        String trimmed = eventName.strip();
+        String trimmed = input.strip();
         int length = trimmed.codePointCount(0, trimmed.length());
-        if (trimmed.isBlank() || length < 1 || length > MAX_EVENT_NAME_CODE_POINTS) {
+        if (trimmed.isBlank() || length < 1 || length > maximumCodePoints) {
             return Optional.empty();
         }
 
@@ -107,9 +123,9 @@ public final class EventProtectModule extends DMLSModule{
         };
     }
 
-    static String buildBroadcastCommand(String eventName) {
-        String message = "&7&l" + eventName + " is starting, and is protected by staff: "
-                + "bandits and raiders are &4&lnot&7&l allowed to interfere.";
+    static String buildBroadcastCommand(String eventName, String landName) {
+        String message = "&7&l" + eventName + " is starting in " + landName
+                + " and is protected by staff. Bandits and raiders are &4&lnot&7&l allowed to interfere.";
         return "broadcastraw public " + message;
     }
 }

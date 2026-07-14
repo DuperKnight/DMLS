@@ -2,6 +2,8 @@ package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.EventProtectModule;
+import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -13,6 +15,8 @@ import net.minecraft.text.Text;
 public final class EventProtectScreen extends DMLSMenuScreen {
     private final EventProtectModule module;
     private TextFieldWidget eventNameField;
+    private TextFieldWidget landNameField;
+    private ButtonWidget broadcastButton;
     private Text validationMessage = Text.empty();
 
     public EventProtectScreen(Screen parent, EventProtectModule module) {
@@ -22,30 +26,60 @@ public final class EventProtectScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        configureScrollableContent(module, scaled(78));
-        int controlWidth = scaled(200);
-        int x = width / 2 - controlWidth / 2;
+        configureScrollableContent(module, scaled(110));
+        int formWidth = Math.min(scaled(360), width - scaled(48));
+        int formX = width / 2 - formWidth / 2;
 
-        eventNameField = new TextFieldWidget(textRenderer, x, contentY(0), controlWidth, STANDARD_BUTTON_HEIGHT,
+        eventNameField = new TextFieldWidget(textRenderer, formX, contentY(scaled(14)), formWidth, STANDARD_BUTTON_HEIGHT,
                 Text.translatable("dmls.module.event_protect.event_name"));
         // TextFieldWidget counts UTF-16 units; allow surrogate pairs and let
         // the module enforce the actual 64-code-point limit.
         eventNameField.setMaxLength(EventProtectModule.MAX_EVENT_NAME_CODE_POINTS * 2);
-        eventNameField.setPlaceholder(Text.translatable("dmls.module.event_protect.event_name_placeholder"));
-        eventNameField.setChangedListener(value -> validationMessage = Text.empty());
-        addScrollableChild(eventNameField, 0);
+        String eventSuggestion = Text.translatable("dmls.module.event_protect.event_name_placeholder").getString();
+        eventNameField.setSuggestion(eventSuggestion);
+        eventNameField.setChangedListener(value -> {
+            eventNameField.setSuggestion(value.isEmpty() ? eventSuggestion : null);
+            validationMessage = Text.empty();
+        });
+        addScrollableChild(eventNameField, scaled(14));
+        setInitialFocus(eventNameField);
 
-        addScrollableChild(ButtonWidget.builder(Text.translatable("dmls.module.event_protect.broadcast"), button -> broadcast())
-                .dimensions(x, contentY(scaled(30)), controlWidth, STANDARD_BUTTON_HEIGHT).build(), scaled(30));
+        landNameField = new TextFieldWidget(textRenderer, formX, contentY(scaled(60)), formWidth, STANDARD_BUTTON_HEIGHT,
+                Text.translatable("dmls.module.event_protect.land_name"));
+        landNameField.setMaxLength(EventProtectModule.MAX_LAND_NAME_CODE_POINTS * 2);
+        String landSuggestion = Text.translatable("dmls.module.event_protect.land_name_placeholder").getString();
+        landNameField.setSuggestion(landSuggestion);
+        landNameField.setChangedListener(value -> {
+            landNameField.setSuggestion(value.isEmpty() ? landSuggestion : null);
+            validationMessage = Text.empty();
+        });
+        addScrollableChild(landNameField, scaled(60));
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
+                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        broadcastButton = addDrawableChild(ButtonWidget.builder(
+                        Text.translatable("dmls.module.event_protect.broadcast"), button -> broadcast())
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        refreshBroadcastButton();
+    }
+
+    @Override
+    public void tick() {
+        refreshBroadcastButton();
+    }
+
+    private void refreshBroadcastButton() {
+        if (broadcastButton != null) {
+            broadcastButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
+        }
     }
 
     private void broadcast() {
-        EventProtectModule.BroadcastResult result = module.broadcastProtection(client, eventNameField.getText());
+        EventProtectModule.BroadcastResult result = module.broadcastProtection(
+                client, eventNameField.getText(), landNameField.getText());
         validationMessage = switch (result) {
-            case INVALID -> Text.translatable("dmls.validation.event_protect.name");
+            case INVALID_EVENT -> Text.translatable("dmls.validation.event_protect.name");
+            case INVALID_LAND -> Text.translatable("dmls.validation.event_protect.land");
             case RANK_BLOCKED -> Text.translatable("dmls.validation.required_rank");
             case SERVER_BLOCKED -> Text.translatable("dmls.validation.server_blocked");
             case SENT, SIMULATED -> Text.empty();
@@ -60,7 +94,19 @@ public final class EventProtectScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
-        int validationY = contentY(scaled(60));
+        int labelY = contentY(0);
+        if (isContentVisible(labelY, textRenderer.fontHeight)) {
+            context.drawTextWithShadow(textRenderer,
+                    Text.translatable("dmls.module.event_protect.event_name.label"),
+                    eventNameField.getX(), labelY, 0xFFCCCCCC);
+        }
+        int landLabelY = contentY(scaled(46));
+        if (isContentVisible(landLabelY, textRenderer.fontHeight)) {
+            context.drawTextWithShadow(textRenderer,
+                    Text.translatable("dmls.module.event_protect.land_name.label"),
+                    landNameField.getX(), landLabelY, 0xFFCCCCCC);
+        }
+        int validationY = contentY(scaled(94));
         if (!validationMessage.getString().isEmpty() && isContentVisible(validationY, textRenderer.fontHeight)) {
             context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, validationY, 0xFFFF5555);
         }
