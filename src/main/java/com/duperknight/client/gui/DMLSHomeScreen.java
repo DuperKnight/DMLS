@@ -68,7 +68,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
 
     private void renderCard(DrawContext context, GridLayout layout, int index, DMLSModule module, int mouseX, int mouseY) {
         int cardX = layout.cardX(index % COLUMNS);
-        int cardY = layout.viewportY() + (index / COLUMNS) * (layout.cardSize() + CARD_GAP) - scrollOffset;
+        int cardY = layout.contentTop() + (index / COLUMNS) * (layout.cardSize() + CARD_GAP) - scrollOffset;
         boolean hovered = mouseX >= cardX && mouseX < cardX + layout.cardSize()
                 && mouseY >= cardY && mouseY < cardY + layout.cardSize()
                 && mouseY >= layout.viewportY() && mouseY < layout.viewportBottom();
@@ -101,8 +101,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         int trackX = layout.viewportRight() + scaled(7);
         int thumbHeight = scrollbarThumbHeight(layout);
         int thumbY = layout.viewportY() + scrollbarThumbOffset(layout, thumbHeight);
-        context.fill(trackX, layout.viewportY(), trackX + scaled(6), layout.viewportBottom(), 0x70000000);
-        context.fill(trackX, thumbY, trackX + scaled(6), thumbY + thumbHeight, 0xFFC0C0C0);
+        renderVanillaScrollbar(context, trackX, layout.viewportY(), layout.viewportHeight(), thumbY, thumbHeight);
     }
 
     @Override
@@ -117,7 +116,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         if (click.button() == 0 && click.y() >= layout.viewportY() && click.y() < layout.viewportBottom()) {
             for (int index = 0; index < visibleModules.size(); index++) {
                 int cardX = layout.cardX(index % COLUMNS);
-                int cardY = layout.viewportY() + (index / COLUMNS) * (layout.cardSize() + CARD_GAP) - scrollOffset;
+                int cardY = layout.contentTop() + (index / COLUMNS) * (layout.cardSize() + CARD_GAP) - scrollOffset;
                 if (click.x() >= cardX && click.x() < cardX + layout.cardSize()
                         && click.y() >= cardY && click.y() < cardY + layout.cardSize()) {
                     visibleModules.get(index).openScreen(client, this);
@@ -160,17 +159,19 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private GridLayout layoutFor(int moduleCount) {
         int panelWidth = Math.clamp(width - scaled(32), scaled(300), scaled(470));
         int panelX = (width - panelWidth) / 2;
-        int viewportY = HEADER_HEIGHT + scaled(24);
-        int viewportHeight = Math.max(scaled(80), height - viewportY - FOOTER_TOP_OFFSET - scaled(11));
+        int viewportY = HEADER_HEIGHT;
+        int viewportHeight = Math.max(scaled(80), height - FOOTER_TOP_OFFSET - viewportY);
         int cardAreaWidth = panelWidth - CARD_MARGIN * 2;
         int cardSize = Math.clamp((cardAreaWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS, MIN_CARD_SIZE, MAX_CARD_SIZE);
         int rows = (moduleCount + COLUMNS - 1) / COLUMNS;
-        int contentHeight = rows == 0 ? 0 : rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
+        int contentHeight = rows == 0 ? 0
+                : CARD_MARGIN * 2 + rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
         maxScroll = Math.max(0, contentHeight - viewportHeight);
         boolean scrollable = maxScroll > 0;
         int viewportWidth = panelWidth - CARD_MARGIN * 2 - (scrollable ? scaled(14) : 0);
         cardSize = Math.clamp(cardSize, MIN_CARD_SIZE, (viewportWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS);
-        contentHeight = rows == 0 ? 0 : rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
+        contentHeight = rows == 0 ? 0
+                : CARD_MARGIN * 2 + rows * cardSize + Math.max(0, rows - 1) * CARD_GAP;
         maxScroll = Math.max(0, contentHeight - viewportHeight);
         if (maxScroll == 0) {
             scrollable = false;
@@ -182,7 +183,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
 
     private int scrollbarThumbHeight(GridLayout layout) {
         int contentHeight = layout.viewportHeight() + maxScroll;
-        return Math.max(scaled(18), layout.viewportHeight() * layout.viewportHeight() / Math.max(1, contentHeight));
+        return scrollbarThumbHeight(layout.viewportHeight(), contentHeight);
     }
 
     private int scrollbarThumbOffset(GridLayout layout, int thumbHeight) {
@@ -191,7 +192,8 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     }
 
     private boolean isOverScrollbar(GridLayout layout, double x, double y) {
-        return x >= layout.viewportRight() + scaled(4) && x < layout.viewportRight() + scaled(12)
+        int scrollbarX = layout.viewportRight() + scaled(7);
+        return x >= scrollbarX && x <= scrollbarX + SCROLLBAR_WIDTH
                 && y >= layout.viewportY() && y < layout.viewportBottom();
     }
 
@@ -210,6 +212,10 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
 
         int viewportBottom() {
             return viewportY + viewportHeight;
+        }
+
+        int contentTop() {
+            return viewportY + CARD_MARGIN;
         }
 
         int cardX(int column) {

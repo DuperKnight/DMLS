@@ -1,8 +1,10 @@
 package com.duperknight.client.modules;
 
-import com.duperknight.client.gui.EventProtectScreen;
+import com.duperknight.client.gui.modules.EventProtectScreen;
+import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.DMLSConfig;
+import com.duperknight.client.utils.ServerGuard;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -11,10 +13,19 @@ import net.minecraft.text.Text;
 
 
 import java.util.List;
+import java.util.Optional;
 
 public final class EventProtectModule extends DMLSModule{
+    private static final String PREFIX = "§8[§6DMLS - Event Protect§8] §7";
+    public static final int MAX_EVENT_NAME_CODE_POINTS = 64;
 
-    private String eventName;
+    public enum BroadcastResult {
+        SENT,
+        SIMULATED,
+        INVALID,
+        RANK_BLOCKED,
+        SERVER_BLOCKED
+    }
 
     public EventProtectModule(){
         super(StaffRank.SENIOR_MODERATOR);
@@ -45,31 +56,60 @@ public final class EventProtectModule extends DMLSModule{
         // No event listeners needed
     }
 
-    public void setEventName(String eventName) {
-        this.eventName = eventName;
-    }
-
     /**
-     Issues /broadcastraw with the protection notice for the currently set event.
+     * Issues /broadcastraw with a protection notice after validating the
+     * immutable value supplied by this submission.
      */
-    public void broadcastProtection() {
-        if (!DMLSConfig.alertsEnabled()) {
-            return;
+    public BroadcastResult broadcastProtection(MinecraftClient client, String eventName) {
+        Optional<String> validatedName = validateEventName(eventName);
+        if (validatedName.isEmpty()) {
+            return BroadcastResult.INVALID;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (ClientUtils.isNotConnected(client)) {
-            return;
+        if (!hasRequiredRank(client)) {
+            return BroadcastResult.RANK_BLOCKED;
         }
 
-        if (eventName == null || eventName.isBlank()) {
-            return;
+        CommandDispatch dispatch = ClientUtils.dispatchCommand(client, buildBroadcastCommand(validatedName.get()));
+        if (dispatch == CommandDispatch.BLOCKED) {
+            ServerGuard.GuardResult guard = ServerGuard.check(client);
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.server_guard.blocked",
+                    guard.reason(), guard.address());
+            return BroadcastResult.SERVER_BLOCKED;
         }
-
-        String message = "&7&l" + eventName + " is starting, and is protected by staff: "
-                + "bandits and raiders are "+"&4&l"+ "not"+"&7&l"+" allowed to interfere.";
-
-        client.player.networkHandler.sendChatCommand("broadcastraw public " + message);
+        return dispatch == CommandDispatch.SIMULATED ? BroadcastResult.SIMULATED : BroadcastResult.SENT;
     }
 
+    /** Trims and validates a 1-64 code-point event name safe for command use. */
+    public static Optional<String> validateEventName(String eventName) {
+        if (eventName == null) {
+            return Optional.empty();
+        }
+
+        String trimmed = eventName.strip();
+        int length = trimmed.codePointCount(0, trimmed.length());
+        if (trimmed.isBlank() || length < 1 || length > MAX_EVENT_NAME_CODE_POINTS) {
+            return Optional.empty();
+        }
+
+        boolean unsafe = trimmed.codePoints().anyMatch(EventProtectModule::isUnsafeEventNameCodePoint);
+        return unsafe ? Optional.empty() : Optional.of(trimmed);
+    }
+
+    private static boolean isUnsafeEventNameCodePoint(int codePoint) {
+        if (codePoint == '&' || codePoint == '§' || Character.isISOControl(codePoint)) {
+            return true;
+        }
+        return switch (Character.getType(codePoint)) {
+            case Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR,
+                    Character.SURROGATE, Character.UNASSIGNED -> true;
+            default -> false;
+        };
+    }
+
+    static String buildBroadcastCommand(String eventName) {
+        String message = "&7&l" + eventName + " is starting, and is protected by staff: "
+                + "bandits and raiders are &4&lnot&7&l allowed to interfere.";
+        return "broadcastraw public " + message;
+    }
 }

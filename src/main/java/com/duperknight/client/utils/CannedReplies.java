@@ -17,6 +17,8 @@ public final class CannedReplies {
         REPLIES.put("help", "If you need staff assistance, please open a ticket in the appropriate ticket category in the Stoneworks Discord.");
         REPLIES.put("invite", "Here's an invite to the Stoneworks Discord: https://discord.gg/stoneworks");
         REPLIES.put("suicide", "If you are feeling down or suicidal please contact a local suicide hotline: https://en.wikipedia.org/wiki/List_of_suicide_crisis_lines <3");
+        REPLIES.put("brb", "I'm away right now. I'll reply when I'm back.");
+        REPLIES.put("busy", "I'm busy right now. If it's urgent, please use /helpop.");
     }
 
     private CannedReplies() {

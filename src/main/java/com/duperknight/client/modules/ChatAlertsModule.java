@@ -4,7 +4,7 @@ import com.duperknight.client.utils.AlertWordlist;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
-import com.duperknight.client.gui.ChatAlertsScreen;
+import com.duperknight.client.gui.modules.ChatAlertsScreen;
 import com.duperknight.client.message.MessageOrigin;
 import com.duperknight.client.message.ServerMessage;
 import com.duperknight.client.message.ServerMessageRouter;
@@ -52,8 +52,17 @@ public final class ChatAlertsModule extends DMLSModule {
         ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.PLAYER_CHAT, MessageOrigin.SERVER_SYSTEM), this::check);
     }
 
+    /** Compatibility wrapper used by the command tree. */
     public static int reloadWordlist() {
+        return reloadWordlistResult().wordCount();
+    }
+
+    public static AlertWordlist.LoadResult reloadWordlistResult() {
         return WORDLIST.load();
+    }
+
+    public static AlertWordlist.LoadResult lastWordlistLoadResult() {
+        return WORDLIST.lastLoadResult();
     }
 
     public static int wordCount() {

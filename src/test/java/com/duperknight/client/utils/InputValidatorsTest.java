@@ -28,4 +28,11 @@ class InputValidatorsTest {
                 InputValidators.uniqueUsernames("Alice, bob ALICE Bob", rejected));
         assertTrue(rejected.isEmpty());
     }
+
+    @Test void validatesCommandArgumentsWithoutForbiddingSpaces() {
+        assertTrue(InputValidators.isSafeCommandArgument("First Land", 64));
+        assertFalse(InputValidators.isSafeCommandArgument("line\nbreak", 64));
+        assertFalse(InputValidators.isSafeCommandArgument(" ", 64));
+        assertFalse(InputValidators.isSafeCommandArgument("x".repeat(65), 64));
+    }
 }

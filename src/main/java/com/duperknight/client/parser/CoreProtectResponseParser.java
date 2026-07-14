@@ -5,16 +5,26 @@ import java.util.regex.Pattern;
 
 /** Matching is intentionally narrow until anonymized Stoneworks response fixtures are available. */
 public final class CoreProtectResponseParser {
-    private static final Pattern COMPLETE = Pattern.compile("^(?:\\[coreprotect]\\s*)?rollback complete[.!]?$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern REJECTED = Pattern.compile("^(?:\\[coreprotect]\\s*)?(?:error|rollback failed|no permission)(?:[:.!].*)?$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern REJECTED = Pattern.compile(
+            "^(?:\\[coreprotect]\\s*)?(?:error|rollback failed|restore failed|no permission)(?:[:.!].*)?$",
+            Pattern.CASE_INSENSITIVE);
 
     private CoreProtectResponseParser() {
     }
 
     public static Result parse(String cleanText) {
+        return parse("rollback", cleanText);
+    }
+
+    /** Parses only completion for the expected destructive action; unrelated success text never advances it. */
+    public static Result parse(String expectedAction, String cleanText) {
+        String action = expectedAction == null ? "" : expectedAction.trim().toLowerCase(Locale.ROOT);
         String value = cleanText == null ? "" : cleanText.trim().toLowerCase(Locale.ROOT);
-        if (COMPLETE.matcher(value).matches()) return Result.CONFIRMED;
         if (REJECTED.matcher(value).matches()) return Result.REJECTED;
+        if ((action.equals("rollback") || action.equals("restore"))
+                && value.matches("^(?:\\[coreprotect]\\s*)?" + Pattern.quote(action) + " complete[.!]?$")) {
+            return Result.CONFIRMED;
+        }
         return Result.UNRELATED;
     }
 

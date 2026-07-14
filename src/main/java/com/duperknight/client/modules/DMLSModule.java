@@ -71,6 +71,8 @@ public abstract class DMLSModule {
     /** The selected rank controls visibility only; the server remains authoritative. */
     protected boolean canRunPrivilegedOperation(MinecraftClient client) {
         if (!hasRequiredRank(client)) return false;
+        // A captured dry-run can safely validate and preview commands without a live connection.
+        if (DMLSConfig.dryRun()) return true;
         ServerGuard.GuardResult guard = ServerGuard.check(client);
         if (guard.allowed()) return true;
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.server_guard.blocked",
