@@ -47,7 +47,6 @@ public final class ChatSpamMuteModule extends DMLSModule {
     private boolean shouldHide(Text message) {
         return shouldHide(
                 ChatUtils.cleanLine(message.getString()),
-                DMLSConfig.staffRank(),
                 DMLSConfig.tradeChatMuted(),
                 DMLSConfig.serverMessagesMuted());
     }
@@ -55,22 +54,9 @@ public final class ChatSpamMuteModule extends DMLSModule {
     /** Pure form of the event filter policy, shared by both chat origins and fixture tests. */
     static boolean shouldHide(
             String cleanMessage,
-            StaffRank rank,
             boolean tradeChatMuted,
             boolean serverMessagesMuted
     ) {
-        if (cleanMessage == null || rank == null || !rank.isAtLeast(StaffRank.ADMIN)) {
-            return false;
-        }
-        return (tradeChatMuted && startsWithTradePrefix(cleanMessage))
-                || (serverMessagesMuted && startsWithServerPrefix(cleanMessage));
-    }
-
-    static boolean startsWithTradePrefix(String message) {
-        return message.startsWith("[T]");
-    }
-
-    static boolean startsWithServerPrefix(String message) {
-        return message.startsWith("[Server: ");
+        return ChatSpamFilterPolicy.shouldHide(cleanMessage, tradeChatMuted, serverMessagesMuted);
     }
 }

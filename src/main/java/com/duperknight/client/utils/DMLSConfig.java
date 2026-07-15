@@ -4,6 +4,7 @@ import com.duperknight.DMLS;
 import com.duperknight.client.modules.DepartmentRank;
 import com.duperknight.client.modules.StaffDepartment;
 import com.duperknight.client.modules.StaffRank;
+import com.duperknight.client.moderation.ModerationPreferences;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -30,6 +31,14 @@ public final class DMLSConfig {
     private static final String SERVER_MESSAGES_MUTED_KEY = "serverMessagesMuted";
     private static final String GREETER_ENABLED_KEY = "greeterEnabled";
     private static final String ALLOWED_SERVERS_KEY = "allowedServers";
+    private static final String MOD_LOCAL_KEY = "moderation.includeLocal";
+    private static final String MOD_TRADE_KEY = "moderation.includeTrade";
+    private static final String MOD_RP_KEY = "moderation.includeRp";
+    private static final String MOD_STAFF_KEY = "moderation.includeStaff";
+    private static final String MOD_ADMIN_KEY = "moderation.includeAdmin";
+    private static final String MOD_SERVER_KEY = "moderation.includeServer";
+    private static final String MOD_TIMESTAMPS_KEY = "moderation.showTimestamps";
+    private static final String MOD_HIGHLIGHTS_KEY = "moderation.highlightAlerts";
     private static final StaffRank DEFAULT_RANK = StaffRank.NONE;
 
     private static boolean loaded;
@@ -42,6 +51,7 @@ public final class DMLSConfig {
     private static boolean serverMessagesMuted;
     private static boolean greeterEnabled = true;
     private static List<String> allowedServers = ServerGuard.DEFAULT_ALLOWED_SERVERS;
+    private static ModerationPreferences moderationPreferences = ModerationPreferences.defaults();
     // Deliberately not persisted: the game always starts live, so a forgotten
     // dry run can never suppress real commands in a later session.
     private static boolean dryRun;
@@ -163,6 +173,21 @@ public final class DMLSConfig {
         return false;
     }
 
+    public static ModerationPreferences moderationPreferences() {
+        ensureLoaded();
+        return moderationPreferences;
+    }
+
+    public static boolean setModerationPreferences(ModerationPreferences preferences) {
+        ensureLoaded();
+        if (preferences == null) return false;
+        ModerationPreferences previous = moderationPreferences;
+        moderationPreferences = preferences;
+        if (save()) return true;
+        moderationPreferences = previous;
+        return false;
+    }
+
     /** While enabled, DMLS prints every command instead of running it. Not persisted. */
     public static boolean dryRun() {
         return dryRun;
@@ -243,6 +268,17 @@ public final class DMLSConfig {
         tradeChatMuted = Boolean.parseBoolean(properties.getProperty(TRADE_CHAT_MUTED_KEY, "false"));
         serverMessagesMuted = Boolean.parseBoolean(properties.getProperty(SERVER_MESSAGES_MUTED_KEY, "false"));
         greeterEnabled = Boolean.parseBoolean(properties.getProperty(GREETER_ENABLED_KEY, "true"));
+        ModerationPreferences defaults = ModerationPreferences.defaults();
+        moderationPreferences = new ModerationPreferences(
+                Boolean.parseBoolean(properties.getProperty(MOD_LOCAL_KEY, Boolean.toString(defaults.includeLocal()))),
+                Boolean.parseBoolean(properties.getProperty(MOD_TRADE_KEY, Boolean.toString(defaults.includeTrade()))),
+                Boolean.parseBoolean(properties.getProperty(MOD_RP_KEY, Boolean.toString(defaults.includeRp()))),
+                Boolean.parseBoolean(properties.getProperty(MOD_STAFF_KEY, Boolean.toString(defaults.includeStaff()))),
+                Boolean.parseBoolean(properties.getProperty(MOD_ADMIN_KEY, Boolean.toString(defaults.includeAdmin()))),
+                Boolean.parseBoolean(properties.getProperty(MOD_SERVER_KEY, Boolean.toString(defaults.includeServer()))),
+                Boolean.parseBoolean(properties.getProperty(MOD_TIMESTAMPS_KEY, Boolean.toString(defaults.showTimestamps()))),
+                Boolean.parseBoolean(properties.getProperty(MOD_HIGHLIGHTS_KEY, Boolean.toString(defaults.highlightAlerts())))
+        );
         if (properties.containsKey(ALLOWED_SERVERS_KEY)) {
             allowedServers = java.util.Arrays.stream(properties.getProperty(ALLOWED_SERVERS_KEY, "").split(","))
                     .map(ServerGuard::normalizeRule)
@@ -277,6 +313,14 @@ public final class DMLSConfig {
         properties.setProperty(SERVER_MESSAGES_MUTED_KEY, Boolean.toString(serverMessagesMuted));
         properties.setProperty(GREETER_ENABLED_KEY, Boolean.toString(greeterEnabled));
         properties.setProperty(ALLOWED_SERVERS_KEY, String.join(",", allowedServers));
+        properties.setProperty(MOD_LOCAL_KEY, Boolean.toString(moderationPreferences.includeLocal()));
+        properties.setProperty(MOD_TRADE_KEY, Boolean.toString(moderationPreferences.includeTrade()));
+        properties.setProperty(MOD_RP_KEY, Boolean.toString(moderationPreferences.includeRp()));
+        properties.setProperty(MOD_STAFF_KEY, Boolean.toString(moderationPreferences.includeStaff()));
+        properties.setProperty(MOD_ADMIN_KEY, Boolean.toString(moderationPreferences.includeAdmin()));
+        properties.setProperty(MOD_SERVER_KEY, Boolean.toString(moderationPreferences.includeServer()));
+        properties.setProperty(MOD_TIMESTAMPS_KEY, Boolean.toString(moderationPreferences.showTimestamps()));
+        properties.setProperty(MOD_HIGHLIGHTS_KEY, Boolean.toString(moderationPreferences.highlightAlerts()));
         return properties;
     }
 

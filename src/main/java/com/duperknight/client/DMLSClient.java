@@ -3,6 +3,8 @@ package com.duperknight.client;
 import com.duperknight.DMLS;
 import com.duperknight.client.gui.DMLSHomeScreen;
 import com.duperknight.client.gui.modules.PunishmentHelperScreen;
+import com.duperknight.client.moderation.ModerationChatService;
+import com.duperknight.client.moderation.ModerationScreen;
 import com.duperknight.client.modules.ActivityWaveModule;
 import com.duperknight.client.modules.AwayModule;
 import com.duperknight.client.modules.ChatAlertsModule;
@@ -70,6 +72,7 @@ public class DMLSClient implements ClientModInitializer {
         registerDmlsCommand();
         registerMenuKeybind();
         GlobalChatMessenger.register();
+        ModerationChatService.register();
         HubStaffRankDetector.register();
         UpdateChecker.register();
         modules().forEach(DMLSModule::register);
@@ -95,6 +98,8 @@ public class DMLSClient implements ClientModInitializer {
                                 }))
                         .then(staffLiteral("help")
                                 .executes(context -> sendHelp(context.getSource().getClient())))
+                        .then(staffLiteral("modview")
+                                .executes(context -> openModerationScreen(context.getSource().getClient())))
                         .then(staffLiteral("cancel")
                                 .executes(context -> cancelActiveOperation(context.getSource().getClient())))
                         .then(staffLiteral("lands")
@@ -389,15 +394,24 @@ public class DMLSClient implements ClientModInitializer {
     }
 
     private void registerMenuKeybind() {
+        KeyBinding.Category dmlsCategory = KeyBinding.Category.create(Identifier.of("dmls", "dmls"));
         KeyBinding menuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.dmls.open_menu",
                 InputUtil.Type.KEYSYM,
                 InputUtil.UNKNOWN_KEY.getCode(),
-                KeyBinding.Category.create(Identifier.of("dmls", "dmls"))));
+                dmlsCategory));
+        KeyBinding moderationKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.dmls.open_moderation",
+                InputUtil.Type.KEYSYM,
+                InputUtil.UNKNOWN_KEY.getCode(),
+                dmlsCategory));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (menuKey.wasPressed()) {
                 openHomeScreen(client);
+            }
+            while (moderationKey.wasPressed()) {
+                if (DMLSConfig.hasRecognizedStaffRank()) openModerationScreen(client);
             }
         });
     }
@@ -430,6 +444,7 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls dnd <on|off>", Text.translatable("dmls.help.dnd"));
         helpLine(client, "/dmls say [reply]", Text.translatable("dmls.help.say"));
         helpLine(client, "/dmls cancel", Text.translatable("dmls.help.cancel"));
+        helpLine(client, "/dmls modview", Text.translatable("dmls.help.modview"));
         helpLine(client, "/dmls", Text.translatable("dmls.help.menu"));
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         return 1;
@@ -445,6 +460,12 @@ public class DMLSClient implements ClientModInitializer {
     private int openHomeScreen(MinecraftClient client) {
         // next tick, otherwise the closing chat screen overrides it
         client.send(() -> client.setScreen(new DMLSHomeScreen(modules())));
+        return 1;
+    }
+
+    private int openModerationScreen(MinecraftClient client) {
+        if (!DMLSConfig.hasRecognizedStaffRank()) return 0;
+        client.send(() -> client.setScreen(new ModerationScreen(null)));
         return 1;
     }
 

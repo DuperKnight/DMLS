@@ -17,6 +17,7 @@ import net.minecraft.text.Text;
 
 import java.util.List;
 import java.util.EnumSet;
+import java.util.Optional;
 
 public final class ChatAlertsModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - Alerts§8] §7";
@@ -67,6 +68,11 @@ public final class ChatAlertsModule extends DMLSModule {
 
     public static int wordCount() {
         return WORDLIST.size();
+    }
+
+    /** Pure matcher used by moderation-row highlighting without sounds or chat output. */
+    public static Optional<String> findWordlistMatch(String text) {
+        return WORDLIST.findMatch(text);
     }
 
     private void check(ServerMessage message) {

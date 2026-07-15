@@ -1,6 +1,7 @@
 package com.duperknight.client.gui;
 
 import com.duperknight.client.modules.DMLSModule;
+import com.duperknight.client.moderation.ModerationScreen;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.Click;
@@ -68,10 +69,18 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                     .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
             return;
         }
-        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.options"), button -> client.setScreen(new DMLSOptionsScreen(this)))
-                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        int gap = scaled(8);
+        int buttonWidth = Math.min(scaled(150), (width - gap * 4) / 3);
+        int groupWidth = buttonWidth * 3 + gap * 2;
+        int firstX = (width - groupWidth) / 2;
+        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.moderation.open"),
+                        button -> client.setScreen(new ModerationScreen(this)))
+                .dimensions(firstX, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
+        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.options"),
+                        button -> client.setScreen(new DMLSOptionsScreen(this)))
+                .dimensions(firstX + buttonWidth + gap, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
         addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.exit"), button -> close())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+                .dimensions(firstX + (buttonWidth + gap) * 2, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
     }
 
     @Override
