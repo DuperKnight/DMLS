@@ -84,6 +84,7 @@ public final class DangerReviewScreen extends DMLSMenuScreen {
         renderMenuBackground(context);
         context.drawCenteredTextWithShadow(textRenderer, title, width / 2, HEADER_HEIGHT + scaled(16), 0xFFFFAA00);
 
+        beginContentScissor(context);
         int panelWidth = Math.min(scaled(420), width - scaled(48));
         int panelHeight = Math.max(scaled(50), wrappedPreview.size() * scaled(12) + scaled(16));
         renderPanel(context, (width - panelWidth) / 2, contentY(0), panelWidth, panelHeight);
@@ -96,6 +97,7 @@ public final class DangerReviewScreen extends DMLSMenuScreen {
                         (width - panelWidth) / 2 + scaled(8), y, 0xFFE0E0E0);
             }
         }
+        endContentScissor(context);
         if (!status.getString().isEmpty()) {
             context.drawCenteredTextWithShadow(textRenderer, status, width / 2,
                     footerButtonY() - scaled(13), 0xFFFF5555);

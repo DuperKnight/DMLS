@@ -47,6 +47,7 @@ public final class RuleDetailScreen extends DMLSMenuScreen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
+        beginContentScissor(context);
         int x = (width - contentWidth) / 2;
         int lineHeight = textRenderer.fontHeight + 2;
         for (int i = 0; i < lines.size(); i++) {
@@ -55,6 +56,7 @@ public final class RuleDetailScreen extends DMLSMenuScreen {
                 context.drawTextWithShadow(textRenderer, lines.get(i), x, y, 0xFFFFFFFF);
             }
         }
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 }

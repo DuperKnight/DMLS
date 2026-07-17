@@ -70,6 +70,7 @@ public final class PunishmentHelperScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
         if (PunishmentHelperModule.rulebookError().isPresent()) {
             int emptyY = contentY(scaled(14));
             if (isContentVisible(emptyY, textRenderer.fontHeight)) {
@@ -83,6 +84,7 @@ public final class PunishmentHelperScreen extends DMLSMenuScreen {
                         width / 2, emptyY, 0xFFAAAAAA);
             }
         }
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 }

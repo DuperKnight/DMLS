@@ -156,6 +156,7 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
 
         drawLabel(context, "dmls.field.co.user.label", userField.getX(), scaled(34));
         drawLabel(context, "dmls.field.co.time.label", timeField.getX(), scaled(34));
@@ -184,6 +185,7 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
                         width / 2, warningY, 0xFFFFAA00);
             }
         }
+        endContentScissor(context);
         if (!status.getString().isEmpty()) {
             context.drawCenteredTextWithShadow(textRenderer, status, width / 2,
                     footerButtonY() - scaled(13), 0xFFFF5555);

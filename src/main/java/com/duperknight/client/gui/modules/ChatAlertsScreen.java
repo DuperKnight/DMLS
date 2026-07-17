@@ -50,10 +50,12 @@ public final class ChatAlertsScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
         int statusY = contentY(scaled(62));
         if (isContentVisible(statusY, textRenderer.fontHeight)) {
             context.drawCenteredTextWithShadow(textRenderer, wordlistStatus, width / 2, statusY, 0xFFAAAAAA);
         }
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 

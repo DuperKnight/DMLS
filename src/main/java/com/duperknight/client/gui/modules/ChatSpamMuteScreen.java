@@ -57,10 +57,12 @@ public final class ChatSpamMuteScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
         int statusY = contentY(scaled(60));
         if (!saveStatus.getString().isEmpty() && isContentVisible(statusY, textRenderer.fontHeight)) {
             context.drawCenteredTextWithShadow(textRenderer, saveStatus, width / 2, statusY, 0xFFFF5555);
         }
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 }

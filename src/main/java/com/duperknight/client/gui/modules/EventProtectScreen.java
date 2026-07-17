@@ -94,6 +94,7 @@ public final class EventProtectScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
         int labelY = contentY(0);
         if (isContentVisible(labelY, textRenderer.fontHeight)) {
             context.drawTextWithShadow(textRenderer,
@@ -110,6 +111,7 @@ public final class EventProtectScreen extends DMLSMenuScreen {
         if (!validationMessage.getString().isEmpty() && isContentVisible(validationY, textRenderer.fontHeight)) {
             context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, validationY, 0xFFFF5555);
         }
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 }

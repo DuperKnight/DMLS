@@ -103,6 +103,7 @@ public final class GriefScanScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
         int ignLabelY = contentY(0);
         if (isContentVisible(ignLabelY, textRenderer.fontHeight)) {
             context.drawTextWithShadow(textRenderer, Text.translatable("dmls.field.containers.ign.label"), ignField.getX(), ignLabelY, 0xFFCCCCCC);
@@ -116,6 +117,7 @@ public final class GriefScanScreen extends DMLSMenuScreen {
         if (!validationMessage.getString().isEmpty() && isContentVisible(validationY, textRenderer.fontHeight)) {
             context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, validationY, 0xFFFF5555);
         }
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 }

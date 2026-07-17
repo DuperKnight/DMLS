@@ -96,12 +96,14 @@ public final class AllowedServersScreen extends DMLSMenuScreen {
             context.drawCenteredTextWithShadow(textRenderer, line, width / 2, y, 0xFFCCCCCC);
             y += scaled(11);
         }
+        beginContentScissor(context);
         if (!validationMessage.getString().isEmpty()) {
             int messageY = contentY(scaled(38) + DMLSConfig.allowedServers().size() * scaled(28));
             if (isContentVisible(messageY, textRenderer.fontHeight)) {
                 context.drawCenteredTextWithShadow(textRenderer, validationMessage, width / 2, messageY, 0xFFFF5555);
             }
         }
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 }

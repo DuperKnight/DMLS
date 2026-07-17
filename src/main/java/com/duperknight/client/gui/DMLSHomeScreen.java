@@ -321,10 +321,6 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         if (maxScroll == 0) {
             scrollable = false;
             viewportWidth = panelWidth - cardMargin * 2;
-            cardSize = Math.clamp((viewportWidth - CARD_GAP * (COLUMNS - 1)) / COLUMNS,
-                    minimumCardSize, maximumCardSize);
-            contentHeight = groupedContentHeight(categories, cardMargin, cardSize);
-            maxScroll = Math.max(0, contentHeight - viewportHeight);
         }
         return new GridLayout(panelX, panelWidth, panelX + cardMargin, viewportY, viewportWidth, viewportHeight,
                 viewportY + cardMargin, cardSize, scrollable);

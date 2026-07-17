@@ -136,7 +136,16 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     protected boolean isContentVisible(int y, int elementHeight) {
-        return y >= contentViewportTop && y + elementHeight <= contentViewportBottom;
+        return y < contentViewportBottom && y + elementHeight > contentViewportTop;
+    }
+
+    /** Clips custom-drawn scrolling content while still allowing partially visible elements to render. */
+    protected void beginContentScissor(DrawContext context) {
+        context.enableScissor(0, contentViewportTop, width, contentViewportBottom);
+    }
+
+    protected void endContentScissor(DrawContext context) {
+        context.disableScissor();
     }
 
     /** Returns the first fixed-height content row that can intersect the viewport. */
@@ -210,7 +219,23 @@ public abstract class DMLSMenuScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        // Screen renders all drawable children together. Hide scrolling children for that pass, then
+        // render them separately through the viewport scissor so partial widgets are cut smoothly.
+        for (ScrollableWidget entry : scrollableWidgets) {
+            entry.widget().visible = false;
+        }
         super.render(context, mouseX, mouseY, delta);
+        int clippedMouseX = mouseY >= contentViewportTop && mouseY < contentViewportBottom
+                ? mouseX : Integer.MIN_VALUE;
+        int clippedMouseY = mouseY >= contentViewportTop && mouseY < contentViewportBottom
+                ? mouseY : Integer.MIN_VALUE;
+        context.enableScissor(0, contentViewportTop, width, contentViewportBottom);
+        for (ScrollableWidget entry : scrollableWidgets) {
+            ClickableWidget widget = entry.widget();
+            widget.visible = isContentVisible(widget.getY(), widget.getHeight());
+            if (widget.visible) widget.render(context, clippedMouseX, clippedMouseY, delta);
+        }
+        context.disableScissor();
         if (maxContentScroll > 0) {
             int trackX = contentScrollbarX();
             int viewportHeight = contentViewportBottom - contentViewportTop;
@@ -254,7 +279,15 @@ public abstract class DMLSMenuScreen extends Screen {
             updateContentScrollFromMouse(click.y());
             return true;
         }
-        return super.mouseClicked(click, doubled);
+        if (click.y() >= contentViewportTop && click.y() < contentViewportBottom) {
+            return super.mouseClicked(click, doubled);
+        }
+        for (ScrollableWidget entry : scrollableWidgets) {
+            entry.widget().visible = false;
+        }
+        boolean handled = super.mouseClicked(click, doubled);
+        updateScrollableWidgets();
+        return handled;
     }
 
     @Override

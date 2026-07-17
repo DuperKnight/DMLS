@@ -2,6 +2,7 @@ package com.duperknight.client.gui.widgets;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
@@ -13,10 +14,13 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * A reusable DMLS panel-styled dropdown for choosing one value from a fixed list.
@@ -30,6 +34,8 @@ public final class DropdownWidget<T> extends PressableWidget {
     private static final int ARROW_AREA_WIDTH = 18;
     private static final int SCROLLBAR_GAP = 2;
     private static final int MIN_SCROLLBAR_THUMB_HEIGHT = 8;
+    private static final int INDICATOR_TEXTURE_SIZE = 16;
+    private static final int INDICATOR_RENDER_SIZE = 12;
 
     private final Text optionText;
     private final List<T> values;
@@ -38,6 +44,9 @@ public final class DropdownWidget<T> extends PressableWidget {
     private final boolean showOptionLabel;
     private final int maxVisibleRows;
     private final List<OptionButton> optionButtons;
+    private final Identifier indicatorTexture;
+    private final Predicate<T> showOptionIndicator;
+    private final BooleanSupplier showCollapsedIndicator;
 
     private T value;
     private boolean open;
@@ -59,6 +68,9 @@ public final class DropdownWidget<T> extends PressableWidget {
         callback = builder.callback;
         showOptionLabel = builder.showOptionLabel;
         maxVisibleRows = builder.maxVisibleRows;
+        indicatorTexture = builder.indicatorTexture;
+        showOptionIndicator = builder.showOptionIndicator;
+        showCollapsedIndicator = builder.showCollapsedIndicator;
         value = values.contains(builder.initialValue) ? builder.initialValue : values.getFirst();
         highlightedIndex = values.indexOf(value);
         optionButtons = values.stream().map(OptionButton::new).toList();
@@ -123,9 +135,17 @@ public final class DropdownWidget<T> extends PressableWidget {
         drawArrow(context);
     }
 
-    /** Draws the expanded list in a fresh layer above the screen's regular controls. */
+    /** Draws the expanded list or collapsed indicator in a fresh layer above the screen's regular controls. */
     public void renderDropdown(DrawContext context, int mouseX, int mouseY, float delta) {
-        if (!open || !visible) {
+        if (!visible) {
+            return;
+        }
+        if (!open) {
+            if (indicatorTexture != null && showCollapsedIndicator.getAsBoolean()) {
+                context.createNewRootLayer();
+                drawIndicator(context, getRight() - INDICATOR_RENDER_SIZE / 2,
+                        getY() - INDICATOR_RENDER_SIZE / 2);
+            }
             return;
         }
 
@@ -317,6 +337,13 @@ public final class DropdownWidget<T> extends PressableWidget {
         }
     }
 
+    private void drawIndicator(DrawContext context, int x, int y) {
+        context.drawTexture(RenderPipelines.GUI_TEXTURED, indicatorTexture, x, y, 0.0F, 0.0F,
+                INDICATOR_RENDER_SIZE, INDICATOR_RENDER_SIZE,
+                INDICATOR_TEXTURE_SIZE, INDICATOR_TEXTURE_SIZE,
+                INDICATOR_TEXTURE_SIZE, INDICATOR_TEXTURE_SIZE);
+    }
+
     private static void drawLeftAlignedLabel(DrawContext context, PressableWidget widget, int rightInset) {
         int left = widget.getX() + 8;
         int right = Math.max(left + 1, widget.getRight() - rightInset);
@@ -438,6 +465,9 @@ public final class DropdownWidget<T> extends PressableWidget {
         private int height = 20;
         private int maxVisibleRows = DEFAULT_MAX_VISIBLE_ROWS;
         private boolean showOptionLabel;
+        private Identifier indicatorTexture;
+        private Predicate<T> showOptionIndicator = ignored -> false;
+        private BooleanSupplier showCollapsedIndicator = () -> false;
 
         private Builder(Text optionText, List<T> values, T initialValue,
                         Function<T, Text> valueToText, UpdateCallback<T> callback) {
@@ -467,6 +497,15 @@ public final class DropdownWidget<T> extends PressableWidget {
         /** Shows "Option: Value" on the collapsed button instead of only the selected value. */
         public Builder<T> showOptionLabel(boolean showOptionLabel) {
             this.showOptionLabel = showOptionLabel;
+            return this;
+        }
+
+        /** Adds a dynamic corner indicator and matching indicators beside marked options. */
+        public Builder<T> indicator(Identifier texture, Predicate<T> showForOption,
+                                    BooleanSupplier showWhenCollapsed) {
+            this.indicatorTexture = Objects.requireNonNull(texture);
+            this.showOptionIndicator = Objects.requireNonNull(showForOption);
+            this.showCollapsedIndicator = Objects.requireNonNull(showWhenCollapsed);
             return this;
         }
 
@@ -505,7 +544,14 @@ public final class DropdownWidget<T> extends PressableWidget {
                 context.drawStrokedRectangle(getX(), getY(), getWidth(), getHeight(),
                         DMLSMenuScreen.PANEL_BORDER_COLOR);
             }
-            drawLeftAlignedLabel(context, this, 8);
+            boolean showIndicator = indicatorTexture != null && showOptionIndicator.test(option);
+            drawLeftAlignedLabel(context, this, showIndicator ? INDICATOR_RENDER_SIZE + 8 : 8);
+            if (showIndicator) {
+                int afterLabel = getX() + 8 + MinecraftClient.getInstance().textRenderer.getWidth(getMessage()) + 4;
+                int rightmost = getRight() - INDICATOR_RENDER_SIZE - 4;
+                drawIndicator(context, Math.min(afterLabel, rightmost),
+                        getY() + (getHeight() - INDICATOR_RENDER_SIZE) / 2);
+            }
         }
 
         @Override

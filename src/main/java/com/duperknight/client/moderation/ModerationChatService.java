@@ -39,8 +39,10 @@ public final class ModerationChatService {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
     private static final Pattern MSG_SUGGESTION = Pattern.compile("^/?msg\\s+([A-Za-z0-9_]{3,16})(?:\\s.*)?$",
             Pattern.CASE_INSENSITIVE);
-    private static final Pattern REALNAME_RESPONSE = Pattern.compile(
+    private static final Pattern BRACKETED_REALNAME_RESPONSE = Pattern.compile(
             "^\\[([^]\\r\\n]{1,32})]\\s+is\\s+\\[([A-Za-z0-9_]{3,16})]$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PLAIN_REALNAME_RESPONSE = Pattern.compile(
+            "^([^\\r\\n]{1,32}?)\\s+is\\s+([A-Za-z0-9_]{3,16})$", Pattern.CASE_INSENSITIVE);
     private static final Pattern VISIBLE_USERNAME = Pattern.compile("[^\\s|:»]{1,32}");
     private static final Pattern PRIVATE_STAFF_LINE = Pattern.compile(
             "^\\[(?:SC|AC)]\\s+\\[[^]\\r\\n]{1,32}]\\s+([^\\s|:»]{1,32})\\s*:\\s*(.+)$");
@@ -49,6 +51,7 @@ public final class ModerationChatService {
     private static final Map<String, String> IGN_BY_VISIBLE_NAME = new HashMap<>();
     private static final Map<String, UUID> UUID_BY_IGN = new HashMap<>();
     private static final Deque<RealnameRequest> REALNAME_QUEUE = new ArrayDeque<>();
+    private static final ChannelMentionTracker CHANNEL_MENTIONS = new ChannelMentionTracker();
 
     private static RealnameRequest activeRealname;
     private static int activeRealnameTicks;
@@ -86,6 +89,10 @@ public final class ModerationChatService {
 
     public static synchronized long revision() {
         return revision;
+    }
+
+    static ChannelMentionTracker channelMentions() {
+        return CHANNEL_MENTIONS;
     }
 
     static synchronized void capture(Text text, GameProfile sender, boolean playerEvent, boolean overlay) {
@@ -136,7 +143,11 @@ public final class ModerationChatService {
     }
 
     private static int playerMessageSeparator(String clean, int fromIndex) {
-        int colon = whitespacePrefixedColon(clean, fromIndex);
+        // Prefixed channel formats use both "Name : message" and "Name: message". Global/server output
+        // keeps the stricter spaced-colon rule so lines such as "Sales: 0 | Net: 0 Coins" stay non-player.
+        int colon = ChatChannel.classifyPlayerLine(clean) == ChatChannel.GLOBAL
+                ? whitespacePrefixedColon(clean, fromIndex)
+                : clean.indexOf(':', fromIndex);
         int chevron = clean.indexOf('»', fromIndex);
         if (colon < 0) return chevron;
         if (chevron < 0) return colon;
@@ -154,9 +165,17 @@ public final class ModerationChatService {
 
     static Optional<String> parseRealnameResponse(String requestedVisibleName, String cleanLine) {
         if (requestedVisibleName == null || cleanLine == null) return Optional.empty();
-        Matcher matcher = REALNAME_RESPONSE.matcher(cleanLine.trim());
-        if (!matcher.matches() || !matcher.group(1).equalsIgnoreCase(requestedVisibleName)) return Optional.empty();
-        return Optional.of(matcher.group(2));
+        String response = cleanLine.trim();
+        Matcher bracketed = BRACKETED_REALNAME_RESPONSE.matcher(response);
+        if (bracketed.matches()) return correlatedRealname(requestedVisibleName, bracketed);
+        Matcher plain = PLAIN_REALNAME_RESPONSE.matcher(response);
+        return plain.matches() ? correlatedRealname(requestedVisibleName, plain) : Optional.empty();
+    }
+
+    private static Optional<String> correlatedRealname(String requestedVisibleName, Matcher matcher) {
+        return matcher.group(1).equalsIgnoreCase(requestedVisibleName)
+                ? Optional.of(matcher.group(2))
+                : Optional.empty();
     }
 
     static Optional<String> extractIgnFromClickMetadata(Text text) {
@@ -305,6 +324,7 @@ public final class ModerationChatService {
         previousText = "";
         previousAt = 0;
         nextSequence = 0;
+        CHANNEL_MENTIONS.reset();
         revision++;
         callbacks.forEach(callback -> callback.accept(Optional.empty()));
     }

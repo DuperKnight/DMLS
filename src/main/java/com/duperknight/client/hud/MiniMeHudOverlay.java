@@ -3,6 +3,7 @@ package com.duperknight.client.hud;
 import com.duperknight.DMLS;
 import com.duperknight.client.modules.MiniMeHudPreferences;
 import com.duperknight.client.utils.DMLSConfig;
+import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -11,6 +12,8 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.resource.ResourceType;
+import net.minecraft.resource.SynchronousResourceReloader;
 import net.minecraft.util.Identifier;
 
 import java.io.IOException;
@@ -90,6 +93,15 @@ public final class MiniMeHudOverlay {
     public static void register() {
         HudElementRegistry.addLast(Identifier.of(DMLS.MOD_ID.toLowerCase(), "walking_mini_mes"),
                 (context, tickCounter) -> render(context));
+        ResourceLoader.get(ResourceType.CLIENT_RESOURCES).registerReloader(
+                Identifier.of(DMLS.MOD_ID.toLowerCase(), "mini_me_frames"),
+                (SynchronousResourceReloader) resourceManager -> invalidateFrameCache());
+    }
+
+    private static void invalidateFrameCache() {
+        for (MiniMeDefinition miniMe : MiniMeDefinition.values()) {
+            miniMe.invalidateFrames();
+        }
     }
 
     private static void render(DrawContext context) {
@@ -630,6 +642,13 @@ public final class MiniMeHudOverlay {
             }
             if (resolvedFrames[index] != null) return resolvedFrames[index];
             return index == 0 ? new MiniMeFrame(textures[0], textures[0], 800, 800) : frame(0);
+        }
+
+        private void invalidateFrames() {
+            for (int index = 0; index < resolvedFrames.length; index++) {
+                resolvedFrames[index] = null;
+                resolutionAttempted[index] = false;
+            }
         }
 
         private float anchorWidth(int size) {

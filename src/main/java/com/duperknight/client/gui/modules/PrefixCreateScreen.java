@@ -165,6 +165,7 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
         int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
 
@@ -175,6 +176,7 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
         drawContentLabel(context, Text.translatable("dmls.field.player_limit.label"), formX, contentY(scaled(190)));
         renderCommandStatus(context, formX, formWidth);
         renderValidation(context, formWidth);
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 

@@ -6,12 +6,15 @@ import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.ChatAlertsModule;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.PlayerSkinDrawer;
 import net.minecraft.client.gui.cursor.StandardCursors;
+import net.minecraft.client.gui.screen.ChatInputSuggestor;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
@@ -27,7 +30,6 @@ import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Formatting;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -65,6 +67,8 @@ public final class ModerationScreen extends Screen {
     private static final long MINI_ME_SPAM_WINDOW_NANOS = 350_000_000L;
     private static final SoundEvent MINI_ME_SQUISH_SOUND = SoundEvent.of(
             Identifier.of(DMLS.MOD_ID.toLowerCase(), "mini_me.squish"));
+    private static final Identifier NOTIFICATION_TEXTURE = Identifier.of(
+            DMLS.MOD_ID.toLowerCase(), "textures/gui/icon/notification.png");
     private static final List<MiniMe> MINI_MES = List.of(
             new MiniMe("Dupey", Identifier.of(DMLS.MOD_ID.toLowerCase(), "textures/gui/mini_me/dupey.png")),
             new MiniMe("Siaffy", Identifier.of(DMLS.MOD_ID.toLowerCase(), "textures/gui/mini_me/siaffy.png")),
@@ -80,9 +84,12 @@ public final class ModerationScreen extends Screen {
     private final Set<String> punishmentSkinLoading = new HashSet<>();
     private final List<MessageHitbox> messageHitboxes = new ArrayList<>();
     private final List<PunishmentHitbox> punishmentHitboxes = new ArrayList<>();
+    private final ChannelMentionTracker channelMentions = ModerationChatService.channelMentions();
 
     private TextFieldWidget globalInput;
     private TextFieldWidget channelInput;
+    private ChatInputSuggestor globalSuggestor;
+    private ChatInputSuggestor channelSuggestor;
     private DropdownWidget<ChatChannel> channelDropdown;
     private ButtonWidget globalSend;
     private ButtonWidget channelSend;
@@ -142,24 +149,25 @@ public final class ModerationScreen extends Screen {
         Layout layout = layout();
         adminAccess = isAdmin();
         List<ChatChannel> selectableChannels = selectableChannels();
-        if (!selectableChannels.contains(selectedChannel)) selectedChannel = ChatChannel.STAFF;
+        if (!selectableChannels.contains(selectedChannel)) selectChannel(ChatChannel.STAFF);
 
         int sendWidth = Math.min(72, Math.max(50, layout.leftWidth() / 7));
         globalInput = addDrawableChild(new TextFieldWidget(textRenderer, layout.leftX(), layout.globalInputY(),
                 layout.leftWidth() - sendWidth - 4, INPUT_HEIGHT, Text.translatable("dmls.moderation.global_input")));
         globalInput.setMaxLength(240);
         globalInput.setText(savedGlobal);
-        globalInput.setSuggestion(savedGlobal.isEmpty() ? Text.translatable("dmls.moderation.type_message").getString() : null);
-        globalInput.setChangedListener(value -> globalInput.setSuggestion(value.isEmpty()
-                ? Text.translatable("dmls.moderation.type_message").getString() : null));
+        globalSuggestor = createSuggestor(globalInput);
+        globalInput.setChangedListener(this::onGlobalInputChanged);
+        onGlobalInputChanged(savedGlobal);
         globalSend = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.moderation.send"), ignored -> sendGlobal())
                 .dimensions(layout.leftX() + layout.leftWidth() - sendWidth, layout.globalInputY(), sendWidth, INPUT_HEIGHT).build());
 
         int dropdownWidth = Math.min(92, Math.max(66, layout.leftWidth() / 5));
         channelDropdown = addDrawableChild(DropdownWidget.builder(Text.translatable("dmls.moderation.channel"),
                         selectableChannels, selectedChannel, ChatChannel::displayName,
-                        (dropdown, value) -> selectedChannel = value)
+                        (dropdown, value) -> selectChannel(value))
                 .dimensions(layout.leftX(), layout.channelInputY(), dropdownWidth, INPUT_HEIGHT)
+                .indicator(NOTIFICATION_TEXTURE, channelMentions::isUnread, channelMentions::hasUnread)
                 .maxVisibleRows(selectableChannels.size()).showOptionLabel(false).build());
         channelDropdown.setDropdownBounds(MARGIN, height - MARGIN);
         channelInput = addDrawableChild(new TextFieldWidget(textRenderer, layout.leftX() + dropdownWidth + 4,
@@ -167,9 +175,9 @@ public final class ModerationScreen extends Screen {
                 Text.translatable("dmls.moderation.channel_input")));
         channelInput.setMaxLength(240);
         channelInput.setText(savedChannel);
-        channelInput.setSuggestion(savedChannel.isEmpty() ? Text.translatable("dmls.moderation.type_message").getString() : null);
-        channelInput.setChangedListener(value -> channelInput.setSuggestion(value.isEmpty()
-                ? Text.translatable("dmls.moderation.type_message").getString() : null));
+        channelSuggestor = createSuggestor(channelInput);
+        channelInput.setChangedListener(this::onChannelInputChanged);
+        onChannelInputChanged(savedChannel);
         channelSend = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.moderation.send"), ignored -> sendSelected())
                 .dimensions(layout.leftX() + layout.leftWidth() - sendWidth, layout.channelInputY(), sendWidth, INPUT_HEIGHT).build());
 
@@ -202,7 +210,12 @@ public final class ModerationScreen extends Screen {
     }
 
     private void sendGlobal() {
-        send(ChatChannel.GLOBAL, globalInput);
+        String message = globalInput.getText().trim();
+        if (message.startsWith("/")) {
+            completeSend(globalInput, ClientUtils.dispatchCommand(client, message.substring(1)));
+        } else {
+            send(ChatChannel.GLOBAL, globalInput);
+        }
     }
 
     private void sendSelected() {
@@ -211,7 +224,10 @@ public final class ModerationScreen extends Screen {
 
     private void send(ChatChannel channel, TextFieldWidget field) {
         String message = field.getText();
-        CommandDispatch result = ModerationActions.sendToChannel(client, channel, message);
+        completeSend(field, ModerationActions.sendToChannel(client, channel, message));
+    }
+
+    private void completeSend(TextFieldWidget field, CommandDispatch result) {
         if (result.accepted()) {
             field.setText("");
             if (result == CommandDispatch.SIMULATED) {
@@ -222,12 +238,41 @@ public final class ModerationScreen extends Screen {
         }
     }
 
+    private ChatInputSuggestor createSuggestor(TextFieldWidget input) {
+        ChatInputSuggestor suggestor = new ChatInputSuggestor(client, new SuggestionOwner(input), input, textRenderer,
+                false, false, 1, 10, true, PANEL_BACKGROUND);
+        // Match ChatScreen: Tab belongs to autocomplete and must not move focus to another mod-view control.
+        suggestor.setCanLeave(false);
+        return suggestor;
+    }
+
+    private void onGlobalInputChanged(String value) {
+        updateSuggestor(globalInput, globalSuggestor, value, true);
+    }
+
+    private void onChannelInputChanged(String value) {
+        updateSuggestor(channelInput, channelSuggestor, value, false);
+    }
+
+    private void updateSuggestor(TextFieldWidget input, ChatInputSuggestor suggestor,
+                                 String value, boolean commandsAllowed) {
+        boolean empty = value.isEmpty();
+        Text placeholder = commandsAllowed
+                ? Text.translatable("dmls.moderation.type_message_or_command")
+                : Text.translatable("dmls.moderation.type_channel_message", selectedChannel.displayName());
+        input.setSuggestion(empty ? placeholder.getString() : null);
+        boolean enabled = !empty && (commandsAllowed || !value.startsWith("/"));
+        suggestor.setWindowActive(enabled);
+        if (enabled) suggestor.refresh();
+    }
+
     @Override
     public void tick() {
         if (statusTicks > 0 && --statusTicks == 0) status = "";
         long revision = ModerationChatService.revision();
         if (revision != lastRevision) {
             lastRevision = revision;
+            updateChannelMentions();
         }
     }
 
@@ -262,6 +307,11 @@ public final class ModerationScreen extends Screen {
         super.render(context, contentMouseX, contentMouseY, delta);
 
         if (modalType == null) {
+            ChatInputSuggestor suggestor = activeSuggestor();
+            if (suggestor != null) {
+                context.createNewRootLayer();
+                suggestor.render(context, contentMouseX, contentMouseY);
+            }
             channelDropdown.renderDropdown(context, contentMouseX, contentMouseY, delta);
             renderContextMenu(context, mouseX, mouseY);
         } else {
@@ -765,6 +815,8 @@ public final class ModerationScreen extends Screen {
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
         if (modalType != null) return super.mouseClicked(click, doubled);
+        ChatInputSuggestor suggestor = activeSuggestor();
+        if (suggestor != null && suggestor.mouseClicked(click)) return true;
         if (channelDropdown.isDropdownOpen() && channelDropdown.mouseClicked(click, doubled)) {
             setFocused(channelDropdown);
             return true;
@@ -957,6 +1009,8 @@ public final class ModerationScreen extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         if (modalType != null) return true;
         if (contextMenu != null) return true;
+        ChatInputSuggestor suggestor = activeSuggestor();
+        if (suggestor != null && suggestor.mouseScrolled(verticalAmount)) return true;
         if (channelDropdown.isDropdownOpen()
                 && channelDropdown.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount)) return true;
         Layout layout = layout();
@@ -1033,6 +1087,10 @@ public final class ModerationScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyInput input) {
+        if (channelInput != null && channelInput.isFocused() && input.isTab()
+                && channelInput.getText().startsWith("/")) return true;
+        ChatInputSuggestor suggestor = activeSuggestor();
+        if (suggestor != null && suggestor.keyPressed(input)) return true;
         if (input.isEscape()) {
             if (modalType != null) {
                 closePunishmentModal();
@@ -1046,10 +1104,6 @@ public final class ModerationScreen extends Screen {
                 channelDropdown.closeDropdown();
                 return true;
             }
-        }
-        if (modalType == null && channelInput.isFocused() && input.isTab()) {
-            cycleChannel((input.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0 ? -1 : 1);
-            return true;
         }
         if (input.getKeycode() == InputUtil.GLFW_KEY_ENTER || input.getKeycode() == InputUtil.GLFW_KEY_KP_ENTER) {
             if (modalType != null && punishmentConfirm.active) {
@@ -1068,11 +1122,26 @@ public final class ModerationScreen extends Screen {
         return super.keyPressed(input);
     }
 
-    private void cycleChannel(int direction) {
-        List<ChatChannel> channels = selectableChannels();
-        int index = channels.indexOf(selectedChannel);
-        selectedChannel = channels.get(Math.floorMod(index + direction, channels.size()));
-        channelDropdown.setValue(selectedChannel);
+    private ChatInputSuggestor activeSuggestor() {
+        if (modalType != null || contextMenu != null || channelDropdown == null
+                || channelDropdown.isDropdownOpen()) return null;
+        if (globalInput != null && globalInput.isFocused()) return globalSuggestor;
+        if (channelInput != null && channelInput.isFocused()) return channelSuggestor;
+        return null;
+    }
+
+    private void selectChannel(ChatChannel channel) {
+        selectedChannel = channel;
+        channelMentions.markRead(channel);
+        if (channelInput != null && channelSuggestor != null) {
+            onChannelInputChanged(channelInput.getText());
+        }
+    }
+
+    private void updateChannelMentions() {
+        if (client == null || client.player == null) return;
+        channelMentions.update(ModerationChatService.messages(), client.player.getName().getString(),
+                selectedChannel, selectableChannels());
     }
 
     private List<ChatChannel> selectableChannels() {
@@ -1342,6 +1411,20 @@ public final class ModerationScreen extends Screen {
     }
 
     private record MiniMe(String name, Identifier texture) {
+    }
+
+    /** Makes vanilla's bottom-anchored suggestion window line up with an arbitrary input field. */
+    private final class SuggestionOwner extends Screen {
+        private SuggestionOwner(TextFieldWidget input) {
+            super(Text.empty());
+            width = ModerationScreen.this.width;
+            height = input.getY() + 12;
+        }
+
+        @Override
+        public Element getFocused() {
+            return ModerationScreen.this.getFocused();
+        }
     }
 
     private void drawPunishmentSummary(DrawContext context, Text text, int left, int right, int top, int bottom) {

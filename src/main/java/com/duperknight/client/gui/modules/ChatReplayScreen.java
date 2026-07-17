@@ -274,7 +274,14 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
             updateSessionScrollFromMouse(click.y());
             return true;
         }
+        boolean sessionViewportClick = click.x() >= layout.sessionX()
+                && click.x() < layout.sessionX() + layout.sessionWidth()
+                && click.y() >= layout.viewportTop() && click.y() < sessionViewportBottom();
+        if (!sessionViewportClick) {
+            sessionButtons.forEach(entry -> entry.button().visible = false);
+        }
         boolean handled = super.mouseClicked(click, doubled);
+        updateSessionButtonPositions();
         if (handled && isOverChatScrollbar(replayLayout(), click.x(), click.y())
                 && loadAdjacentChunkAtScrollbarEdge()) {
             stopDraggingContentScrollbar();
@@ -354,6 +361,7 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         context.drawCenteredTextWithShadow(textRenderer, title, width / 2,
                 HEADER_HEIGHT + scaled(16), 0xFFFFFFFF);
 
+        beginContentScissor(context);
         if (loading && lines.isEmpty()) {
             drawStatus(context, Text.translatable("dmls.screen.chat_replay.loading"));
         } else if (loadFailed) {
@@ -370,12 +378,15 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
                 }
             }
         }
+        endContentScissor(context);
         updateNavigationButtons();
         if (exportStatus != null) {
             context.drawCenteredTextWithShadow(textRenderer, exportStatus, width / 2,
                     height - FOOTER_TOP_OFFSET + scaled(4), exporting ? 0xFFAAAAAA : 0xFFFFFFFF);
         }
+        sessionButtons.forEach(entry -> entry.button().visible = false);
         super.render(context, mouseX, mouseY, delta);
+        renderSessionButtons(context, mouseX, mouseY, delta);
         renderSessionScrollbar(context);
     }
 
@@ -419,8 +430,27 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
             ButtonWidget button = sessionButtons.get(index).button();
             int y = viewportTop + index * (STANDARD_BUTTON_HEIGHT + SESSION_BUTTON_GAP) - sessionScrollOffset;
             button.setY(y);
-            button.visible = y >= viewportTop && y + STANDARD_BUTTON_HEIGHT <= viewportBottom;
+            button.visible = y < viewportBottom && y + STANDARD_BUTTON_HEIGHT > viewportTop;
         }
+    }
+
+    private void renderSessionButtons(DrawContext context, int mouseX, int mouseY, float delta) {
+        ReplayLayout layout = replayLayout();
+        int viewportBottom = sessionViewportBottom();
+        boolean mouseInside = mouseX >= layout.sessionX()
+                && mouseX < layout.sessionX() + layout.sessionWidth()
+                && mouseY >= layout.viewportTop() && mouseY < viewportBottom;
+        int clippedMouseX = mouseInside ? mouseX : Integer.MIN_VALUE;
+        int clippedMouseY = mouseInside ? mouseY : Integer.MIN_VALUE;
+        context.enableScissor(layout.sessionX(), layout.viewportTop(),
+                layout.sessionX() + layout.sessionWidth(), viewportBottom);
+        updateSessionButtonPositions();
+        for (SessionButton entry : sessionButtons) {
+            if (entry.button().visible) {
+                entry.button().render(context, clippedMouseX, clippedMouseY, delta);
+            }
+        }
+        context.disableScissor();
     }
 
     private void renderSessionScrollbar(DrawContext context) {

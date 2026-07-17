@@ -69,6 +69,7 @@ public final class LocationsScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
         if (module.entries().isEmpty()) {
             int emptyY = contentY(scaled(14));
             if (isContentVisible(emptyY, textRenderer.fontHeight)) {
@@ -76,6 +77,7 @@ public final class LocationsScreen extends DMLSMenuScreen {
                         width / 2, emptyY, 0xFFAAAAAA);
             }
         }
+        endContentScissor(context);
         if (!status.getString().isEmpty()) {
             context.drawCenteredTextWithShadow(textRenderer, status, width / 2,
                     footerButtonY() - scaled(13), 0xFFFF5555);

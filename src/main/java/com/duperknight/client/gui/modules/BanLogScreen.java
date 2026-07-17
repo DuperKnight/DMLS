@@ -173,6 +173,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
+        beginContentScissor(context);
         int formX = ignField.getX();
         drawLabel(context, "dmls.field.ban_log.ign", formX, scaled(0));
         drawLabel(context, "dmls.field.ban_log.discord", formX, scaled(44));
@@ -182,6 +183,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
         drawLabel(context, "dmls.field.ban_log.ticket", formX, scaled(220));
         drawLabel(context, "dmls.field.ban_log.comments", formX, scaled(264));
         drawLabel(context, "dmls.field.ban_log.evidence", formX, scaled(308));
+        endContentScissor(context);
         if (!status.getString().isEmpty()) {
             context.drawCenteredTextWithShadow(textRenderer, status, width / 2, footerButtonY() - scaled(12), 0xFFFFFF55);
         }

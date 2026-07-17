@@ -116,6 +116,7 @@ public final class UuidLookupScreen extends DMLSMenuScreen {
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
+        beginContentScissor(context);
         int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
         drawContentText(context, Text.translatable("dmls.field.player_igns.label"), formX, contentY(0), 0xFFCCCCCC);
@@ -141,6 +142,7 @@ public final class UuidLookupScreen extends DMLSMenuScreen {
                 }
             }
         }
+        endContentScissor(context);
         super.render(context, mouseX, mouseY, delta);
     }
 
