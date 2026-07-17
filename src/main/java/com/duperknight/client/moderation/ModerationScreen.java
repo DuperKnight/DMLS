@@ -16,23 +16,19 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
+import net.minecraft.client.sound.PositionedSoundInstance;
+import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.client.util.DefaultSkinHelper;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.SkinTextures;
 import net.minecraft.screen.ScreenTexts;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Formatting;
 import org.lwjgl.glfw.GLFW;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -42,6 +38,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 
 /** Standalone live moderation workspace; intentionally not a regular DMLS module screen. */
 public final class ModerationScreen extends Screen {
@@ -49,6 +46,7 @@ public final class ModerationScreen extends Screen {
     private static final int GAP = 8;
     private static final int INPUT_HEIGHT = 20;
     private static final int ROW_HEIGHT = 20;
+    private static final int SETTINGS_SECTION_HEIGHT = 25;
     private static final int CONTEXT_ROW_HEIGHT = 23;
     private static final int PANEL_BACKGROUND = 0xD0000000;
     private static final int PANEL_BORDER = 0xFF888888;
@@ -61,21 +59,25 @@ public final class ModerationScreen extends Screen {
     private static final int STATUS_VERTICAL_PADDING = 6;
     private static final long SUBMENU_HOVER_DELAY_NANOS = 250_000_000L;
     private static final float PUNISHMENT_SUMMARY_SCALE = 0.8F;
-    private static final Duration AVATAR_TIMEOUT = Duration.ofSeconds(8);
-    private static final HttpClient AVATAR_HTTP_CLIENT = HttpClient.newBuilder()
-            .connectTimeout(AVATAR_TIMEOUT)
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
-
+    private static final int MINI_ME_TEXTURE_SIZE = 800;
+    private static final float MINI_ME_SPRING_STRENGTH = 115.0F;
+    private static final float MINI_ME_SPRING_DAMPING = 7.0F;
+    private static final long MINI_ME_SPAM_WINDOW_NANOS = 350_000_000L;
+    private static final SoundEvent MINI_ME_SQUISH_SOUND = SoundEvent.of(
+            Identifier.of(DMLS.MOD_ID.toLowerCase(), "mini_me.squish"));
+    private static final List<MiniMe> MINI_MES = List.of(
+            new MiniMe("Dupey", Identifier.of(DMLS.MOD_ID.toLowerCase(), "textures/gui/mini_me/dupey.png")),
+            new MiniMe("Siaffy", Identifier.of(DMLS.MOD_ID.toLowerCase(), "textures/gui/mini_me/siaffy.png")),
+            new MiniMe("Beany", Identifier.of(DMLS.MOD_ID.toLowerCase(), "textures/gui/mini_me/beany.png")),
+            new MiniMe("Morvy", Identifier.of(DMLS.MOD_ID.toLowerCase(), "textures/gui/mini_me/morvy.png")),
+            new MiniMe("Biggy", Identifier.of(DMLS.MOD_ID.toLowerCase(), "textures/gui/mini_me/biggy.png"))
+    );
     private final Screen parent;
     private final PunishmentLogSource punishmentLogSource;
     private final PaneState globalPane = new PaneState();
     private final PaneState channelPane = new PaneState();
-    private final Map<String, SkinTextures> realtimeSkinCache = new HashMap<>();
-    private final Set<String> realtimeSkinLoading = new HashSet<>();
-    private final Map<String, Identifier> websiteAvatarCache = new HashMap<>();
-    private final Set<String> websiteAvatarLoading = new HashSet<>();
-    private final Set<String> websiteAvatarFailed = new HashSet<>();
+    private final Map<String, SkinTextures> punishmentSkinCache = new HashMap<>();
+    private final Set<String> punishmentSkinLoading = new HashSet<>();
     private final List<MessageHitbox> messageHitboxes = new ArrayList<>();
     private final List<PunishmentHitbox> punishmentHitboxes = new ArrayList<>();
 
@@ -85,7 +87,7 @@ public final class ModerationScreen extends Screen {
     private ButtonWidget globalSend;
     private ButtonWidget channelSend;
     private ButtonWidget settingsTab;
-    private ButtonWidget petTab;
+    private ButtonWidget miniMeTab;
     private TextFieldWidget punishmentReason;
     private TextFieldWidget punishmentDuration;
     private ButtonWidget punishmentConfirm;
@@ -108,6 +110,14 @@ public final class ModerationScreen extends Screen {
     private int settingsMaxScroll;
     private boolean draggingSettingsScrollbar;
     private boolean adminAccess;
+    private int selectedMiniMeIndex;
+    private float miniMeSquish;
+    private float miniMeSquishVelocity;
+    private float miniMeSpamEnergy;
+    private long miniMeAnimationNanos = System.nanoTime();
+    private long lastMiniMeClickNanos;
+    private Rect miniMeHitbox;
+    private SoundInstance activeMiniMeSquishSound;
 
     public ModerationScreen(Screen parent) {
         this(parent, PunishmentLogService.shared());
@@ -168,10 +178,8 @@ public final class ModerationScreen extends Screen {
                     selectedRightTab = RightTab.SETTINGS;
                     updateTabButtons();
                 }).dimensions(layout.rightX(), layout.tabY(), tabWidth, INPUT_HEIGHT).build());
-        petTab = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.moderation.pet"), ignored -> {
-                    selectedRightTab = RightTab.PET;
-                    updateTabButtons();
-                }).dimensions(layout.rightX() + tabWidth + 4, layout.tabY(), tabWidth, INPUT_HEIGHT).build());
+        miniMeTab = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.moderation.mini_me"), ignored -> openMiniMeTab())
+                .dimensions(layout.rightX() + tabWidth + 4, layout.tabY(), tabWidth, INPUT_HEIGHT).build());
 
         ModalLayout modal = modalLayout();
         punishmentReason = addDrawableChild(new TextFieldWidget(textRenderer, modal.fieldX(), modal.reasonY(),
@@ -359,7 +367,7 @@ public final class ModerationScreen extends Screen {
         context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.moderation.punishment_log"),
                 pane.x() + pane.width() / 2, pane.y() + 6, 0xFFFFFFFF);
         int contentTop = pane.y() + 20;
-        int rowHeight = 31;
+        int rowHeight = 30;
         List<PunishmentLogEntry> entries = punishmentLogSource.latest().stream()
                 .limit(PunishmentLogService.MAX_ENTRIES).toList();
         int viewportHeight = pane.bottom() - contentTop - 3;
@@ -375,27 +383,30 @@ public final class ModerationScreen extends Screen {
             PunishmentLogEntry entry = entries.get(index);
             int y = contentTop + index * rowHeight - logScroll;
             if (y + rowHeight <= contentTop || y >= pane.bottom()) continue;
+            int highlightTop = y + 1;
+            int highlightBottom = y + rowHeight - 1;
             boolean hovered = mouseX >= pane.x() + 2 && mouseX < contentRight
-                    && mouseY >= Math.max(y, contentTop) && mouseY < Math.min(y + rowHeight - 2, pane.bottom());
+                    && mouseY >= Math.max(highlightTop, contentTop)
+                    && mouseY < Math.min(highlightBottom, pane.bottom());
             int highlightAlpha = entry.highlightAlpha(System.currentTimeMillis());
             if (highlightAlpha > 0) {
-                context.fill(pane.x() + 2, y, pane.right() - 2, y + rowHeight - 2,
+                context.fill(pane.x() + 2, highlightTop, pane.right() - 2, highlightBottom,
                         (entry.type().accentColor() & 0x00FFFFFF) | highlightAlpha << 24);
             }
             if (hovered) {
-                context.fill(pane.x() + 2, y, pane.right() - 2, y + rowHeight - 2, HOVER_BACKGROUND);
+                context.fill(pane.x() + 2, highlightTop, pane.right() - 2, highlightBottom, HOVER_BACKGROUND);
                 context.setCursor(StandardCursors.POINTING_HAND);
             }
             renderPunishmentAvatar(context, entry, pane.x() + 7, y + 3, 24);
-            context.drawTextWithShadow(textRenderer, Text.literal(entry.playerName()), pane.x() + 38, y + 3, 0xFFFFFFFF);
+            context.drawTextWithShadow(textRenderer, Text.literal(entry.playerName()), pane.x() + 38, y + 6, 0xFFFFFFFF);
             Text logLine = entry.duration().isEmpty()
                     ? Text.translatable("dmls.moderation.log_line", entry.type().displayName(), entry.staffName())
                     : Text.translatable("dmls.moderation.log_line_timed",
                     entry.type().displayName(), entry.duration(), entry.staffName());
             drawPunishmentSummary(context, logLine.copy().formatted(Formatting.GRAY),
-                    pane.x() + 38, contentRight, y + 13, y + 29);
-            punishmentHitboxes.add(new PunishmentHitbox(entry, pane.x() + 2, y,
-                    contentRight, y + rowHeight - 2, new Rect(pane.x(), contentTop,
+                    pane.x() + 38, contentRight, y + 14, y + 29);
+            punishmentHitboxes.add(new PunishmentHitbox(entry, pane.x() + 2, highlightTop,
+                    contentRight, highlightBottom, new Rect(pane.x(), contentTop,
                     pane.width(), pane.bottom() - contentTop)));
         }
         context.disableScissor();
@@ -411,27 +422,17 @@ public final class ModerationScreen extends Screen {
     }
 
     private void renderPunishmentAvatar(DrawContext context, PunishmentLogEntry entry, int x, int y, int size) {
-        if (entry.website()) {
-            Identifier avatar = websiteAvatar(entry);
-            if (avatar != null) {
-                context.drawTexture(RenderPipelines.GUI_TEXTURED, avatar, x, y, 0.0F, 0.0F,
-                        size, size, 25, 25, 25, 25);
-                return;
-            }
-            PlayerSkinDrawer.draw(context, DefaultSkinHelper.getSkinTextures(entry.playerUuid()), x, y, size);
-            return;
-        }
-        PlayerSkinDrawer.draw(context, realtimeSkin(entry), x, y, size);
+        PlayerSkinDrawer.draw(context, punishmentSkin(entry), x, y, size);
     }
 
-    private SkinTextures realtimeSkin(PunishmentLogEntry entry) {
+    private SkinTextures punishmentSkin(PunishmentLogEntry entry) {
         String key = entry.playerName().toLowerCase(java.util.Locale.ROOT);
-        SkinTextures known = realtimeSkinCache.get(key);
+        SkinTextures known = punishmentSkinCache.get(key);
         if (known != null) return known;
 
         SkinTextures fallback = DefaultSkinHelper.getSkinTextures(entry.playerUuid());
-        realtimeSkinCache.put(key, fallback);
-        if (realtimeSkinLoading.add(key)) {
+        punishmentSkinCache.put(key, fallback);
+        if (punishmentSkinLoading.add(key)) {
             CompletableFuture.supplyAsync(() -> client.getApiServices().profileRepository()
                             .findProfileByName(entry.playerName())
                             .map(nameAndId -> client.getApiServices().sessionService()
@@ -442,102 +443,55 @@ public final class ModerationScreen extends Screen {
                             ? CompletableFuture.completedFuture(Optional.<SkinTextures>empty())
                             : client.getSkinProvider().fetchSkinTextures(profile))
                     .thenAccept(textures -> client.execute(() -> {
-                        textures.ifPresent(skin -> realtimeSkinCache.put(key, skin));
-                        realtimeSkinLoading.remove(key);
+                        textures.ifPresent(skin -> punishmentSkinCache.put(key, skin));
+                        punishmentSkinLoading.remove(key);
                     }))
                     .exceptionally(error -> {
-                        client.execute(() -> realtimeSkinLoading.remove(key));
+                        client.execute(() -> punishmentSkinLoading.remove(key));
                         return null;
                     });
         }
         return fallback;
     }
 
-    private Identifier websiteAvatar(PunishmentLogEntry entry) {
-        String url = entry.avatarUrl();
-        if (url.isEmpty()) return null;
-        Identifier known = websiteAvatarCache.get(url);
-        if (known != null) return known;
-        if (websiteAvatarFailed.contains(url) || !websiteAvatarLoading.add(url)) return null;
-
-        URI uri;
-        try {
-            uri = URI.create(url);
-            if (!uri.getScheme().equalsIgnoreCase("https") || !uri.getHost().equalsIgnoreCase("cravatar.eu")) {
-                websiteAvatarLoading.remove(url);
-                websiteAvatarFailed.add(url);
-                return null;
-            }
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            websiteAvatarLoading.remove(url);
-            websiteAvatarFailed.add(url);
-            return null;
-        }
-
-        HttpRequest request = HttpRequest.newBuilder(uri)
-                .timeout(AVATAR_TIMEOUT)
-                .header("Accept", "image/png")
-                .header("User-Agent", "DuperKnight/DMLS punishment log")
-                .GET()
-                .build();
-        AVATAR_HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
-                .thenAccept(response -> {
-                    if (response.statusCode() != 200) {
-                        client.execute(() -> failWebsiteAvatar(url));
-                        return;
-                    }
-                    try {
-                        NativeImage image = NativeImage.read(response.body());
-                        client.execute(() -> {
-                            Identifier id = Identifier.of(DMLS.MOD_ID, "punishment_avatars/"
-                                    + entry.playerUuid().toString().replace("-", ""));
-                            NativeImageBackedTexture texture = new NativeImageBackedTexture(
-                                    () -> "DMLS punishment avatar " + entry.playerName(), image);
-                            client.getTextureManager().registerTexture(id, texture);
-                            websiteAvatarCache.put(url, id);
-                            websiteAvatarLoading.remove(url);
-                        });
-                    } catch (Exception exception) {
-                        client.execute(() -> failWebsiteAvatar(url));
-                    }
-                })
-                .exceptionally(error -> {
-                    client.execute(() -> failWebsiteAvatar(url));
-                    return null;
-                });
-        return null;
-    }
-
-    private void failWebsiteAvatar(String url) {
-        websiteAvatarLoading.remove(url);
-        websiteAvatarFailed.add(url);
-    }
-
     private void renderRightPanel(DrawContext context, Layout layout, int mouseX, int mouseY) {
         Rect pane = layout.rightPane();
         drawPanel(context, pane);
-        if (selectedRightTab == RightTab.PET) {
+        if (selectedRightTab == RightTab.MINI_ME) {
             settingsMaxScroll = 0;
+            renderMiniMe(context, pane, mouseX, mouseY);
             return;
         }
-        List<SettingRow> rows = settingRows();
+        miniMeHitbox = null;
+        List<SettingEntry> entries = settingEntries();
         int contentTop = pane.y() + 8;
         int contentBottom = pane.bottom() - 3;
         int viewportHeight = Math.max(1, contentBottom - contentTop);
-        settingsMaxScroll = Math.max(0, rows.size() * ROW_HEIGHT - viewportHeight);
+        int contentHeight = entries.stream().mapToInt(SettingEntry::height).sum();
+        settingsMaxScroll = Math.max(0, contentHeight - viewportHeight);
         settingsScroll = Math.clamp(settingsScroll, 0, settingsMaxScroll);
         int contentRight = settingsMaxScroll > 0 ? scrollbarX(pane) - 2 : pane.right() - 3;
         context.enableScissor(pane.x() + 1, pane.y() + 1, contentRight, pane.bottom() - 1);
         int y = contentTop - settingsScroll;
-        for (SettingRow row : rows) {
-            if (y + ROW_HEIGHT <= contentTop) {
-                y += ROW_HEIGHT;
+        for (SettingEntry entry : entries) {
+            int entryHeight = entry.height();
+            if (y + entryHeight <= contentTop) {
+                y += entryHeight;
                 continue;
             }
             if (y >= contentBottom) break;
+
+            if (entry instanceof SettingSection section) {
+                renderSettingSection(context, section.label(), pane.x() + 8, contentRight - 8,
+                        y, entryHeight);
+                y += entryHeight;
+                continue;
+            }
+
+            SettingRow row = (SettingRow) entry;
             boolean hovered = mouseX >= pane.x() + 4 && mouseX < contentRight
-                    && mouseY >= Math.max(y, contentTop) && mouseY < Math.min(y + ROW_HEIGHT, contentBottom);
-            if (hovered) context.fill(pane.x() + 3, y, pane.right() - 3, y + ROW_HEIGHT, HOVER_BACKGROUND);
+                    && mouseY >= Math.max(y, contentTop) && mouseY < Math.min(y + entryHeight, contentBottom);
+            if (hovered) context.fill(pane.x() + 3, y, contentRight, y + entryHeight, HOVER_BACKGROUND);
             int boxY = y + (ROW_HEIGHT - 10) / 2;
             context.fill(pane.x() + 8, boxY, pane.x() + 18, boxY + 10, 0xFF111111);
             context.drawStrokedRectangle(pane.x() + 8, boxY, 10, 10, PANEL_BORDER);
@@ -546,10 +500,107 @@ public final class ModerationScreen extends Screen {
             }
             context.drawTextWithShadow(textRenderer, row.label(), pane.x() + 24,
                     y + (ROW_HEIGHT - textRenderer.fontHeight) / 2, 0xFFFFFFFF);
-            y += ROW_HEIGHT;
+            y += entryHeight;
         }
         context.disableScissor();
         if (settingsMaxScroll > 0) renderSettingsScrollbar(context, pane);
+    }
+
+    private void renderMiniMe(DrawContext context, Rect pane, int mouseX, int mouseY) {
+        updateMiniMeAnimation();
+        MiniMe miniMe = MINI_MES.get(selectedMiniMeIndex);
+        int nameY = pane.bottom() - textRenderer.fontHeight - 6;
+        int spriteTop = pane.y() + 7;
+        int spriteBottom = nameY - 5;
+        int spriteSize = Math.max(1, Math.min(pane.width() - 14, spriteBottom - spriteTop));
+        int spriteX = pane.x() + (pane.width() - spriteSize) / 2;
+        int spriteY = spriteBottom - spriteSize;
+        miniMeHitbox = new Rect(spriteX, spriteY, spriteSize, spriteSize);
+
+        if (miniMeHitbox.contains(mouseX, mouseY)) {
+            context.setCursor(StandardCursors.POINTING_HAND);
+        }
+
+        float minimumDeformation = -0.10F - miniMeSpamEnergy * 0.06F;
+        float maximumDeformation = 0.16F + miniMeSpamEnergy * 0.12F;
+        float deformation = Math.clamp(miniMeSquish * 0.52F, minimumDeformation, maximumDeformation);
+        float scaleX = 1.0F + deformation;
+        float scaleY = 1.0F - deformation;
+        context.enableScissor(pane.x() + 1, pane.y() + 1, pane.right() - 1, pane.bottom() - 1);
+        context.getMatrices().pushMatrix();
+        context.getMatrices().translate(spriteX + spriteSize / 2.0F, spriteBottom);
+        context.getMatrices().scale(scaleX, scaleY);
+        context.drawTexture(RenderPipelines.GUI_TEXTURED, miniMe.texture(),
+                -spriteSize / 2, -spriteSize, 0.0F, 0.0F,
+                spriteSize, spriteSize, MINI_ME_TEXTURE_SIZE, MINI_ME_TEXTURE_SIZE,
+                MINI_ME_TEXTURE_SIZE, MINI_ME_TEXTURE_SIZE);
+        context.getMatrices().popMatrix();
+        context.drawCenteredTextWithShadow(textRenderer, Text.literal(miniMe.name()),
+                pane.x() + pane.width() / 2, nameY, 0xFFFFFFFF);
+        context.disableScissor();
+    }
+
+    private void updateMiniMeAnimation() {
+        long now = System.nanoTime();
+        float deltaSeconds = Math.min((now - miniMeAnimationNanos) / 1_000_000_000.0F, 0.05F);
+        miniMeAnimationNanos = now;
+        miniMeSpamEnergy = Math.max(0.0F, miniMeSpamEnergy - deltaSeconds * 0.65F);
+        miniMeSquishVelocity += (-MINI_ME_SPRING_STRENGTH * miniMeSquish
+                - MINI_ME_SPRING_DAMPING * miniMeSquishVelocity) * deltaSeconds;
+        float maximumSquish = 0.36F + miniMeSpamEnergy * 0.22F;
+        miniMeSquish = Math.clamp(miniMeSquish + miniMeSquishVelocity * deltaSeconds, -0.30F, maximumSquish);
+        if (Math.abs(miniMeSquish) < 0.001F && Math.abs(miniMeSquishVelocity) < 0.01F) {
+            miniMeSquish = 0.0F;
+            miniMeSquishVelocity = 0.0F;
+        }
+    }
+
+    private void squishMiniMe() {
+        long now = System.nanoTime();
+        if (now - lastMiniMeClickNanos <= MINI_ME_SPAM_WINDOW_NANOS) {
+            miniMeSpamEnergy = Math.min(1.0F, miniMeSpamEnergy + 0.22F);
+        } else {
+            miniMeSpamEnergy = Math.max(0.08F, miniMeSpamEnergy);
+        }
+        lastMiniMeClickNanos = now;
+
+        float clickCompression = 0.055F + miniMeSpamEnergy * 0.055F;
+        float maximumSquish = 0.36F + miniMeSpamEnergy * 0.22F;
+        miniMeSquish = Math.min(maximumSquish, Math.max(0.0F, miniMeSquish) + clickCompression);
+        miniMeSquishVelocity = Math.min(10.0F,
+                Math.max(0.0F, miniMeSquishVelocity) * 0.35F + 4.0F + miniMeSpamEnergy * 3.0F);
+        miniMeAnimationNanos = now;
+        if (client != null) {
+            if (activeMiniMeSquishSound != null) {
+                client.getSoundManager().stop(activeMiniMeSquishSound);
+            }
+            activeMiniMeSquishSound = PositionedSoundInstance.ui(MINI_ME_SQUISH_SOUND, 1.0F, 0.8F);
+            client.getSoundManager().play(activeMiniMeSquishSound);
+        }
+    }
+
+    private void cycleMiniMe() {
+        selectedMiniMeIndex = (selectedMiniMeIndex + 1) % MINI_MES.size();
+        miniMeSquish = 0.0F;
+        miniMeSquishVelocity = 5.0F;
+        miniMeSpamEnergy = 0.0F;
+        lastMiniMeClickNanos = 0L;
+        miniMeAnimationNanos = System.nanoTime();
+    }
+
+    private void openMiniMeTab() {
+        selectedRightTab = RightTab.MINI_ME;
+        selectedMiniMeIndex = ThreadLocalRandom.current().nextInt(MINI_MES.size());
+        miniMeSquish = 0.0F;
+        miniMeSquishVelocity = 0.0F;
+        miniMeSpamEnergy = 0.0F;
+        lastMiniMeClickNanos = 0L;
+        miniMeAnimationNanos = System.nanoTime();
+        if (client != null && activeMiniMeSquishSound != null) {
+            client.getSoundManager().stop(activeMiniMeSquishSound);
+            activeMiniMeSquishSound = null;
+        }
+        updateTabButtons();
     }
 
     private void renderSettingsScrollbar(DrawContext context, Rect pane) {
@@ -562,19 +613,36 @@ public final class ModerationScreen extends Screen {
         DMLSMenuScreen.renderVanillaScrollbar(context, trackX, trackY, trackHeight, thumbY, thumbHeight);
     }
 
-    private List<SettingRow> settingRows() {
-        List<SettingRow> rows = new ArrayList<>();
-        rows.add(new SettingRow(Text.translatable("dmls.moderation.include_local"), preferences.includeLocal(), SettingKey.LOCAL));
-        rows.add(new SettingRow(Text.translatable("dmls.moderation.include_trade"), preferences.includeTrade(), SettingKey.TRADE));
-        rows.add(new SettingRow(Text.translatable("dmls.moderation.include_rp"), preferences.includeRp(), SettingKey.RP));
-        rows.add(new SettingRow(Text.translatable("dmls.moderation.include_staff"), preferences.includeStaff(), SettingKey.STAFF));
+    private void renderSettingSection(DrawContext context, Text label, int left, int right, int y, int height) {
+        int centerX = left + (right - left) / 2;
+        int lineY = y + height / 2;
+        int titleHalfWidth = textRenderer.getWidth(label) / 2;
+        int titlePadding = 8;
+        int leftLineEnd = centerX - titleHalfWidth - titlePadding;
+        int rightLineStart = centerX + titleHalfWidth + titlePadding;
+        if (leftLineEnd > left) context.fill(left, lineY, leftLineEnd, lineY + 1, PANEL_BORDER);
+        if (right > rightLineStart) context.fill(rightLineStart, lineY, right, lineY + 1, PANEL_BORDER);
+        context.drawCenteredTextWithShadow(textRenderer, label, centerX,
+                lineY - textRenderer.fontHeight / 2, 0xFFFFFFFF);
+    }
+
+    private List<SettingEntry> settingEntries() {
+        List<SettingEntry> entries = new ArrayList<>();
+        entries.add(new SettingSection(Text.translatable("dmls.moderation.settings.section.chat_feed")));
+        entries.add(new SettingRow(Text.translatable("dmls.moderation.include_local"), preferences.includeLocal(), SettingKey.LOCAL));
+        entries.add(new SettingRow(Text.translatable("dmls.moderation.include_trade"), preferences.includeTrade(), SettingKey.TRADE));
+        entries.add(new SettingRow(Text.translatable("dmls.moderation.include_rp"), preferences.includeRp(), SettingKey.RP));
+        entries.add(new SettingRow(Text.translatable("dmls.moderation.include_staff"), preferences.includeStaff(), SettingKey.STAFF));
         if (isAdmin()) {
-            rows.add(new SettingRow(Text.translatable("dmls.moderation.include_admin"), preferences.includeAdmin(), SettingKey.ADMIN));
+            entries.add(new SettingRow(Text.translatable("dmls.moderation.include_admin"), preferences.includeAdmin(), SettingKey.ADMIN));
         }
-        rows.add(new SettingRow(Text.translatable("dmls.moderation.include_server"), preferences.includeServer(), SettingKey.SERVER));
-        rows.add(new SettingRow(Text.translatable("dmls.moderation.timestamps"), preferences.showTimestamps(), SettingKey.TIMESTAMPS));
-        rows.add(new SettingRow(Text.translatable("dmls.moderation.highlight_alerts"), preferences.highlightAlerts(), SettingKey.ALERTS));
-        return rows;
+        entries.add(new SettingRow(Text.translatable("dmls.moderation.include_server"), preferences.includeServer(), SettingKey.SERVER));
+
+        entries.add(new SettingSection(Text.translatable("dmls.moderation.settings.section.display")));
+        entries.add(new SettingRow(Text.translatable("dmls.moderation.timestamps"), preferences.showTimestamps(), SettingKey.TIMESTAMPS));
+        entries.add(new SettingRow(Text.translatable("dmls.moderation.highlight_alerts"), preferences.highlightAlerts(), SettingKey.ALERTS));
+
+        return entries;
     }
 
     private void renderContextMenu(DrawContext context, int mouseX, int mouseY) {
@@ -705,6 +773,17 @@ public final class ModerationScreen extends Screen {
         if (contextMenu != null) contextMenu = null;
 
         Layout layout = layout();
+        if (selectedRightTab == RightTab.MINI_ME && miniMeHitbox != null
+                && miniMeHitbox.contains(click.x(), click.y())) {
+            if (click.button() == 0) {
+                squishMiniMe();
+                return true;
+            }
+            if (click.button() == 1) {
+                cycleMiniMe();
+                return true;
+            }
+        }
         if (selectedRightTab == RightTab.SETTINGS && layout.rightPane().contains(click.x(), click.y())) {
             Rect pane = layout.rightPane();
             if (settingsMaxScroll > 0 && click.button() == 0 && overScrollbar(pane, click.x(), click.y())) {
@@ -713,12 +792,19 @@ public final class ModerationScreen extends Screen {
                 return true;
             }
             int contentRight = settingsMaxScroll > 0 ? scrollbarX(pane) - 2 : pane.right() - 3;
-            int index = (int) ((click.y() - pane.y() - 8 + settingsScroll) / ROW_HEIGHT);
-            List<SettingRow> rows = settingRows();
             if (click.x() < contentRight && click.y() >= pane.y() + 8 && click.y() < pane.bottom() - 3
-                    && index >= 0 && index < rows.size()) {
-                toggleSetting(rows.get(index));
-                return true;
+                    && click.button() == 0) {
+                int y = pane.y() + 8 - settingsScroll;
+                for (SettingEntry entry : settingEntries()) {
+                    if (click.y() >= y && click.y() < y + entry.height()) {
+                        if (entry instanceof SettingRow row) {
+                            toggleSetting(row);
+                            return true;
+                        }
+                        break;
+                    }
+                    y += entry.height();
+                }
             }
         }
         if (globalPane.jumpRect != null && globalPane.jumpRect.contains(click.x(), click.y())) {
@@ -845,7 +931,7 @@ public final class ModerationScreen extends Screen {
         channelInput.visible = visible;
         channelSend.visible = visible;
         settingsTab.visible = visible;
-        petTab.visible = visible;
+        miniMeTab.visible = visible;
     }
 
     private void toggleSetting(SettingRow row) {
@@ -1071,7 +1157,7 @@ public final class ModerationScreen extends Screen {
 
     private void updateTabButtons() {
         if (settingsTab != null) settingsTab.active = selectedRightTab != RightTab.SETTINGS;
-        if (petTab != null) petTab.active = selectedRightTab != RightTab.PET;
+        if (miniMeTab != null) miniMeTab.active = selectedRightTab != RightTab.MINI_ME;
     }
 
     private void drawPanel(DrawContext context, Rect rect) {
@@ -1148,7 +1234,7 @@ public final class ModerationScreen extends Screen {
         client.setScreen(parent);
     }
 
-    private enum RightTab { SETTINGS, PET }
+    private enum RightTab { SETTINGS, MINI_ME }
 
     private static final class PaneState {
         private int scroll;
@@ -1193,7 +1279,19 @@ public final class ModerationScreen extends Screen {
         }
     }
 
-    private static final class SettingRow {
+    private interface SettingEntry {
+        Text label();
+        int height();
+    }
+
+    private record SettingSection(Text label) implements SettingEntry {
+        @Override
+        public int height() {
+            return SETTINGS_SECTION_HEIGHT;
+        }
+    }
+
+    private static final class SettingRow implements SettingEntry {
         private final Text label;
         private final boolean enabled;
         private final SettingKey key;
@@ -1204,11 +1302,18 @@ public final class ModerationScreen extends Screen {
             this.key = key;
         }
 
-        Text label() { return label; }
+        public Text label() { return label; }
         boolean enabled() { return enabled; }
+
+        @Override
+        public int height() {
+            return ROW_HEIGHT;
+        }
     }
 
-    private enum SettingKey { LOCAL, TRADE, RP, STAFF, ADMIN, SERVER, TIMESTAMPS, ALERTS }
+    private enum SettingKey {
+        LOCAL, TRADE, RP, STAFF, ADMIN, SERVER, TIMESTAMPS, ALERTS
+    }
 
     private record Rect(int x, int y, int width, int height) {
         int right() { return x + width; }
@@ -1234,6 +1339,9 @@ public final class ModerationScreen extends Screen {
             return x >= left && x < right && y >= Math.max(top, clip.y())
                     && y < Math.min(bottom, clip.bottom());
         }
+    }
+
+    private record MiniMe(String name, Identifier texture) {
     }
 
     private void drawPunishmentSummary(DrawContext context, Text text, int left, int right, int top, int bottom) {

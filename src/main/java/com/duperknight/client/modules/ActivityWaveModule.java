@@ -72,6 +72,11 @@ public final class ActivityWaveModule extends DMLSModule {
     }
 
     @Override
+    public ModuleCategory category() {
+        return ModuleCategory.SERVER_MANAGEMENT;
+    }
+
+    @Override
     public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new ActivityWaveScreen(parent, this));
     }

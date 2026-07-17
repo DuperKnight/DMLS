@@ -104,6 +104,11 @@ public final class CoreProtectBuilderModule extends DMLSModule {
     }
 
     @Override
+    public ModuleCategory category() {
+        return ModuleCategory.GENERAL;
+    }
+
+    @Override
     public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new CoreProtectBuilderScreen(parent, this));
     }

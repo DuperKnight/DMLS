@@ -68,6 +68,7 @@ public final class DemoWaveModule extends DMLSModule {
         return List.of(Text.translatable("dmls.module.demo_wave.description.1"),
                 Text.translatable("dmls.module.demo_wave.description.2"));
     }
+    @Override public ModuleCategory category() { return ModuleCategory.SERVER_MANAGEMENT; }
     @Override public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new DemoWaveScreen(parent, this));
     }

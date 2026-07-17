@@ -49,6 +49,11 @@ public final class EventProtectModule extends DMLSModule{
     }
 
     @Override
+    public ModuleCategory category() {
+        return ModuleCategory.EVENTS;
+    }
+
+    @Override
     public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new EventProtectScreen(parent, this));
     }

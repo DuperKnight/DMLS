@@ -102,7 +102,9 @@ public final class ModerationChatService {
         String visible = playerMessage ? parsed.visibleUsername() : "";
         String body = playerMessage ? parsed.messageBody() : clean;
         String clickIgn = extractIgnFromClickMetadata(text).orElse(null);
-        String capturedIgn = clickIgn != null ? clickIgn
+        String capturedIgn = channel.visibleUsernameIsIgn() && InputValidators.isUsername(visible)
+                ? visible
+                : clickIgn != null ? clickIgn
                 : sender != null && InputValidators.isUsername(sender.name()) ? sender.name() : null;
         UUID capturedUuid = sender == null ? null : sender.id();
         if (capturedIgn != null) {

@@ -69,6 +69,19 @@ class ModerationParsingTest {
     }
 
     @Test
+    void staffAndAdminVisibleUsernamesAreCapturedDirectlyAsIgns() {
+        ModerationChatService.capture(Text.literal("[SC] [Abex] DuperKnight: staff message"), null, false, false);
+        ModerationChatService.capture(Text.literal("[AC] [Admin] OtherStaff: admin message"), null, false, false);
+
+        ModerationMessage staff = ModerationChatService.messages().get(0);
+        ModerationMessage admin = ModerationChatService.messages().get(1);
+        assertEquals("DuperKnight", staff.capturedIgn());
+        assertEquals("OtherStaff", admin.capturedIgn());
+        assertEquals("DuperKnight", ModerationChatService.knownIgn(staff).orElseThrow());
+        assertEquals("OtherStaff", ModerationChatService.knownIgn(admin).orElseThrow());
+    }
+
+    @Test
     void extractsRealIgnFromClickablePrefix() {
         Text line = Text.literal("[VIP]").styled(style -> style.withClickEvent(
                         new ClickEvent.SuggestCommand("/msg Real_Name ")))

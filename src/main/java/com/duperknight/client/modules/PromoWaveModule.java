@@ -89,6 +89,7 @@ public final class PromoWaveModule extends DMLSModule {
         return List.of(Text.translatable("dmls.module.promo_wave.description.1"),
                 Text.translatable("dmls.module.promo_wave.description.2"));
     }
+    @Override public ModuleCategory category() { return ModuleCategory.SERVER_MANAGEMENT; }
     @Override public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new PromoWaveScreen(parent, this));
     }

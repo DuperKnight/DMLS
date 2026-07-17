@@ -22,6 +22,7 @@ import com.duperknight.client.modules.EventProtectModule;
 import com.duperknight.client.modules.GreeterModule;
 import com.duperknight.client.modules.GriefScanModule;
 import com.duperknight.client.modules.LocationsModule;
+import com.duperknight.client.modules.MiniMeHudModule;
 import com.duperknight.client.modules.PrefixCreateModule;
 import com.duperknight.client.modules.PromoWaveModule;
 import com.duperknight.client.modules.PunishmentHelperModule;
@@ -513,6 +514,7 @@ public class DMLSClient implements ClientModInitializer {
                 new GreeterModule(),
                 new GriefScanModule(),
                 new LocationsModule(),
+                new MiniMeHudModule(),
                 new PrefixCreateModule(),
                 new PromoWaveModule(),
                 new PunishmentHelperModule(),

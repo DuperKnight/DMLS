@@ -88,6 +88,11 @@ public abstract class DMLSModule {
     /** The description displayed at the top of this module's screen. */
     public abstract List<Text> description();
 
+    /** The collapsible home-screen section containing this module. */
+    public ModuleCategory category() {
+        return ModuleCategory.GENERAL;
+    }
+
     /** Opens this module's screen, returning to the supplied DMLS home screen. */
     public abstract void openScreen(MinecraftClient client, Screen parent);
 

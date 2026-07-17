@@ -2,6 +2,7 @@ package com.duperknight.client.utils;
 
 import com.duperknight.DMLS;
 import com.duperknight.client.modules.DepartmentRank;
+import com.duperknight.client.modules.MiniMeHudPreferences;
 import com.duperknight.client.modules.StaffDepartment;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.moderation.ModerationPreferences;
@@ -39,6 +40,12 @@ public final class DMLSConfig {
     private static final String MOD_SERVER_KEY = "moderation.includeServer";
     private static final String MOD_TIMESTAMPS_KEY = "moderation.showTimestamps";
     private static final String MOD_HIGHLIGHTS_KEY = "moderation.highlightAlerts";
+    private static final String MINI_ME_DUPEY_HUD_KEY = "miniMe.dupeyHud";
+    private static final String MINI_ME_SIAFFY_HUD_KEY = "miniMe.siaffyHud";
+    private static final String MINI_ME_BEANY_HUD_KEY = "miniMe.beanyHud";
+    private static final String MINI_ME_MORVY_HUD_KEY = "miniMe.morvyHud";
+    private static final String MINI_ME_BIGGY_HUD_KEY = "miniMe.biggyHud";
+    private static final String MINI_ME_CHAOS_MODE_KEY = "miniMe.chaosMode";
     private static final StaffRank DEFAULT_RANK = StaffRank.NONE;
 
     private static boolean loaded;
@@ -52,6 +59,7 @@ public final class DMLSConfig {
     private static boolean greeterEnabled = true;
     private static List<String> allowedServers = ServerGuard.DEFAULT_ALLOWED_SERVERS;
     private static ModerationPreferences moderationPreferences = ModerationPreferences.defaults();
+    private static MiniMeHudPreferences miniMeHudPreferences = MiniMeHudPreferences.defaults();
     // Deliberately not persisted: the game always starts live, so a forgotten
     // dry run can never suppress real commands in a later session.
     private static boolean dryRun;
@@ -188,6 +196,21 @@ public final class DMLSConfig {
         return false;
     }
 
+    public static MiniMeHudPreferences miniMeHudPreferences() {
+        ensureLoaded();
+        return miniMeHudPreferences;
+    }
+
+    public static boolean setMiniMeHudPreferences(MiniMeHudPreferences preferences) {
+        ensureLoaded();
+        if (preferences == null) return false;
+        MiniMeHudPreferences previous = miniMeHudPreferences;
+        miniMeHudPreferences = preferences;
+        if (save()) return true;
+        miniMeHudPreferences = previous;
+        return false;
+    }
+
     /** While enabled, DMLS prints every command instead of running it. Not persisted. */
     public static boolean dryRun() {
         return dryRun;
@@ -279,6 +302,15 @@ public final class DMLSConfig {
                 Boolean.parseBoolean(properties.getProperty(MOD_TIMESTAMPS_KEY, Boolean.toString(defaults.showTimestamps()))),
                 Boolean.parseBoolean(properties.getProperty(MOD_HIGHLIGHTS_KEY, Boolean.toString(defaults.highlightAlerts())))
         );
+        MiniMeHudPreferences miniMeDefaults = MiniMeHudPreferences.defaults();
+        miniMeHudPreferences = new MiniMeHudPreferences(
+                Boolean.parseBoolean(properties.getProperty(MINI_ME_DUPEY_HUD_KEY, Boolean.toString(miniMeDefaults.dupeyHud()))),
+                Boolean.parseBoolean(properties.getProperty(MINI_ME_SIAFFY_HUD_KEY, Boolean.toString(miniMeDefaults.siaffyHud()))),
+                Boolean.parseBoolean(properties.getProperty(MINI_ME_BEANY_HUD_KEY, Boolean.toString(miniMeDefaults.beanyHud()))),
+                Boolean.parseBoolean(properties.getProperty(MINI_ME_MORVY_HUD_KEY, Boolean.toString(miniMeDefaults.morvyHud()))),
+                Boolean.parseBoolean(properties.getProperty(MINI_ME_BIGGY_HUD_KEY, Boolean.toString(miniMeDefaults.biggyHud()))),
+                Boolean.parseBoolean(properties.getProperty(MINI_ME_CHAOS_MODE_KEY, Boolean.toString(miniMeDefaults.chaosMode())))
+        );
         if (properties.containsKey(ALLOWED_SERVERS_KEY)) {
             allowedServers = java.util.Arrays.stream(properties.getProperty(ALLOWED_SERVERS_KEY, "").split(","))
                     .map(ServerGuard::normalizeRule)
@@ -321,6 +353,12 @@ public final class DMLSConfig {
         properties.setProperty(MOD_SERVER_KEY, Boolean.toString(moderationPreferences.includeServer()));
         properties.setProperty(MOD_TIMESTAMPS_KEY, Boolean.toString(moderationPreferences.showTimestamps()));
         properties.setProperty(MOD_HIGHLIGHTS_KEY, Boolean.toString(moderationPreferences.highlightAlerts()));
+        properties.setProperty(MINI_ME_DUPEY_HUD_KEY, Boolean.toString(miniMeHudPreferences.dupeyHud()));
+        properties.setProperty(MINI_ME_SIAFFY_HUD_KEY, Boolean.toString(miniMeHudPreferences.siaffyHud()));
+        properties.setProperty(MINI_ME_BEANY_HUD_KEY, Boolean.toString(miniMeHudPreferences.beanyHud()));
+        properties.setProperty(MINI_ME_MORVY_HUD_KEY, Boolean.toString(miniMeHudPreferences.morvyHud()));
+        properties.setProperty(MINI_ME_BIGGY_HUD_KEY, Boolean.toString(miniMeHudPreferences.biggyHud()));
+        properties.setProperty(MINI_ME_CHAOS_MODE_KEY, Boolean.toString(miniMeHudPreferences.chaosMode()));
         return properties;
     }
 

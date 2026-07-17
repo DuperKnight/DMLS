@@ -64,6 +64,11 @@ public final class CheckMembersModule extends DMLSModule {
     }
 
     @Override
+    public ModuleCategory category() {
+        return ModuleCategory.GENERAL;
+    }
+
+    @Override
     public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new CheckMembersScreen(parent, this));
     }

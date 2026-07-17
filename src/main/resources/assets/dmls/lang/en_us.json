@@ -29,6 +29,12 @@
   "dmls.update.available": "DMLS update available: %s — please update the mod!",
   "dmls.option.on": "On",
   "dmls.option.off": "Off",
+  "dmls.module_category.general": "General",
+  "dmls.module_category.events": "Events",
+  "dmls.module_category.war": "War",
+  "dmls.module_category.bans": "Bans",
+  "dmls.module_category.server_management": "Server Management",
+  "dmls.module_category.joke": "Joke",
   "dmls.option.staff_rank": "Staff Rank",
   "dmls.option.departments": "Departments",
   "dmls.option.allowed_servers": "Allowed Servers...",
@@ -87,6 +93,15 @@
   "dmls.module.chat_spam.description": "Hide trade chat and server messages on this client.",
   "dmls.module.chat_spam.trade_chat_toggle": "Trade Chat Muted",
   "dmls.module.chat_spam.server_messages_toggle": "Server Messages Muted",
+  "dmls.module.mini_me_hud.name": "Mini Me HUD",
+  "dmls.module.mini_me_hud.description.1": "Choose which Mini Mes wander around your in-game HUD.",
+  "dmls.module.mini_me_hud.description.2": "Chaos Mode makes fights happen constantly.",
+  "dmls.module.mini_me_hud.dupey": "Show Dupey",
+  "dmls.module.mini_me_hud.siaffy": "Show Siaffy",
+  "dmls.module.mini_me_hud.beany": "Show Beany",
+  "dmls.module.mini_me_hud.morvy": "Show Morvy",
+  "dmls.module.mini_me_hud.biggy": "Show Biggy",
+  "dmls.module.mini_me_hud.chaos_mode": "Chaos Mode",
   "dmls.module.xray.name": "Xray Rollback",
   "dmls.module.xray.description.1": "Roll back a confirmed xrayer: ores and tunnels (30d),",
   "dmls.module.xray.description.2": "containers (7d), then a balance check.",
@@ -579,7 +594,7 @@
   ,"dmls.moderation.channel.admin": "Admin"
   ,"dmls.moderation.channel.server": "Server"
   ,"dmls.moderation.settings": "Settings"
-  ,"dmls.moderation.pet": "Pet"
+  ,"dmls.moderation.mini_me": "Mini Me"
   ,"dmls.moderation.no_messages": "No live messages yet"
   ,"dmls.moderation.punishment_log": "Punishment Log"
   ,"dmls.moderation.no_punishments": "No punishment data"
@@ -602,6 +617,8 @@
   ,"dmls.moderation.include_server": "Show Server messages"
   ,"dmls.moderation.timestamps": "Show timestamps"
   ,"dmls.moderation.highlight_alerts": "Highlight alert words"
+  ,"dmls.moderation.settings.section.chat_feed": "Chat Feed"
+  ,"dmls.moderation.settings.section.display": "Message Display"
   ,"dmls.moderation.context.punish": "Punish"
   ,"dmls.moderation.context.copy_ign": "Copy IGN"
   ,"dmls.moderation.context.copy_uuid": "Copy UUID"

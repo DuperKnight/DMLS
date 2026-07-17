@@ -43,6 +43,11 @@ public final class ContainerScanModule extends AbstractCoreProtectScanModule {
     }
 
     @Override
+    public ModuleCategory category() {
+        return ModuleCategory.GENERAL;
+    }
+
+    @Override
     public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new ContainerScanScreen(parent, this));
     }

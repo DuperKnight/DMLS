@@ -94,6 +94,11 @@ public final class XrayRollbackModule extends DMLSModule {
     }
 
     @Override
+    public ModuleCategory category() {
+        return ModuleCategory.GENERAL;
+    }
+
+    @Override
     public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new XrayRollbackScreen(parent, this));
     }

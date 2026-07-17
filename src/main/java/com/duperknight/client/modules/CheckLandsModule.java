@@ -73,6 +73,11 @@ public final class CheckLandsModule extends DMLSModule {
     }
 
     @Override
+    public ModuleCategory category() {
+        return ModuleCategory.GENERAL;
+    }
+
+    @Override
     public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new CheckLandsScreen(parent, this));
     }

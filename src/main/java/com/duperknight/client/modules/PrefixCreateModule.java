@@ -57,6 +57,11 @@ public final class PrefixCreateModule extends DMLSModule {
     }
 
     @Override
+    public ModuleCategory category() {
+        return ModuleCategory.GENERAL;
+    }
+
+    @Override
     public void openScreen(MinecraftClient client, Screen parent) {
         client.setScreen(new PrefixCreateScreen(parent, this));
     }

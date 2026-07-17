@@ -42,6 +42,11 @@ public enum ChatChannel {
         return selectable;
     }
 
+    /** Staff-only channels always display the sender's actual Minecraft username. */
+    public boolean visibleUsernameIsIgn() {
+        return this == STAFF || this == ADMIN;
+    }
+
     /** Returns channels that the current rank is allowed to send to or inspect directly. */
     public static List<ChatChannel> selectableFor(boolean admin) {
         return admin ? ADMIN_SECONDARY_CHANNELS : STAFF_SECONDARY_CHANNELS;
