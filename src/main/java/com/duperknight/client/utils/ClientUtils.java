@@ -4,6 +4,9 @@ import com.duperknight.DMLS;
 import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.session.ConnectionSnapshot;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ClientPlayNetworkHandler;
+
+import java.util.List;
 
 /**
  * Utility methods for interacting with the Minecraft client.
@@ -26,6 +29,22 @@ public final class ClientUtils {
                 || client.world == null
                 || client.getNetworkHandler() == null
                 || !client.getNetworkHandler().isConnectionOpen();
+    }
+
+    /**
+     * Returns a snapshot of the online player names advertised to this client.
+     * This is the player-name source used by vanilla chat autocomplete.
+     *
+     * @param client the Minecraft client
+     * @return the known online player names, or an empty list when disconnected
+     */
+    public static List<String> getOnlinePlayerNames(MinecraftClient client) {
+        ClientPlayNetworkHandler networkHandler = client == null ? null : client.getNetworkHandler();
+        if (networkHandler == null || !networkHandler.isConnectionOpen()) return List.of();
+
+        return networkHandler.getPlayerList().stream()
+                .map(entry -> entry.getProfile().name())
+                .toList();
     }
 
     /**
