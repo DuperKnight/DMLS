@@ -487,6 +487,7 @@ public class DMLSClient implements ClientModInitializer {
                 new CoreProtectBuilderModule(),
                 new DemoWaveModule(),
                 new DonorPetModule(),
+                new EventPowerToolModule(),
                 new EventProtectModule(),
                 new EventRandomTeleportModule(),
                 new GreeterModule(),
