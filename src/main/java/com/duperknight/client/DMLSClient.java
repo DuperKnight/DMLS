@@ -325,7 +325,40 @@ public class DMLSClient implements ClientModInitializer {
                                             ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
                                                     count == 1 ? "dmls.chat.alerts.reloaded.one" : "dmls.chat.alerts.reloaded.many", count);
                                             return 1;
-                                        })));
+                                        })))
+                            .then(staffLiteral("eventprotect")
+                                    .executes(context -> {
+                                        MinecraftClient client = context.getSource().getClient();
+                                        client.send(() -> module(EventProtectModule.class).openScreen(client, null));
+                                        return 1;
+                                    })
+                                    .then(ClientCommandManager.argument("eventName", StringArgumentType.string())
+                                            .then(ClientCommandManager.argument("landName", StringArgumentType.greedyString())
+                                                    .executes(context -> {
+                                                        MinecraftClient client = context.getSource().getClient();
+                                                        EventProtectModule.BroadcastResult result = module(EventProtectModule.class)
+                                                                .broadcastProtection(client,
+                                                                        StringArgumentType.getString(context, "eventName"),
+                                                                        StringArgumentType.getString(context, "landName"));
+                                                        return reportProtectResult(client, result) ? 1 : 0;
+                                                    }))))
+                            .then(staffLiteral("eventrandomtp")
+                                    .executes(context -> {
+                                        MinecraftClient client = context.getSource().getClient();
+                                        String target = module(EventRandomTeleportModule.class).teleportToRandomPlayer(client);
+                                        if (target == null) {
+                                            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.event_random_teleport.no_players");
+                                            return 0;
+                                        }
+                            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.event_random_teleport.teleported", target);
+                            return 1;
+                        }))
+                            .then(staffLiteral("eventpowertool")
+                                    .executes(context -> {
+                                        MinecraftClient client = context.getSource().getClient();
+                                        client.send(() -> module(EventPowerToolModule.class).openScreen(client, null));
+                                        return 1;
+                                    }));
     }
 
     private static <T extends DMLSModule> T module(Class<T> type) {
@@ -425,6 +458,9 @@ public class DMLSClient implements ClientModInitializer {
         helpLine(client, "/dmls say [reply]", Text.translatable("dmls.help.say"));
         helpLine(client, "/dmls cancel", Text.translatable("dmls.help.cancel"));
         helpLine(client, "/dmls modview", Text.translatable("dmls.help.modview"));
+        helpLine(client, "/dmls eventprotect", Text.translatable("dmls.help.eventprotect"));
+        helpLine(client, "/dmls eventrandomtp", Text.translatable("dmls.help.eventrandomteleport"));
+        helpLine(client, "/dmls eventpowertool", Text.translatable("dmls.help.eventpowertool"));
         helpLine(client, "/dmls", Text.translatable("dmls.help.menu"));
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         return 1;
@@ -472,6 +508,30 @@ public class DMLSClient implements ClientModInitializer {
         return 1;
     }
 
+    private boolean reportProtectResult(MinecraftClient client, EventProtectModule.BroadcastResult result) {
+        return switch (result) {
+            case SENT -> true;
+            case SIMULATED -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.dry_run.would_run",
+                        "broadcastraw public ...");
+                yield true;
+            }
+            case INVALID_EVENT -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_protect.name");
+                yield false;
+            }
+            case INVALID_LAND -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_protect.land");
+                yield false;
+            }
+            case RANK_BLOCKED -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.department.required",
+                        StaffDepartment.EVENTS.displayName());
+                yield false;
+            }
+            case SERVER_BLOCKED -> false; // module already sent the guard message
+        };
+    }
     /** Defers config-backed module construction until normal client initialization. */
     private static final class ModulesHolder {
         private static final List<DMLSModule> ALL = List.of(
