@@ -3,6 +3,7 @@ package com.duperknight.client.gui;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.DepartmentRank;
 import com.duperknight.client.modules.StaffDepartment;
+import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -60,9 +61,11 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
             index++;
         }
 
-        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.option.allowed_servers"),
-                        button -> client.setScreen(new AllowedServersScreen(this)))
-                .dimensions(rankX, allowedServersY, rankWidth, STANDARD_BUTTON_HEIGHT).build());
+        if (DMLSConfig.staffRank().isAtLeast(StaffRank.SENIOR_MODERATOR)) {
+            addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.option.allowed_servers"),
+                            button -> client.setScreen(new AllowedServersScreen(this)))
+                    .dimensions(rankX, allowedServersY, rankWidth, STANDARD_BUTTON_HEIGHT).build());
+        }
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
     }

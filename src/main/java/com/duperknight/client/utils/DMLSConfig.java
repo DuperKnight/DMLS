@@ -6,6 +6,7 @@ import com.duperknight.client.modules.MiniMeHudPreferences;
 import com.duperknight.client.modules.StaffDepartment;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.moderation.ModerationPreferences;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -92,6 +93,7 @@ public final class DMLSConfig {
     public static void clearStaffRankForHubVerification() {
         ensureLoaded();
         staffRank = StaffRank.NONE;
+        refreshCommandCompletionsIfAvailable();
     }
 
     /**
@@ -106,6 +108,7 @@ public final class DMLSConfig {
         if (saved) {
             storedStaffRankPresent = rank.isStaff();
         }
+        refreshCommandCompletionsIfAvailable();
         return saved;
     }
 
@@ -124,7 +127,10 @@ public final class DMLSConfig {
             return false;
         }
         DepartmentRank previous = departmentRanks.put(department, rank);
-        if (save()) return true;
+        if (save()) {
+            refreshCommandCompletionsIfAvailable();
+            return true;
+        }
         departmentRanks.put(department, previous);
         return false;
     }
@@ -251,11 +257,7 @@ public final class DMLSConfig {
     public static boolean setAllowedServers(List<String> servers) {
         ensureLoaded();
         List<String> previous = allowedServers;
-        allowedServers = servers.stream()
-                .map(ServerGuard::normalizeRule)
-                .flatMap(Optional::stream)
-                .distinct()
-                .toList();
+        allowedServers = withMandatoryAllowedServers(servers);
         if (save()) return true;
         allowedServers = previous;
         return false;
@@ -346,11 +348,8 @@ public final class DMLSConfig {
                 Boolean.parseBoolean(properties.getProperty(MINI_ME_CHAOS_MODE_KEY, Boolean.toString(miniMeDefaults.chaosMode())))
         );
         if (properties.containsKey(ALLOWED_SERVERS_KEY)) {
-            allowedServers = java.util.Arrays.stream(properties.getProperty(ALLOWED_SERVERS_KEY, "").split(","))
-                    .map(ServerGuard::normalizeRule)
-                    .flatMap(Optional::stream)
-                    .distinct()
-                    .toList();
+            allowedServers = withMandatoryAllowedServers(java.util.Arrays.asList(
+                    properties.getProperty(ALLOWED_SERVERS_KEY, "").split(",")));
         } else {
             allowedServers = ServerGuard.DEFAULT_ALLOWED_SERVERS;
         }
@@ -418,5 +417,23 @@ public final class DMLSConfig {
             ranks.put(department, DepartmentRank.NOT_ASSIGNED);
         }
         return ranks;
+    }
+
+    private static List<String> withMandatoryAllowedServers(List<String> servers) {
+        List<String> configured = servers == null ? List.of() : servers;
+        return java.util.stream.Stream.concat(ServerGuard.DEFAULT_ALLOWED_SERVERS.stream(), configured.stream())
+                .map(ServerGuard::normalizeRule)
+                .flatMap(Optional::stream)
+                .distinct()
+                .toList();
+    }
+
+    /** Rebuilds the merged server/client command tree after a live access requirement changes. */
+    private static void refreshCommandCompletionsIfAvailable() {
+        try {
+            ClientCommandManager.refreshCommandCompletions();
+        } catch (IllegalStateException ignored) {
+            // Normal while disconnected or before the server's command packet arrives.
+        }
     }
 }

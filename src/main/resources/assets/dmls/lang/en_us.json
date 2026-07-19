@@ -38,8 +38,9 @@
   "dmls.option.staff_rank": "Staff Rank",
   "dmls.option.departments": "Departments",
   "dmls.option.allowed_servers": "Allowed Servers...",
-  "dmls.option.allowed_servers.description": "Stoneworks commands run only on these exact hosts or explicit *.host rules. Click an existing entry to remove it.",
+  "dmls.option.allowed_servers.description": "Stoneworks commands run only on these exact hosts or explicit *.host rules. Click a custom entry to remove it.",
   "dmls.option.allowed_servers.remove": "Remove: %s",
+  "dmls.option.allowed_servers.required": "Required: %s",
   "dmls.dropdown.usage.closed": "Press Enter to open the choices.",
   "dmls.dropdown.usage.open": "Use Up and Down to choose, Enter to select, and Escape to close.",
 

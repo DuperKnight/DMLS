@@ -52,9 +52,15 @@ public final class AllowedServersScreen extends DMLSMenuScreen {
         for (int index = 0; index < servers.size(); index++) {
             String rule = servers.get(index);
             int offset = scaled(34) + index * scaled(28);
-            addScrollableChild(ButtonWidget.builder(Text.translatable("dmls.option.allowed_servers.remove", rule),
+            boolean mandatory = ServerGuard.DEFAULT_ALLOWED_SERVERS.contains(rule);
+            ButtonWidget serverButton = ButtonWidget.builder(
+                            Text.translatable(mandatory
+                                    ? "dmls.option.allowed_servers.required"
+                                    : "dmls.option.allowed_servers.remove", rule),
                             button -> removeServer(rule))
-                    .dimensions(formX, contentY(offset), formWidth, STANDARD_BUTTON_HEIGHT).build(), offset);
+                    .dimensions(formX, contentY(offset), formWidth, STANDARD_BUTTON_HEIGHT).build();
+            serverButton.active = !mandatory;
+            addScrollableChild(serverButton, offset);
         }
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
@@ -79,6 +85,7 @@ public final class AllowedServersScreen extends DMLSMenuScreen {
     }
 
     private void removeServer(String rule) {
+        if (ServerGuard.DEFAULT_ALLOWED_SERVERS.contains(rule)) return;
         List<String> servers = new ArrayList<>(DMLSConfig.allowedServers());
         servers.remove(rule);
         DMLSConfig.setAllowedServers(servers);

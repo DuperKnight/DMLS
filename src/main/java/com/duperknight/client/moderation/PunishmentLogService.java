@@ -1,8 +1,6 @@
 package com.duperknight.client.moderation;
 
 import com.duperknight.DMLS;
-import com.duperknight.client.modules.StaffRank;
-import com.duperknight.client.utils.DMLSConfig;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.MinecraftClient;
@@ -108,7 +106,7 @@ public final class PunishmentLogService implements PunishmentLogSource {
         if (INSTANCE.registered) return;
         INSTANCE.registered = true;
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.world != null && shouldPeriodicallyRefresh(DMLSConfig.staffRank())) {
+            if (client.world != null && client.currentScreen instanceof ModerationScreen) {
                 INSTANCE.refreshIfStale();
             }
         });
@@ -174,10 +172,6 @@ public final class PunishmentLogService implements PunishmentLogSource {
     }
 
     public void onScreenOpened() {
-        if (shouldPeriodicallyRefresh(DMLSConfig.staffRank())) {
-            refreshIfStale();
-            return;
-        }
         synchronized (this) {
             lastRefreshAttemptMillis = 0L;
         }
@@ -355,10 +349,6 @@ public final class PunishmentLogService implements PunishmentLogSource {
                 && first.playerName().equalsIgnoreCase(second.playerName())
                 && first.staffName().equalsIgnoreCase(second.staffName())
                 && first.occurredAt().equals(second.occurredAt());
-    }
-
-    static boolean shouldPeriodicallyRefresh(StaffRank rank) {
-        return rank == StaffRank.HELPER;
     }
 
     static List<PunishmentLogEntry> mergeEntries(List<PunishmentLogEntry> local,
