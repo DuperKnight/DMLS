@@ -252,10 +252,12 @@ public abstract class DMLSMenuScreen extends Screen {
         context.disableScissor();
         if (maxContentScroll > 0) {
             int trackX = contentScrollbarX();
+            int trackTop = contentScrollbarTop();
+            int trackHeight = Math.max(1, contentScrollbarBottom() - trackTop);
             int viewportHeight = contentViewportBottom - contentViewportTop;
-            int thumbHeight = scrollbarThumbHeight(viewportHeight, viewportHeight + maxContentScroll);
-            int thumbY = contentViewportTop + contentScrollOffset * (viewportHeight - thumbHeight) / maxContentScroll;
-            renderVanillaScrollbar(context, trackX, contentViewportTop, viewportHeight, thumbY, thumbHeight);
+            int thumbHeight = scrollbarThumbHeight(trackHeight, viewportHeight, viewportHeight + maxContentScroll);
+            int thumbY = trackTop + contentScrollOffset * (trackHeight - thumbHeight) / maxContentScroll;
+            renderVanillaScrollbar(context, trackX, trackTop, trackHeight, thumbY, thumbHeight);
         }
         for (DropdownWidget<?> dropdown : dropdownWidgets) {
             dropdown.renderDropdown(context, mouseX, mouseY, delta);
@@ -288,7 +290,7 @@ public abstract class DMLSMenuScreen extends Screen {
         }
         if (maxContentScroll > 0 && click.button() == 0
                 && click.x() >= contentScrollbarX() && click.x() <= contentScrollbarX() + SCROLLBAR_WIDTH
-                && click.y() >= contentViewportTop && click.y() < contentViewportBottom) {
+                && click.y() >= contentScrollbarTop() && click.y() < contentScrollbarBottom()) {
             draggingContentScrollbar = true;
             updateContentScrollFromMouse(click.y());
             return true;
@@ -341,11 +343,21 @@ public abstract class DMLSMenuScreen extends Screen {
         return width / 2 + contentWidth / 2 + scaled(7);
     }
 
+    protected int contentScrollbarTop() {
+        return contentViewportTop;
+    }
+
+    protected int contentScrollbarBottom() {
+        return contentViewportBottom;
+    }
+
     private void updateContentScrollFromMouse(double mouseY) {
+        int trackTop = contentScrollbarTop();
+        int trackHeight = Math.max(1, contentScrollbarBottom() - trackTop);
         int viewportHeight = contentViewportBottom - contentViewportTop;
-        int thumbHeight = scrollbarThumbHeight(viewportHeight, viewportHeight + maxContentScroll);
-        int track = Math.max(1, viewportHeight - thumbHeight);
-        double relative = Math.clamp((int) (mouseY - contentViewportTop - thumbHeight / 2.0), 0, track);
+        int thumbHeight = scrollbarThumbHeight(trackHeight, viewportHeight, viewportHeight + maxContentScroll);
+        int track = Math.max(1, trackHeight - thumbHeight);
+        double relative = Math.clamp((int) (mouseY - trackTop - thumbHeight / 2.0), 0, track);
         contentScrollOffset = Math.clamp((int) Math.round(relative * maxContentScroll / track), 0, maxContentScroll);
         updateScrollableWidgets();
     }
@@ -353,6 +365,11 @@ public abstract class DMLSMenuScreen extends Screen {
     protected static int scrollbarThumbHeight(int viewportHeight, int contentHeight) {
         return Math.clamp(viewportHeight * viewportHeight / Math.max(1, contentHeight),
                 32, Math.max(32, viewportHeight - 8));
+    }
+
+    protected static int scrollbarThumbHeight(int trackHeight, int viewportHeight, int contentHeight) {
+        return Math.clamp(trackHeight * viewportHeight / Math.max(1, contentHeight),
+                32, Math.max(32, trackHeight - 8));
     }
 
     public static void renderVanillaScrollbar(DrawContext context, int x, int y, int height,

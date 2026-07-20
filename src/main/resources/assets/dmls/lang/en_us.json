@@ -6,7 +6,8 @@
   "dmls.title.options": "Mod Options",
   "dmls.title.allowed_servers": "Allowed Servers",
   "dmls.button.options": "Mod Options...",
-  "dmls.button.rulebook": "Rulebook",
+  "dmls.button.rulebook": "Rulebook...",
+  "dmls.rulebook.find_hint": "Press Ctrl+F (Command+F on macOS) to search the rulebook.",
   "dmls.button.exit": "Exit",
   "dmls.button.submit": "Submit",
   "dmls.button.lookup": "Look Up",
@@ -636,7 +637,7 @@
   ,"key.dmls.open_moderation": "Open Moderation View"
   ,"dmls.help.modview": "Opens the live moderation workspace."
   ,"dmls.moderation.title": "Moderation View"
-  ,"dmls.moderation.open": "Moderation View"
+  ,"dmls.moderation.open": "Moderation View..."
   ,"dmls.moderation.send": "Send"
   ,"dmls.moderation.sent": "Message sent."
   ,"dmls.moderation.simulated": "Dry run: nothing was sent."

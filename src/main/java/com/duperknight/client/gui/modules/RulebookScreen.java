@@ -22,9 +22,12 @@ import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.screen.ScreenTexts;
@@ -59,22 +62,39 @@ public final class RulebookScreen extends DMLSMenuScreen {
     private static final int LIST_LEVEL_INDENT = 20;
     private static final int MAX_IMAGE_WIDTH = 360;
     private static final int WHITE_BORDER = 0xFFD8D8D8;
+    private static final int FIND_HIGHLIGHT = 0x7046D369;
+    private static final int FIND_HIGHLIGHT_ACTIVE = 0xFF35B957;
     private static final ItemStack GOLD_INGOT = new ItemStack(Items.GOLD_INGOT);
     private static final ItemStack IRON_INGOT = new ItemStack(Items.IRON_INGOT);
     private static final ItemStack COPPER_INGOT = new ItemStack(Items.COPPER_INGOT);
 
     private final String initialRuleId;
     private final Map<ImageBlock, Texture> textures = new IdentityHashMap<>();
+    private final Map<Layout, List<SearchMatch>> matchesByLayout = new IdentityHashMap<>();
     private List<Layout> layouts = List.of();
+    private List<SearchMatch> findMatches = List.of();
     private RulebookSnapshot snapshot;
     private RulebookRule selectedRule;
     private ButtonWidget reloadButton;
+    private TextFieldWidget findField;
+    private ButtonWidget findPreviousButton;
+    private ButtonWidget findNextButton;
+    private ButtonWidget findCloseButton;
+    private int findPanelX;
+    private int findPanelY;
+    private int findPanelWidth;
+    private int findPanelHeight;
+    private int findCountX;
+    private int findCountWidth;
     private int documentX;
     private int documentWidth;
     private int viewerTop;
     private int viewerBottom;
     private long observedRevision;
     private boolean initialAnchorApplied;
+    private boolean findOpen;
+    private String findQuery = "";
+    private int selectedFindIndex = -1;
 
     public RulebookScreen(Screen parent, String initialRuleId) {
         super(Text.translatable("dmls.rulebook.title"), parent);
@@ -125,11 +145,187 @@ public final class RulebookScreen extends DMLSMenuScreen {
                     if (selectedRule != null) client.setScreen(new BanLogScreen(this, selectedRule));
                 }).dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         makeLog.active = selectedRule != null;
+
+        initFindWidgets();
+        rebuildFindMatches(false);
     }
 
     private Text logLabel() {
         return selectedRule == null ? Text.translatable("dmls.button.punish.make_log")
                 : Text.translatable("dmls.rulebook.make_log", selectedRule.id());
+    }
+
+    private void initFindWidgets() {
+        findPanelWidth = Math.min(scaled(320), width - scaled(8));
+        findPanelHeight = STANDARD_BUTTON_HEIGHT + scaled(8);
+        findPanelX = width - findPanelWidth - scaled(6);
+        findPanelY = scaled(4);
+        int inset = scaled(4);
+        int gap = scaled(3);
+        int buttonSize = STANDARD_BUTTON_HEIGHT;
+        findCountWidth = scaled(72);
+        int fieldWidth = Math.max(scaled(60), findPanelWidth - inset * 2 - findCountWidth
+                - buttonSize * 3 - gap * 4);
+        int widgetY = findPanelY + (findPanelHeight - STANDARD_BUTTON_HEIGHT) / 2;
+
+        findField = addDrawableChild(new TextFieldWidget(textRenderer, findPanelX + inset, widgetY,
+                fieldWidth, STANDARD_BUTTON_HEIGHT, Text.literal("Find in rulebook")));
+        findField.setMaxLength(128);
+        findField.setPlaceholder(Text.literal("Find"));
+        findField.setText(findQuery);
+        findField.setChangedListener(this::onFindChanged);
+
+        findCountX = findField.getX() + findField.getWidth() + gap;
+        int buttonX = findCountX + findCountWidth + gap;
+        findPreviousButton = addDrawableChild(ButtonWidget.builder(Text.literal("↑"), button -> selectFindResult(-1))
+                .dimensions(buttonX, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
+        findNextButton = addDrawableChild(ButtonWidget.builder(Text.literal("↓"), button -> selectFindResult(1))
+                .dimensions(buttonX + buttonSize + gap, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
+        findCloseButton = addDrawableChild(ButtonWidget.builder(Text.literal("×"), button -> closeFind())
+                .dimensions(buttonX + (buttonSize + gap) * 2, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
+        layoutFindWidgets();
+        setFindWidgetsVisible(findOpen);
+    }
+
+    private void layoutFindWidgets() {
+        if (findField == null) return;
+        int inset = scaled(4);
+        int gap = scaled(3);
+        int buttonSize = STANDARD_BUTTON_HEIGHT;
+        int widgetY = findPanelY + (findPanelHeight - STANDARD_BUTTON_HEIGHT) / 2;
+        String widestCount = findMatches.isEmpty() ? "0 of 0"
+                : findMatches.size() + " of " + findMatches.size();
+        findCountWidth = Math.max(scaled(64), textRenderer.getWidth(widestCount) + scaled(12));
+        int fieldWidth = Math.max(scaled(60), findPanelWidth - inset * 2 - findCountWidth
+                - buttonSize * 3 - gap * 4);
+        findField.setDimensionsAndPosition(fieldWidth, STANDARD_BUTTON_HEIGHT, findPanelX + inset, widgetY);
+        findCountX = findField.getRight() + gap;
+        int buttonX = findCountX + findCountWidth + gap;
+        findPreviousButton.setDimensionsAndPosition(buttonSize, STANDARD_BUTTON_HEIGHT, buttonX, widgetY);
+        findNextButton.setDimensionsAndPosition(buttonSize, STANDARD_BUTTON_HEIGHT,
+                buttonX + buttonSize + gap, widgetY);
+        findCloseButton.setDimensionsAndPosition(buttonSize, STANDARD_BUTTON_HEIGHT,
+                buttonX + (buttonSize + gap) * 2, widgetY);
+    }
+
+    private void onFindChanged(String query) {
+        findQuery = query;
+        rebuildFindMatches(true);
+    }
+
+    private void openFind() {
+        findOpen = true;
+        setFindWidgetsVisible(true);
+        rebuildFindMatches(true);
+        setFocused(findField);
+        findField.setFocused(true);
+        findField.setCursorToEnd(false);
+    }
+
+    private void closeFind() {
+        findOpen = false;
+        setFindWidgetsVisible(false);
+        setFocused(null);
+        findMatches = List.of();
+        matchesByLayout.clear();
+        selectedFindIndex = -1;
+    }
+
+    private void setFindWidgetsVisible(boolean visible) {
+        if (findField != null) findField.setVisible(visible);
+        if (findPreviousButton != null) findPreviousButton.visible = visible;
+        if (findNextButton != null) findNextButton.visible = visible;
+        if (findCloseButton != null) findCloseButton.visible = visible;
+        syncFindButtons();
+    }
+
+    private void rebuildFindMatches(boolean resetSelection) {
+        matchesByLayout.clear();
+        if (!findOpen || findQuery.isBlank()) {
+            findMatches = List.of();
+            selectedFindIndex = -1;
+            layoutFindWidgets();
+            syncFindButtons();
+            return;
+        }
+
+        String needle = findQuery.toLowerCase(Locale.ROOT);
+        List<SearchMatch> matches = new ArrayList<>();
+        for (Layout layout : layouts) collectFindMatches(layout, needle, matches);
+        findMatches = List.copyOf(matches);
+        for (SearchMatch match : findMatches) {
+            matchesByLayout.computeIfAbsent(match.layout, ignored -> new ArrayList<>()).add(match);
+        }
+        if (findMatches.isEmpty()) {
+            selectedFindIndex = -1;
+        } else if (resetSelection || selectedFindIndex < 0) {
+            selectedFindIndex = 0;
+        } else {
+            selectedFindIndex = Math.min(selectedFindIndex, findMatches.size() - 1);
+        }
+        layoutFindWidgets();
+        syncFindButtons();
+        if (resetSelection && selectedFindIndex >= 0) scrollToSelectedFindResult();
+    }
+
+    private void collectFindMatches(Layout layout, String needle, List<SearchMatch> matches) {
+        if (layout.block instanceof RuleBox box) {
+            String searchable = box.ruleId().toLowerCase(Locale.ROOT);
+            int from = 0;
+            while (from <= searchable.length() - needle.length()) {
+                int start = searchable.indexOf(needle, from);
+                if (start < 0) break;
+                matches.add(new SearchMatch(layout, -1, start, start + needle.length(), layout.absoluteY));
+                from = start + Math.max(1, needle.length());
+            }
+        } else if (layout.block instanceof TextBlock) {
+            for (int lineIndex = 0; lineIndex < layout.lines.size(); lineIndex++) {
+                String line = orderedText(layout.lines.get(lineIndex));
+                String searchable = line.toLowerCase(Locale.ROOT);
+                int from = 0;
+                while (from <= searchable.length() - needle.length()) {
+                    int start = searchable.indexOf(needle, from);
+                    if (start < 0) break;
+                    matches.add(new SearchMatch(layout, lineIndex, start, start + needle.length(),
+                            layout.absoluteY + lineIndex * layout.lineStep));
+                    from = start + Math.max(1, needle.length());
+                }
+            }
+        }
+        for (Layout child : layout.children) collectFindMatches(child, needle, matches);
+        if (layout.table == null) return;
+        for (TableRow row : layout.table.rows) {
+            for (TableCellLayout cell : row.cells) {
+                for (Layout child : cell.content) collectFindMatches(child, needle, matches);
+            }
+        }
+    }
+
+    private String orderedText(OrderedText text) {
+        StringBuilder result = new StringBuilder();
+        text.accept((index, style, codePoint) -> {
+            result.appendCodePoint(codePoint);
+            return true;
+        });
+        return result.toString();
+    }
+
+    private void selectFindResult(int direction) {
+        if (findMatches.isEmpty()) return;
+        selectedFindIndex = Math.floorMod(selectedFindIndex + direction, findMatches.size());
+        scrollToSelectedFindResult();
+    }
+
+    private void scrollToSelectedFindResult() {
+        if (selectedFindIndex < 0 || selectedFindIndex >= findMatches.size()) return;
+        int viewportHeight = Math.max(1, viewerBottom - viewerTop);
+        setContentScrollOffset(findMatches.get(selectedFindIndex).contentY - viewportHeight / 3);
+    }
+
+    private void syncFindButtons() {
+        boolean navigable = findOpen && !findMatches.isEmpty();
+        if (findPreviousButton != null) findPreviousButton.active = navigable;
+        if (findNextButton != null) findNextButton.active = navigable;
     }
 
     @Override
@@ -149,6 +345,8 @@ public final class RulebookScreen extends DMLSMenuScreen {
             DocumentBlock block = document.blocks().get(index);
             Layout layout = layout(block, documentWidth);
             layout.y = y;
+            if (block instanceof ImageBlock && firstTopLevelImage) layout.primaryCrest = true;
+            assignAbsoluteY(layout, y);
             result.add(layout);
             DocumentBlock next = index + 1 < document.blocks().size() ? document.blocks().get(index + 1) : null;
             int gap = gapBetween(block, next);
@@ -159,6 +357,19 @@ public final class RulebookScreen extends DMLSMenuScreen {
             y += layout.height + gap;
         }
         return result;
+    }
+
+    private void assignAbsoluteY(Layout layout, int absoluteY) {
+        layout.absoluteY = absoluteY;
+        for (Layout child : layout.children) assignAbsoluteY(child, absoluteY + child.y);
+        if (layout.table == null) return;
+        int rowY = absoluteY;
+        for (TableRow row : layout.table.rows) {
+            for (TableCellLayout cell : row.cells) {
+                for (Layout child : cell.content) assignAbsoluteY(child, rowY + child.y);
+            }
+            rowY += row.height;
+        }
     }
 
     private Layout layout(DocumentBlock block, int availableWidth) {
@@ -300,9 +511,12 @@ public final class RulebookScreen extends DMLSMenuScreen {
                     snapshot.status() == RulebookStatus.LOADING ? 0xFFFFFF55 : 0xFFFF5555);
         }
         endContentScissor(context);
+        renderFindHint(context);
+        if (findOpen) renderFindPanel(context);
         super.render(context, mouseX, mouseY, delta);
         if (snapshot.status() == RulebookStatus.STALE && snapshot.document() != null) renderStaleOutline(context);
         renderReloadIcon(context);
+        if (findOpen) renderFindCount(context);
     }
 
     private void renderStatus(DrawContext context) {
@@ -321,6 +535,27 @@ public final class RulebookScreen extends DMLSMenuScreen {
         context.drawCenteredTextWithShadow(textRenderer, status, width / 2, scaled(8), color);
     }
 
+    private void renderFindPanel(DrawContext context) {
+        context.fill(findPanelX, findPanelY, findPanelX + findPanelWidth,
+                findPanelY + findPanelHeight, 0xF0181818);
+        context.drawStrokedRectangle(findPanelX, findPanelY, findPanelWidth, findPanelHeight, 0xFFD8D8D8);
+    }
+
+    private void renderFindCount(DrawContext context) {
+        int countY = findPanelY + (findPanelHeight - textRenderer.fontHeight + 1) / 2;
+        context.drawCenteredTextWithShadow(textRenderer, Text.literal(findCountText()),
+                findCountX + findCountWidth / 2, countY, 0xFFDDDDDD);
+    }
+
+    private String findCountText() {
+        return findMatches.isEmpty() ? "0 of 0" : selectedFindIndex + 1 + " of " + findMatches.size();
+    }
+
+    private void renderFindHint(DrawContext context) {
+        context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.rulebook.find_hint"),
+                width / 2, footerButtonY() - scaled(14), 0xFFBBBBBB);
+    }
+
     private void renderStaleOutline(DrawContext context) {
         double pulse = (Math.sin(System.currentTimeMillis() / 320.0) + 1.0) / 2.0;
         int alpha = 55 + (int) (pulse * 145);
@@ -331,9 +566,10 @@ public final class RulebookScreen extends DMLSMenuScreen {
     private void renderLayout(DrawContext context, Layout layout, int x, int y, int availableWidth) {
         if (layout.block instanceof TextBlock) {
             int lineY = y;
-            for (OrderedText line : layout.lines) {
+            for (int lineIndex = 0; lineIndex < layout.lines.size(); lineIndex++) {
+                OrderedText line = layout.lines.get(lineIndex);
                 if (layout.textScale == 1.0F) {
-                    drawStyledLine(context, line, x + layout.indent, lineY);
+                    drawStyledLine(context, line, x + layout.indent, lineY, layout, lineIndex);
                 } else {
                     float lineWidth = textRenderer.getWidth(line) * layout.textScale;
                     float lineX = layout.centered
@@ -342,7 +578,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
                     context.getMatrices().pushMatrix();
                     context.getMatrices().translate(lineX, lineY);
                     context.getMatrices().scale(layout.textScale, layout.textScale);
-                    drawStyledLine(context, line, 0, 0);
+                    drawStyledLine(context, line, 0, 0, layout, lineIndex);
                     context.getMatrices().popMatrix();
                 }
                 lineY += layout.lineStep;
@@ -353,7 +589,8 @@ public final class RulebookScreen extends DMLSMenuScreen {
                 context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.rulebook.image_unavailable"),
                         x + availableWidth / 2, y + scaled(8), 0xFFAAAAAA);
             } else {
-                int imageX = x + (availableWidth - layout.renderWidth) / 2;
+                int imageCenter = layout.primaryCrest ? documentX + documentWidth / 2 : x + availableWidth / 2;
+                int imageX = imageCenter - layout.renderWidth / 2;
                 context.drawTexture(RenderPipelines.GUI_TEXTURED, texture.identifier, imageX, y, 0, 0,
                         layout.renderWidth, layout.height, texture.width, texture.height, texture.width, texture.height);
             }
@@ -364,8 +601,12 @@ public final class RulebookScreen extends DMLSMenuScreen {
             context.fill(x + railWidth - 1, y, x + railWidth, y + layout.height, WHITE_BORDER);
             boolean selected = selectedRule != null && selectedRule.id().equalsIgnoreCase(box.ruleId());
             if (selected) context.drawStrokedRectangle(x + 1, y + 1, availableWidth - 2, layout.height - 2, 0xFFFFAA00);
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal(box.ruleId()).styled(style -> style
-                            .withBold(true).withColor(box.ruleColor())), x + railWidth / 2, y + scaled(11), 0xFFFFFFFF);
+            Style ruleIdStyle = Style.EMPTY.withBold(true).withColor(box.ruleColor());
+            Text ruleId = Text.literal(box.ruleId()).setStyle(ruleIdStyle);
+            int ruleIdX = x + (railWidth - textRenderer.getWidth(ruleId)) / 2;
+            int ruleIdY = y + scaled(11);
+            drawRuleIdSearchHighlights(context, layout, box.ruleId(), ruleIdStyle, ruleIdX, ruleIdY);
+            context.drawTextWithShadow(textRenderer, ruleId, ruleIdX, ruleIdY, 0xFFFFFFFF);
             int bodyX = x + railWidth + scaled(RULE_PADDING);
             int bodyWidth = availableWidth - railWidth - scaled(RULE_PADDING * 2);
             for (Layout child : layout.children) renderLayout(context, child, bodyX, y + child.y, bodyWidth);
@@ -422,10 +663,11 @@ public final class RulebookScreen extends DMLSMenuScreen {
         return result;
     }
 
-    private void drawStyledLine(DrawContext context, OrderedText line, int x, int y) {
+    private void drawStyledLine(DrawContext context, OrderedText line, int x, int y,
+                                Layout layout, int lineIndex) {
         float[] cursor = {x};
         line.accept((index, style, codePoint) -> {
-            float next = cursor[0] + textRenderer.getWidth(new String(Character.toChars(codePoint)));
+            float next = cursor[0] + styledGlyphWidth(style, codePoint);
             String insertion = style.getInsertion();
             if (insertion != null && insertion.startsWith("dmls-item:")) {
                 try {
@@ -444,6 +686,67 @@ public final class RulebookScreen extends DMLSMenuScreen {
             return true;
         });
         context.drawTextWithShadow(textRenderer, line, x, y, 0xFFFFFFFF);
+        if (drawSearchHighlights(context, line, x, y, layout, lineIndex)) {
+            context.drawTextWithShadow(textRenderer, line, x, y, 0xFFFFFFFF);
+        }
+    }
+
+    private boolean drawSearchHighlights(DrawContext context, OrderedText line, int x, int y,
+                                         Layout layout, int lineIndex) {
+        List<SearchMatch> layoutMatches = matchesByLayout.get(layout);
+        if (!findOpen || layoutMatches == null || layoutMatches.isEmpty()) return false;
+        SearchMatch active = selectedFindIndex >= 0 && selectedFindIndex < findMatches.size()
+                ? findMatches.get(selectedFindIndex) : null;
+        boolean highlighted = false;
+        for (SearchMatch match : layoutMatches) {
+            if (match.lineIndex != lineIndex) continue;
+            float[] bounds = textBounds(line, match.start, match.end);
+            int left = (int) Math.floor(x + bounds[0]);
+            int right = Math.max(left + 1, (int) Math.ceil(x + bounds[1]));
+            context.fill(left, y - 1, right, y + textRenderer.fontHeight + 1,
+                    match == active ? FIND_HIGHLIGHT_ACTIVE : FIND_HIGHLIGHT);
+            highlighted = true;
+        }
+        return highlighted;
+    }
+
+    private void drawRuleIdSearchHighlights(DrawContext context, Layout layout, String ruleId,
+                                            Style style, int x, int y) {
+        List<SearchMatch> layoutMatches = matchesByLayout.get(layout);
+        if (!findOpen || layoutMatches == null) return;
+        SearchMatch active = selectedFindIndex >= 0 && selectedFindIndex < findMatches.size()
+                ? findMatches.get(selectedFindIndex) : null;
+        for (SearchMatch match : layoutMatches) {
+            if (match.lineIndex != -1) continue;
+            int left = x + textRenderer.getWidth(Text.literal(ruleId.substring(0, match.start)).setStyle(style));
+            int right = left + textRenderer.getWidth(Text.literal(ruleId.substring(match.start, match.end)).setStyle(style));
+            context.fill(left, y - 1, Math.max(left + 1, right), y + textRenderer.fontHeight + 1,
+                    match == active ? FIND_HIGHLIGHT_ACTIVE : FIND_HIGHLIGHT);
+        }
+    }
+
+    private float[] textBounds(OrderedText line, int start, int end) {
+        int[] offset = {0};
+        float[] cursor = {0};
+        float[] bounds = {0, 0};
+        boolean[] started = {false};
+        line.accept((index, style, codePoint) -> {
+            int nextOffset = offset[0] + Character.charCount(codePoint);
+            float nextX = cursor[0] + styledGlyphWidth(style, codePoint);
+            if (!started[0] && nextOffset > start) {
+                bounds[0] = cursor[0];
+                started[0] = true;
+            }
+            if (offset[0] < end) bounds[1] = nextX;
+            offset[0] = nextOffset;
+            cursor[0] = nextX;
+            return offset[0] < end;
+        });
+        return bounds;
+    }
+
+    private int styledGlyphWidth(Style style, int codePoint) {
+        return textRenderer.getWidth(Text.literal(new String(Character.toChars(codePoint))).setStyle(style));
     }
 
     private void drawInlineItem(DrawContext context, InlineItem item, float x, int y) {
@@ -493,7 +796,31 @@ public final class RulebookScreen extends DMLSMenuScreen {
     }
 
     @Override
+    public boolean keyPressed(KeyInput input) {
+        int modifiers = input.modifiers();
+        boolean findModifier = (modifiers & (InputUtil.GLFW_MOD_CONTROL | InputUtil.GLFW_MOD_SUPER)) != 0;
+        if (input.getKeycode() == InputUtil.GLFW_KEY_F && findModifier) {
+            openFind();
+            return true;
+        }
+        if (findOpen && input.isEscape()) {
+            closeFind();
+            return true;
+        }
+        if (findOpen && (input.getKeycode() == InputUtil.GLFW_KEY_ENTER
+                || input.getKeycode() == InputUtil.GLFW_KEY_KP_ENTER)) {
+            selectFindResult((modifiers & InputUtil.GLFW_MOD_SHIFT) != 0 ? -1 : 1);
+            return true;
+        }
+        return super.keyPressed(input);
+    }
+
+    @Override
     public boolean mouseClicked(Click click, boolean doubled) {
+        if (findOpen && click.x() >= findPanelX && click.x() < findPanelX + findPanelWidth
+                && click.y() >= findPanelY && click.y() < findPanelY + findPanelHeight) {
+            return super.mouseClicked(click, doubled);
+        }
         if (click.button() == 0 && click.y() >= viewerTop && click.y() < viewerBottom) {
             for (Layout layout : layouts) {
                 Style style = styleAt(layout, documentX, contentY(layout.y), documentWidth, click.x(), click.y());
@@ -595,6 +922,16 @@ public final class RulebookScreen extends DMLSMenuScreen {
     }
 
     @Override
+    protected int contentScrollbarTop() {
+        return findOpen ? Math.max(viewerTop, findPanelY + findPanelHeight + scaled(4)) : viewerTop;
+    }
+
+    @Override
+    protected int contentScrollbarBottom() {
+        return viewerBottom;
+    }
+
+    @Override
     public void removed() {
         releaseTextures();
         super.removed();
@@ -610,12 +947,14 @@ public final class RulebookScreen extends DMLSMenuScreen {
     private static final class Layout {
         private final DocumentBlock block;
         private int y;
+        private int absoluteY;
         private int height;
         private int indent;
         private int renderWidth;
         private int lineStep;
         private float textScale = 1.0F;
         private boolean centered;
+        private boolean primaryCrest;
         private List<OrderedText> lines = List.of();
         private final List<Layout> children = new ArrayList<>();
         private TableLayout table;
@@ -649,5 +988,8 @@ public final class RulebookScreen extends DMLSMenuScreen {
     }
 
     private record Texture(Identifier identifier, int width, int height) {
+    }
+
+    private record SearchMatch(Layout layout, int lineIndex, int start, int end, int contentY) {
     }
 }
