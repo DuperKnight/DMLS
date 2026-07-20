@@ -77,7 +77,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
 
         renderPanel(context, rankX, rankY, rankWidth, STANDARD_BUTTON_HEIGHT);
         context.drawCenteredTextWithShadow(textRenderer, DMLSConfig.staffRank().displayName(),
-                width / 2, rankY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2 + scaled(2), 0xFFFFFFFF);
+                width / 2, rankY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2 + scaled(1), 0xFFFFFFFF);
 
         Text departmentsTitle = Text.translatable("dmls.option.departments");
         int titleHalfWidth = textRenderer.getWidth(departmentsTitle) / 2;

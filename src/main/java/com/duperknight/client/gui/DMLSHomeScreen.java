@@ -1,6 +1,7 @@
 package com.duperknight.client.gui;
 
 import com.duperknight.client.modules.DMLSModule;
+import com.duperknight.client.gui.modules.RulebookScreen;
 import com.duperknight.client.modules.ModuleCategory;
 import com.duperknight.client.moderation.ModerationScreen;
 import com.duperknight.client.modules.StaffRank;
@@ -79,17 +80,20 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
             return;
         }
         int gap = scaled(8);
-        int buttonWidth = Math.min(scaled(150), (width - gap * 4) / 3);
-        int groupWidth = buttonWidth * 3 + gap * 2;
+        int buttonWidth = Math.min(scaled(135), (width - scaled(32) - gap * 3) / 4);
+        int groupWidth = buttonWidth * 4 + gap * 3;
         int firstX = (width - groupWidth) / 2;
         addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.moderation.open"),
                         button -> client.setScreen(new ModerationScreen(this)))
                 .dimensions(firstX, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
+        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.rulebook"),
+                        button -> client.setScreen(new RulebookScreen(this, null)))
+                .dimensions(firstX + buttonWidth + gap, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
         addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.options"),
                         button -> client.setScreen(new DMLSOptionsScreen(this)))
-                .dimensions(firstX + buttonWidth + gap, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
-        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.exit"), button -> close())
                 .dimensions(firstX + (buttonWidth + gap) * 2, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
+        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.exit"), button -> close())
+                .dimensions(firstX + (buttonWidth + gap) * 3, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
     }
 
     @Override

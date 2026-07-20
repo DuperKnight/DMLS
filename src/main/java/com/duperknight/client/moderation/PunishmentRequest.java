@@ -22,6 +22,10 @@ public record PunishmentRequest(PunishmentType type, String ign, String duration
     }
 
     public String command() {
+        if ((type == PunishmentType.MUTE || type == PunishmentType.BAN)
+                && duration.matches("(?i)perm(?:anent)?")) {
+            return "%s %s %s".formatted(type.command(), ign, reason);
+        }
         return type.durationRequired()
                 ? "%s %s %s %s".formatted(type.command(), ign, duration, reason)
                 : "%s %s %s".formatted(type.command(), ign, reason);

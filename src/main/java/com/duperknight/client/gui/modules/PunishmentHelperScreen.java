@@ -2,7 +2,10 @@ package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.PunishmentHelperModule;
-import com.duperknight.client.modules.PunishmentHelperModule.Rule;
+import com.duperknight.client.rulebook.RulebookRule;
+import com.duperknight.client.rulebook.RulebookService;
+import com.duperknight.client.rulebook.RulebookSnapshot;
+import com.duperknight.client.rulebook.RulebookStatus;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -20,6 +23,7 @@ public final class PunishmentHelperScreen extends DMLSMenuScreen {
     private final PunishmentHelperModule module;
     private TextFieldWidget searchField;
     private String query = "";
+    private long observedRevision = -1;
 
     public PunishmentHelperScreen(Screen parent, PunishmentHelperModule module) {
         super(Text.translatable("dmls.module.punish.name"), parent);
@@ -28,7 +32,21 @@ public final class PunishmentHelperScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        List<Rule> matches = PunishmentHelperModule.search(query);
+        RulebookSnapshot snapshot = RulebookService.shared().snapshot();
+        observedRevision = snapshot.revision();
+        if (!snapshot.hasDocument()) {
+            configureScrollableContent(module, scaled(64));
+            addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
+                    .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+            ButtonWidget retry = addDrawableChild(ButtonWidget.builder(
+                            Text.translatable(snapshot.refreshing() ? "dmls.rulebook.loading" : "dmls.rulebook.retry"),
+                            button -> RulebookService.shared().refresh())
+                    .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+            retry.active = !snapshot.refreshing();
+            return;
+        }
+
+        List<RulebookRule> matches = PunishmentHelperModule.search(query);
         int shown = Math.min(matches.size(), MAX_ROWS);
         configureScrollableContent(module, Math.max(scaled(60), shown * scaled(ROW_HEIGHT_UNSCALED) + scaled(12)));
 
@@ -36,10 +54,10 @@ public final class PunishmentHelperScreen extends DMLSMenuScreen {
         int formX = (width - formWidth) / 2;
 
         for (int i = 0; i < shown; i++) {
-            Rule rule = matches.get(i);
+            RulebookRule rule = matches.get(i);
             int offset = scaled(6) + i * scaled(ROW_HEIGHT_UNSCALED);
             addScrollableChild(ButtonWidget.builder(Text.literal(trim(rule.label(), 62)), button ->
-                            client.setScreen(new RuleDetailScreen(this, rule)))
+                            client.setScreen(new RulebookScreen(this, rule.id())))
                     .dimensions(formX, contentY(offset), formWidth, STANDARD_BUTTON_HEIGHT).build(), offset);
         }
 
@@ -62,6 +80,12 @@ public final class PunishmentHelperScreen extends DMLSMenuScreen {
         }
     }
 
+    @Override
+    public void tick() {
+        super.tick();
+        if (RulebookService.shared().snapshot().revision() != observedRevision) clearAndInit();
+    }
+
     private String trim(String text, int max) {
         return text.length() <= max ? text : text.substring(0, max - 1) + "…";
     }
@@ -71,11 +95,15 @@ public final class PunishmentHelperScreen extends DMLSMenuScreen {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
         beginContentScissor(context);
-        if (PunishmentHelperModule.rulebookError().isPresent()) {
+        RulebookSnapshot snapshot = RulebookService.shared().snapshot();
+        if (!snapshot.hasDocument()) {
             int emptyY = contentY(scaled(14));
             if (isContentVisible(emptyY, textRenderer.fontHeight)) {
-                context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.screen.punish.load_failed"),
-                        width / 2, emptyY, 0xFFFF5555);
+                Text message = snapshot.status() == RulebookStatus.LOADING
+                        ? Text.translatable("dmls.rulebook.connecting")
+                        : Text.translatable("dmls.rulebook.unavailable");
+                context.drawCenteredTextWithShadow(textRenderer, message, width / 2, emptyY,
+                        snapshot.status() == RulebookStatus.LOADING ? 0xFFFFFF55 : 0xFFFF5555);
             }
         } else if (PunishmentHelperModule.search(query).isEmpty()) {
             int emptyY = contentY(scaled(14));

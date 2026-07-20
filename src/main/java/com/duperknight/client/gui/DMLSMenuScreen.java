@@ -71,6 +71,15 @@ public abstract class DMLSMenuScreen extends Screen {
                 0.0F, 0.0F, width, 2, 32, 2);
     }
 
+    /** Full-height variant for dense readers that do not need the shared logo header. */
+    protected void renderMenuBackgroundWithoutHeader(DrawContext context) {
+        int footerTop = height - FOOTER_TOP_OFFSET;
+        context.fill(0, 0, width, footerTop, 0xA6000000);
+        context.fill(0, footerTop, width, height, 0x20000000);
+        context.drawTexture(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
+                0.0F, 0.0F, width, 2, 32, 2);
+    }
+
     protected void renderPanel(DrawContext context, int x, int y, int panelWidth, int panelHeight) {
         context.fill(x, y, x + panelWidth, y + panelHeight, PANEL_BACKGROUND_COLOR);
         context.drawStrokedRectangle(x, y, panelWidth, panelHeight, PANEL_BORDER_COLOR);
