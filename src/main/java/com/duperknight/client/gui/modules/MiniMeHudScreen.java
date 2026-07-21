@@ -14,7 +14,7 @@ import net.minecraft.util.Formatting;
 
 import java.util.function.BiFunction;
 
-/** Settings screen for Mini Mes shown on the in-game HUD. */
+/** Settings screen for AdMinis shown on the in-game HUD. */
 public final class MiniMeHudScreen extends DMLSMenuScreen {
     private final MiniMeHudModule module;
     private Text saveStatus = Text.empty();

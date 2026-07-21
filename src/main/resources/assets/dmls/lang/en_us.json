@@ -39,10 +39,38 @@
   "dmls.module_category.joke": "Joke",
   "dmls.option.staff_rank": "Staff Rank",
   "dmls.option.departments": "Departments",
+  "dmls.option.integrations": "Integrations",
   "dmls.option.allowed_servers": "Allowed Servers...",
   "dmls.option.allowed_servers.description": "Stoneworks commands run only on these exact hosts or explicit *.host rules. Click a custom entry to remove it.",
   "dmls.option.allowed_servers.remove": "Remove: %s",
   "dmls.option.allowed_servers.required": "Required: %s",
+  "dmls.option.discord_link": "Link to Discord",
+  "dmls.option.discord_link.checking": "Checking Discord Link...",
+  "dmls.option.discord_link.linked": "Discord Linked",
+  "dmls.option.discord_link.stale": "Discord Link Needs Verification",
+  "dmls.option.discord_link.new_code": "Request New Discord Code",
+  "dmls.option.discord_link.requesting": "Requesting Code...",
+  "dmls.option.discord_link.requesting_hint": "Contacting the DMLS linking service...",
+  "dmls.option.discord_link.instructions": "Run /link followed by this code in Discord. It expires in 10 minutes.",
+  "dmls.option.discord_link.pending_without_code": "A Discord link is pending. Request a new code if you no longer have it.",
+  "dmls.option.discord_link.copied": "Link code copied to the clipboard.",
+  "dmls.option.discord_link.code.usage_hidden": "Press Enter to reveal the code, or Control C to copy it.",
+  "dmls.option.discord_link.code.usage_revealed": "Press Enter or Control C to copy the code.",
+  "dmls.option.discord_link.error.identity": "Your Minecraft profile UUID is unavailable. Sign in and try again.",
+  "dmls.option.discord_link.error.rate_limited": "Too many link requests. Wait a few minutes and try again.",
+  "dmls.option.discord_link.error.timeout": "The linking service took too long to respond. Try again.",
+  "dmls.option.discord_link.error.network": "Could not reach the linking service. Check your connection and try again.",
+  "dmls.option.discord_link.error.service": "The linking service could not create a code. Try again later.",
+  "dmls.option.discord_link.error.service_message": "The linking service could not create a code: %s",
+  "dmls.option.discord_link.error.response": "The linking service returned an invalid response. Try again later.",
+  "dmls.option.discord_link.error.storage": "The code was created, but its token could not be saved. Check the DMLS config folder and try again.",
+  "dmls.option.discord_link.error.invalid_token": "The saved Discord link is no longer valid. Request a new code to link again.",
+  "dmls.option.discord_link.error.expired": "The Discord link request expired. Request a new code to try again.",
+  "dmls.option.discord_link.error.stale": "Discord role authorization is temporarily stale. DMLS will check again shortly.",
+  "dmls.option.discord_link.error.status_rate_limited": "Link verification was rate-limited. DMLS will retry shortly.",
+  "dmls.option.discord_link.error.status_timeout": "Link verification timed out. DMLS will retry shortly.",
+  "dmls.option.discord_link.error.status_network": "Could not reach the linking service. DMLS will retry shortly.",
+  "dmls.option.discord_link.error.status_service": "Could not verify the saved Discord link. DMLS will retry shortly.",
   "dmls.dropdown.usage.closed": "Press Enter to open the choices.",
   "dmls.dropdown.usage.open": "Use Up and Down to choose, Enter to select, and Escape to close.",
 
@@ -96,8 +124,8 @@
   "dmls.module.chat_spam.description": "Hide trade chat and server messages on this client.",
   "dmls.module.chat_spam.trade_chat_toggle": "Trade Chat Muted",
   "dmls.module.chat_spam.server_messages_toggle": "Server Messages Muted",
-  "dmls.module.mini_me_hud.name": "Mini Me HUD",
-  "dmls.module.mini_me_hud.description.1": "Choose which Mini Mes wander around your in-game HUD.",
+  "dmls.module.mini_me_hud.name": "AdMinis HUD",
+  "dmls.module.mini_me_hud.description.1": "Choose which AdMinis wander around your in-game HUD.",
   "dmls.module.mini_me_hud.description.2": "Chaos Mode makes fights happen constantly.",
   "dmls.module.mini_me_hud.dupey": "Show Dupey",
   "dmls.module.mini_me_hud.siaffy": "Show Siaffy",
@@ -655,7 +683,7 @@
   ,"dmls.moderation.channel.admin": "Admin"
   ,"dmls.moderation.channel.server": "Server"
   ,"dmls.moderation.settings": "Settings"
-  ,"dmls.moderation.mini_me": "Mini Me"
+  ,"dmls.moderation.mini_me": "AdMinis"
   ,"dmls.moderation.no_messages": "No live messages yet"
   ,"dmls.moderation.punishment_log": "Punishment Log"
   ,"dmls.moderation.no_punishments": "No punishment data"

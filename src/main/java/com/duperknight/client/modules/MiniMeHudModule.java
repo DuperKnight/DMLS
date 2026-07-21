@@ -10,7 +10,7 @@ import net.minecraft.text.Text;
 
 import java.util.List;
 
-/** Configures the optional animated Mini Mes shown on the in-game HUD. */
+/** Configures the optional animated AdMinis shown on the in-game HUD. */
 public final class MiniMeHudModule extends DMLSModule {
     public MiniMeHudModule() {
         super(StaffRank.HELPER);

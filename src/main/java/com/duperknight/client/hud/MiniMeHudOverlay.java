@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-/** Renders optional animated Mini Mes that wander entirely inside the in-game HUD. */
+/** Renders optional animated AdMinis that wander entirely inside the in-game HUD. */
 public final class MiniMeHudOverlay {
     private static final int MINI_ME_SIZE = 44;
     private static final int SCREEN_MARGIN = 4;
@@ -752,12 +752,12 @@ public final class MiniMeHudOverlay {
                     Identifier damageTexture = Identifier.of(DMLS.MOD_ID.toLowerCase(),
                             "mini_me_damage/" + texture.getPath().replace('/', '_'));
                     NativeImageBackedTexture backedTexture = new NativeImageBackedTexture(
-                            () -> "DMLS Mini Me damage texture " + texture, damageImage);
+                            () -> "DMLS AdMinis damage texture " + texture, damageImage);
                     MinecraftClient.getInstance().getTextureManager().registerTexture(damageTexture, backedTexture);
                     return new MiniMeFrame(texture, damageTexture, image.getWidth(), image.getHeight());
                 }
             } catch (IOException exception) {
-                DMLS.LOGGER.warn("Could not read HUD Mini Me frame dimensions for {}", texture, exception);
+                DMLS.LOGGER.warn("Could not read HUD AdMinis frame dimensions for {}", texture, exception);
                 return new MiniMeFrame(texture, texture, 800, 800);
             }
         }

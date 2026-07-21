@@ -1,6 +1,6 @@
 package com.duperknight.client.modules;
 
-/** Persisted settings owned by the Mini Me HUD module. */
+/** Persisted settings owned by the AdMinis HUD module. */
 public record MiniMeHudPreferences(
         boolean dupeyHud,
         boolean siaffyHud,
