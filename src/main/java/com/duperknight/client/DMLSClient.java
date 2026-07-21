@@ -355,7 +355,35 @@ public class DMLSClient implements ClientModInitializer {
                                                 MinecraftClient client = context.getSource().getClient();
                                                 client.send(() -> module(EventPowerToolModule.class).openScreen(client, null));
                                                 return 1;
-                                            })));
+                                            }))
+
+                                    .then(moduleLiteral("simultaneous", EventSimultaneousCommandModule.class)
+                                                        .executes(context -> {
+                                                            MinecraftClient client = context.getSource().getClient();
+                                                            client.send(() -> module(EventSimultaneousCommandModule.class).openScreen(client, null));
+                                                            return 1;
+                                                        })
+                                                        .then(ClientCommandManager.literal("command1")
+                                                                .then(ClientCommandManager.argument("command", StringArgumentType.greedyString())
+                                                                        .executes(context -> {
+                                                                            MinecraftClient client = context.getSource().getClient();
+                                                                            return module(EventSimultaneousCommandModule.class).setCommandOne(client,
+                                                                                    StringArgumentType.getString(context, "command")) ? 1 : 0;
+                                                                        })))
+                                                        .then(ClientCommandManager.literal("command2")
+                                                                .then(ClientCommandManager.argument("command", StringArgumentType.greedyString())
+                                                                        .executes(context -> {
+                                                                            MinecraftClient client = context.getSource().getClient();
+                                                                            return module(EventSimultaneousCommandModule.class).setCommandTwo(client,
+                                                                                    StringArgumentType.getString(context, "command")) ? 1 : 0;
+                                                                        })))
+                                                        .then(ClientCommandManager.literal("run")
+                                                                .executes(context -> {
+                                                                    MinecraftClient client = context.getSource().getClient();
+                                                                    EventSimultaneousCommandModule.RunResult result =
+                                                                            module(EventSimultaneousCommandModule.class).runStored(client);
+                                                                    return reportSimultaneousResult(client, result) ? 1 : 0;
+                                                                }))));
     }
 
     private static <T extends DMLSModule> T module(Class<T> type) {
@@ -508,6 +536,9 @@ public class DMLSClient implements ClientModInitializer {
                 "/dmls event randomtp", Text.translatable("dmls.help.eventrandomteleport"));
         moduleHelpLine(client, EventPowerToolModule.class,
                 "/dmls event powertool", Text.translatable("dmls.help.eventpowertool"));
+        moduleHelpLine(client, EventSimultaneousCommandModule.class,
+                "/dmls event simultaneouscommand", Text.translatable("dmls.help.eventsimultaneous"));
+
         helpLine(client, "/dmls", Text.translatable("dmls.help.menu"));
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         return 1;
@@ -603,6 +634,24 @@ public class DMLSClient implements ClientModInitializer {
             case BLOCKED -> false; // module already sent the rank, guard, or dispatch message
         };
     }
+    private boolean reportSimultaneousResult(MinecraftClient client, EventSimultaneousCommandModule.RunResult result) {
+        return switch (result) {
+            case SENT -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.event_simultaneous.sent");
+                yield true;
+            }
+            case SIMULATED -> true;
+            case INVALID_COMMAND_ONE -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.no_command_one");
+                yield false;
+            }
+            case INVALID_COMMAND_TWO -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.no_command_two");
+                yield false;
+            }
+            case RANK_BLOCKED, SERVER_BLOCKED -> false; // module already sent that message
+        };
+    }
 
     /** Defers config-backed module construction until normal client initialization. */
     private static final class ModulesHolder {
@@ -622,6 +671,7 @@ public class DMLSClient implements ClientModInitializer {
                 new EventPowerToolModule(),
                 new EventProtectModule(),
                 new EventRandomTeleportModule(),
+                new EventSimultaneousCommandModule(),
                 new GreeterModule(),
                 new GriefScanModule(),
                 new LocationsModule(),

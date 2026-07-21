@@ -143,6 +143,21 @@
   "dmls.module.uuid.description.1": "Look up as many as 10 Minecraft UUIDs using Mojang's API.",
   "dmls.module.uuid.description.2": "Separate usernames with commas or spaces; results can be copied.",
 
+  "dmls.module.event_simultaneous.name": "Event Simultaneous Commands",
+  "dmls.module.event_simultaneous.description": "Enter two commands and run them one after another.",
+  "dmls.module.event_simultaneous.command_one_field": "Command 1",
+  "dmls.module.event_simultaneous.command_one_placeholder": "e.g. summon cow",
+  "dmls.module.event_simultaneous.command_two_field": "Command 2",
+  "dmls.module.event_simultaneous.command_two_placeholder": "e.g. disguiseradius 3 creeper",
+  "dmls.module.event_simultaneous.run": "Run Both Commands",
+  "dmls.chat.event_simultaneous.sent": "Both commands were sent.",
+  "dmls.validation.event_simultaneous.command_one": "Enter a valid first command (1-256 characters, no control characters).",
+  "dmls.validation.event_simultaneous.command_two": "Enter a valid second command (1-256 characters, no control characters).",
+  "dmls.chat.event_simultaneous.set_one": "Stored command 1: §6%s§7.",
+  "dmls.chat.event_simultaneous.set_two": "Stored command 2: §6%s§7.",
+  "dmls.validation.event_simultaneous.no_command_one": "Set command 1 first with /dmls event simultaneous command1 <command>.",
+  "dmls.validation.event_simultaneous.no_command_two": "Set command 2 first with /dmls event simultaneous command2 <command>.",
+
   "dmls.module.event_random_teleport.name": "Event Random Teleport",
   "dmls.module.event_random_teleport.description": "Teleport to a random online player.",
   "dmls.module.event_random_teleport.teleport": "Teleport to Random Player",
@@ -256,6 +271,7 @@
   ,"dmls.help.eventprotect": "Opens Event Protect, or broadcasts directly when a quoted event name and land are supplied."
   ,"dmls.help.eventrandomteleport": "Enables vanish only when tracked off, then teleports to a random online player."
   ,"dmls.help.eventpowertool": "Opens the saved PowerTool command library."
+  ,"dmls.help.eventsimultaneous": "Saves commands then runs theme in sequence."
   ,"dmls.validation.required_rank": "This module is hidden for the hub-detected staff rank; server permissions are authoritative."
   ,"dmls.validation.prefix.active": "A prefix creation is still running; wait for it to finish."
   ,"dmls.validation.prefix.ign": "Enter a valid player IGN."
