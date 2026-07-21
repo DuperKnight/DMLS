@@ -4,10 +4,10 @@ import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.gui.DangerReviewScreen;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.moderation.PunishmentRequest;
-import com.duperknight.client.modules.PunishmentHelperModule;
-import com.duperknight.client.modules.PunishmentHelperModule.PunishmentOption;
-import com.duperknight.client.modules.PunishmentHelperModule.PunishmentOutcome;
-import com.duperknight.client.modules.PunishmentHelperModule.PunishmentPreparation;
+import com.duperknight.client.moderation.PunishmentWorkflow;
+import com.duperknight.client.moderation.PunishmentWorkflow.PunishmentOption;
+import com.duperknight.client.moderation.PunishmentWorkflow.PunishmentOutcome;
+import com.duperknight.client.moderation.PunishmentWorkflow.PunishmentPreparation;
 import com.duperknight.client.rulebook.RulebookRule;
 import com.duperknight.client.session.PendingConfirmation;
 import net.minecraft.client.gui.DrawContext;
@@ -115,7 +115,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
     }
 
     private String selectedType() {
-        return PunishmentHelperModule.readablePunishment(
+        return PunishmentWorkflow.readablePunishment(
                 punishmentDropdown.getValue(), durationField == null ? durationDraft : durationField.getText());
     }
 
@@ -138,19 +138,19 @@ public final class BanLogScreen extends DMLSMenuScreen {
     }
 
     private void copy() {
-        String log = PunishmentHelperModule.banLog(ignField.getText(), discordField.getText(), reasonField.getText(),
+        String log = PunishmentWorkflow.banLog(ignField.getText(), discordField.getText(), reasonField.getText(),
                 selectedType(), ticketField.getText(), commentsField.getText(), evidenceField.getText());
         client.keyboard.setClipboard(log);
         status = Text.translatable("dmls.screen.ban_log.copied");
     }
 
     private void tryPunish() {
-        PunishmentPreparation preparation = PunishmentHelperModule.preparePunishment(
+        PunishmentPreparation preparation = PunishmentWorkflow.preparePunishment(
                 ignField.getText(), punishmentDropdown.getValue(),
                 durationField == null ? durationDraft : durationField.getText(), reasonField.getText());
         if (!preparation.isValid()) {
             disarmPunishment();
-            status = Text.translatable(PunishmentHelperModule.validationTranslationKey(preparation.validation()));
+            status = Text.translatable(PunishmentWorkflow.validationTranslationKey(preparation.validation()));
             return;
         }
 
@@ -183,7 +183,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
             return false;
         }
 
-        PunishmentOutcome outcome = PunishmentHelperModule.punish(client, confirmation.request().orElseThrow());
+        PunishmentOutcome outcome = PunishmentWorkflow.punish(client, confirmation.request().orElseThrow());
         disarmPunishment();
         if (outcome == PunishmentOutcome.SENT || outcome == PunishmentOutcome.SIMULATED) {
             return true;
@@ -208,7 +208,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
     private void updatePunishButton() {
         if (punishButton == null || punishmentDropdown == null) return;
         punishButton.setMessage(punishLabel());
-        punishButton.active = PunishmentHelperModule.canPunish(punishmentDropdown.getValue());
+        punishButton.active = PunishmentWorkflow.canPunish(punishmentDropdown.getValue());
     }
 
     @Override

@@ -20,6 +20,7 @@ import com.duperknight.client.rulebook.RulebookStatus;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
@@ -145,13 +146,16 @@ public final class RulebookScreen extends DMLSMenuScreen {
                     if (selectedRule != null) client.setScreen(new BanLogScreen(this, selectedRule));
                 }).dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         makeLog.active = selectedRule != null;
+        if (selectedRule == null) {
+            makeLog.setTooltip(Tooltip.of(Text.translatable("dmls.rulebook.select_rule_tooltip")));
+        }
 
         initFindWidgets();
         rebuildFindMatches(false);
     }
 
     private Text logLabel() {
-        return selectedRule == null ? Text.translatable("dmls.button.punish.make_log")
+        return selectedRule == null ? Text.translatable("dmls.rulebook.make_log_disabled")
                 : Text.translatable("dmls.rulebook.make_log", selectedRule.id());
     }
 

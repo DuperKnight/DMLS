@@ -2,7 +2,7 @@ package com.duperknight.client;
 
 import com.duperknight.DMLS;
 import com.duperknight.client.gui.DMLSHomeScreen;
-import com.duperknight.client.gui.modules.PunishmentHelperScreen;
+import com.duperknight.client.gui.modules.RulebookScreen;
 import com.duperknight.client.moderation.ModerationChatService;
 import com.duperknight.client.moderation.ModerationScreen;
 import com.duperknight.client.moderation.PunishmentLogService;
@@ -14,6 +14,7 @@ import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.HubStaffRankDetector;
 import com.duperknight.client.utils.UpdateChecker;
 import com.duperknight.client.message.ServerMessageRouter;
+import com.duperknight.client.rulebook.RulebookService;
 import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.session.OperationCancelResult;
 import com.duperknight.client.session.OperationCoordinator;
@@ -48,9 +49,10 @@ public class DMLSClient implements ClientModInitializer {
         ServerMessageRouter.register();
         OperationCoordinator.global().register();
         registerDmlsCommand();
-        registerMenuKeybind();
+        registerScreenKeybinds();
         ModerationChatService.register();
         PunishmentLogService.register();
+        RulebookService.shared().register();
         HubStaffRankDetector.register();
         UpdateChecker.register();
         modules().forEach(DMLSModule::register);
@@ -78,6 +80,12 @@ public class DMLSClient implements ClientModInitializer {
                                 .executes(context -> sendHelp(context.getSource().getClient())))
                         .then(staffLiteral("modview")
                                 .executes(context -> openModerationScreen(context.getSource().getClient())))
+                        .then(staffLiteral("punish")
+                                .executes(context -> {
+                                    MinecraftClient client = context.getSource().getClient();
+                                    client.send(() -> client.setScreen(new RulebookScreen(null, null)));
+                                    return 1;
+                                }))
                         .then(staffLiteral("cancel")
                                 .executes(context -> cancelActiveOperation(context.getSource().getClient())))
                         .then(moduleLiteral("lands", CheckLandsModule.class)
@@ -194,12 +202,6 @@ public class DMLSClient implements ClientModInitializer {
                         .then(moduleLiteral("co", CoreProtectBuilderModule.class)
                                 .executes(context -> {
                                     module(CoreProtectBuilderModule.class).openScreenDeferred(context.getSource().getClient());
-                                    return 1;
-                                }))
-                        .then(moduleLiteral("punish", PunishmentHelperModule.class)
-                                .executes(context -> {
-                                    MinecraftClient client = context.getSource().getClient();
-                                    client.send(() -> client.setScreen(new PunishmentHelperScreen(null, module(PunishmentHelperModule.class))));
                                     return 1;
                                 }))
                         .then(moduleLiteral("greet", GreeterModule.class)
@@ -416,7 +418,7 @@ public class DMLSClient implements ClientModInitializer {
         return say;
     }
 
-    private void registerMenuKeybind() {
+    private void registerScreenKeybinds() {
         KeyBinding.Category dmlsCategory = KeyBinding.Category.create(Identifier.of("dmls", "dmls"));
         KeyBinding menuKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.dmls.open_menu",
@@ -428,6 +430,11 @@ public class DMLSClient implements ClientModInitializer {
                 InputUtil.Type.KEYSYM,
                 InputUtil.UNKNOWN_KEY.getCode(),
                 dmlsCategory));
+        KeyBinding rulebookKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.dmls.open_rulebook",
+                InputUtil.Type.KEYSYM,
+                InputUtil.UNKNOWN_KEY.getCode(),
+                dmlsCategory));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (menuKey.wasPressed()) {
@@ -435,6 +442,11 @@ public class DMLSClient implements ClientModInitializer {
             }
             while (moderationKey.wasPressed()) {
                 if (DMLSConfig.hasRecognizedStaffRank()) openModerationScreen(client);
+            }
+            while (rulebookKey.wasPressed()) {
+                if (DMLSConfig.hasRecognizedStaffRank() && !(client.currentScreen instanceof RulebookScreen)) {
+                    client.setScreen(new RulebookScreen(client.currentScreen, null));
+                }
             }
         });
     }
@@ -475,8 +487,6 @@ public class DMLSClient implements ClientModInitializer {
                 "/dmls greeter [on|off]", Text.translatable("dmls.help.greeter"));
         moduleHelpLine(client, LocationsModule.class,
                 "/dmls loc <save|tp|del|list> [name]", Text.translatable("dmls.help.loc"));
-        moduleHelpLine(client, PunishmentHelperModule.class,
-                "/dmls punish", Text.translatable("dmls.help.punish"));
         moduleHelpLine(client, CoreProtectBuilderModule.class,
                 "/dmls co", Text.translatable("dmls.help.co", StaffRank.SENIOR_MODERATOR.displayName()));
         moduleHelpLine(client, ContainerScanModule.class,
@@ -491,6 +501,7 @@ public class DMLSClient implements ClientModInitializer {
                 "/dmls say [reply]", Text.translatable("dmls.help.say"));
         helpLine(client, "/dmls cancel", Text.translatable("dmls.help.cancel"));
         helpLine(client, "/dmls modview", Text.translatable("dmls.help.modview"));
+        helpLine(client, "/dmls punish", Text.translatable("dmls.help.punish"));
         moduleHelpLine(client, EventProtectModule.class,
                 "/dmls event protect [\"event name\" <land>]", Text.translatable("dmls.help.eventprotect"));
         moduleHelpLine(client, EventRandomTeleportModule.class,
@@ -617,7 +628,6 @@ public class DMLSClient implements ClientModInitializer {
                 new MiniMeHudModule(),
                 new PrefixCreateModule(),
                 new PromoWaveModule(),
-                new PunishmentHelperModule(),
                 new UuidLookupModule(),
                 new XrayRollbackModule()
         );

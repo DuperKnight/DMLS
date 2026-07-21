@@ -1,30 +1,17 @@
-package com.duperknight.client.modules;
+package com.duperknight.client.moderation;
 
-import com.duperknight.client.gui.modules.PunishmentHelperScreen;
-import com.duperknight.client.moderation.ModerationActions;
-import com.duperknight.client.moderation.PunishmentRequest;
-import com.duperknight.client.moderation.PunishmentType;
-import com.duperknight.client.rulebook.RulebookRule;
-import com.duperknight.client.rulebook.RulebookService;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Rulebook browser and ban-log composer built from the Stoneworks rulebook. */
-public final class PunishmentHelperModule extends DMLSModule {
-    /** The minimum rank required to actually issue a ban from the helper. */
-    public static final StaffRank BAN_RANK = StaffRank.MODERATOR;
-
+/** Shared validation, formatting, and dispatch logic for the rulebook's punishment composer. */
+public final class PunishmentWorkflow {
     private static final String PREFIX = "§8[§6DMLS - Punish§8] §7";
     private static final Pattern DURATION = Pattern.compile(
             "([1-9][0-9]{0,3})(s|m|h|d|w|mo|y)", Pattern.CASE_INSENSITIVE);
@@ -82,55 +69,7 @@ public final class PunishmentHelperModule extends DMLSModule {
         BUSY
     }
 
-    public PunishmentHelperModule() {
-        super(StaffRank.HELPER);
-    }
-
-    @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.punish.name");
-    }
-
-    @Override
-    public ItemStack icon() {
-        return new ItemStack(Items.WRITTEN_BOOK);
-    }
-
-    @Override
-    public List<Text> description() {
-        return List.of(
-                Text.translatable("dmls.module.punish.description.1"),
-                Text.translatable("dmls.module.punish.description.2")
-        );
-    }
-
-    @Override
-    public ModuleCategory category() {
-        return ModuleCategory.GENERAL;
-    }
-
-    @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new PunishmentHelperScreen(parent, this));
-    }
-
-    @Override
-    public void register() {
-        RulebookService.shared().register();
-    }
-
-    public static List<RulebookRule> rules() {
-        return search("");
-    }
-
-    /** Returns rules matching the query in id, section, title or punishment. */
-    public static List<RulebookRule> search(String query) {
-        return RulebookService.shared().search(query).stream().filter(RulebookRule::punishable).toList();
-    }
-
-    /** Whether the hub-detected rank may issue bans. Retained for callers that only care about bans. */
-    public static boolean canBan() {
-        return DMLSConfig.staffRank().isAtLeast(BAN_RANK);
+    private PunishmentWorkflow() {
     }
 
     /** Whether the hub-detected rank may issue the selected punishment. */
