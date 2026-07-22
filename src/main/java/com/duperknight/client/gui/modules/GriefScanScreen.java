@@ -3,8 +3,6 @@ package com.duperknight.client.gui.modules;
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.GriefScanModule;
 import com.duperknight.client.modules.session.AbstractCoreProtectScanModule;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -63,9 +61,9 @@ public final class GriefScanScreen extends DMLSMenuScreen {
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.containers.scan"), button -> submit())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton.active = canSubmit();
+        submitButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
+                        Text.translatable("dmls.button.containers.scan"), button -> submit())
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build()));
     }
 
     private void submit() {
@@ -88,15 +86,6 @@ public final class GriefScanScreen extends DMLSMenuScreen {
         if (result.accepted()) {
             closeToGame();
         }
-    }
-
-    @Override
-    public void tick() {
-        submitButton.active = canSubmit();
-    }
-
-    private boolean canSubmit() {
-        return DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
     }
 
     @Override

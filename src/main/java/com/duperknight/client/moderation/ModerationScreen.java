@@ -8,6 +8,7 @@ import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
+import com.duperknight.client.utils.ServerGuard;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
@@ -16,6 +17,7 @@ import net.minecraft.client.gui.PlayerSkinDrawer;
 import net.minecraft.client.gui.cursor.StandardCursors;
 import net.minecraft.client.gui.screen.ChatInputSuggestor;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.input.KeyInput;
@@ -45,6 +47,8 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /** Standalone live moderation workspace; intentionally not a regular DMLS module screen. */
 public final class ModerationScreen extends Screen {
+    private static final Tooltip STONEWORKS_CONNECTION_TOOLTIP = Tooltip.of(
+            Text.translatable("dmls.tooltip.connect_stoneworks"));
     private static final int MARGIN = 10;
     private static final int GAP = 8;
     private static final int INPUT_HEIGHT = 20;
@@ -127,6 +131,7 @@ public final class ModerationScreen extends Screen {
     private float miniMeSpamEnergy;
     private long miniMeAnimationNanos = System.nanoTime();
     private long lastMiniMeClickNanos;
+    private boolean serverAllowedPreviously;
     private Rect miniMeHitbox;
     private SoundInstance activeMiniMeSquishSound;
     private long lastAutomaticAlertRevision;
@@ -214,6 +219,7 @@ public final class ModerationScreen extends Screen {
         updateTabButtons();
         setModalVisibility(modalType != null);
         updateBaseVisibility();
+        refreshServerAvailability();
     }
 
     private void sendGlobal() {
@@ -293,6 +299,7 @@ public final class ModerationScreen extends Screen {
 
     @Override
     public void tick() {
+        refreshServerAvailability();
         if (statusTicks > 0 && --statusTicks == 0) status = "";
         long revision = ModerationChatService.revision();
         if (revision != lastRevision) {
@@ -303,6 +310,7 @@ public final class ModerationScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        refreshServerAvailability();
         if (!DMLSConfig.hasRecognizedStaffRank()) {
             close();
             return;
@@ -796,7 +804,8 @@ public final class ModerationScreen extends Screen {
     private void renderModalForeground(DrawContext context) {
         PunishmentRequest.Validation validation = PunishmentRequest.validate(modalType, modalIgn,
                 punishmentDuration.getText(), punishmentReason.getText());
-        punishmentConfirm.active = validation == PunishmentRequest.Validation.VALID;
+        punishmentConfirm.active = ServerGuard.check(client).allowed()
+                && validation == PunishmentRequest.Validation.VALID;
         String command = commandPreview();
         ModalLayout modal = modalLayout();
         int previewY = modal.previewY();
@@ -858,6 +867,7 @@ public final class ModerationScreen extends Screen {
 
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
+        refreshServerAvailability();
         if (modalType != null) return super.mouseClicked(click, doubled);
         ChatInputSuggestor suggestor = activeSuggestor();
         if (suggestor != null && suggestor.mouseClicked(click)) return true;
@@ -1030,6 +1040,34 @@ public final class ModerationScreen extends Screen {
         miniMeTab.visible = visible;
     }
 
+    private void refreshServerAvailability() {
+        if (globalInput == null || channelInput == null || channelDropdown == null
+                || globalSend == null || channelSend == null || punishmentConfirm == null) {
+            return;
+        }
+        boolean serverAllowed = ServerGuard.check(client).allowed();
+        globalInput.active = serverAllowed;
+        globalInput.setEditable(serverAllowed);
+        channelInput.active = serverAllowed;
+        channelInput.setEditable(serverAllowed);
+        channelDropdown.active = serverAllowed;
+        globalSend.active = serverAllowed;
+        channelSend.active = serverAllowed;
+        globalSend.setTooltip(serverAllowed ? null : STONEWORKS_CONNECTION_TOOLTIP);
+        channelSend.setTooltip(serverAllowed ? null : STONEWORKS_CONNECTION_TOOLTIP);
+        punishmentConfirm.setTooltip(serverAllowed ? null : STONEWORKS_CONNECTION_TOOLTIP);
+        if (!serverAllowed) {
+            punishmentConfirm.active = false;
+            channelDropdown.closeDropdown();
+            if (globalSuggestor != null) globalSuggestor.setWindowActive(false);
+            if (channelSuggestor != null) channelSuggestor.setWindowActive(false);
+        } else if (!serverAllowedPreviously) {
+            onGlobalInputChanged(globalInput.getText());
+            onChannelInputChanged(channelInput.getText());
+        }
+        serverAllowedPreviously = serverAllowed;
+    }
+
     private void toggleSetting(SettingRow row) {
         if (row.key == SettingKey.AUTOMATIC_RULE) {
             if (!ModerationChatService.setAutomaticRuleEnabled(row.ruleId, !row.enabled)) {
@@ -1139,6 +1177,7 @@ public final class ModerationScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyInput input) {
+        refreshServerAvailability();
         if (channelInput != null && channelInput.isFocused() && input.isTab()
                 && channelInput.getText().startsWith("/")) return true;
         ChatInputSuggestor suggestor = activeSuggestor();
@@ -1162,11 +1201,11 @@ public final class ModerationScreen extends Screen {
                 confirmPunishment();
                 return true;
             }
-            if (globalInput.isFocused()) {
+            if (globalInput.isFocused() && globalSend.active) {
                 sendGlobal();
                 return true;
             }
-            if (channelInput.isFocused()) {
+            if (channelInput.isFocused() && channelSend.active) {
                 sendSelected();
                 return true;
             }

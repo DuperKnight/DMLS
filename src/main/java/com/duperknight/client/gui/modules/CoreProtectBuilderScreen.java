@@ -4,8 +4,6 @@ import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.gui.DangerReviewScreen;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.CoreProtectBuilderModule;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -88,8 +86,10 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        runButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.co.run"), button -> submit())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        runButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
+                        Text.translatable("dmls.button.co.run"), button -> submit())
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build()),
+                () -> result.valid());
         refresh();
     }
 
@@ -142,20 +142,10 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
         result = CoreProtectBuilderModule.build(mode, userField.getText(), timeField.getText(), radiusField.getText(),
                 action, includeField.getText(), excludeField.getText());
         status = Text.empty();
-        if (runButton != null) {
-            runButton.active = result.valid() && (DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client));
-        }
         if (copyButton != null) {
             copyButton.active = result.valid();
         }
         updateScrollableContentHeight(previewContentHeight());
-    }
-
-    @Override
-    public void tick() {
-        if (runButton != null) {
-            runButton.active = result.valid() && (DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client));
-        }
     }
 
     @Override

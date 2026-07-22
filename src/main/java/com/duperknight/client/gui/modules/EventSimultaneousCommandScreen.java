@@ -2,8 +2,6 @@ package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.EventSimultaneousCommandModule;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -83,9 +81,10 @@ public final class EventSimultaneousCommandScreen extends DMLSMenuScreen {
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        runButton = addDrawableChild(ButtonWidget.builder(
+        runButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
                         Text.translatable("dmls.module.event_simultaneous.run"), button -> runCommands())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build()),
+                () -> EventSimultaneousCommandModule.validateCommands(commands).isPresent());
 
         if (!commandFields.isEmpty()) {
             setInitialFocus(commandFields.get(0));
@@ -135,9 +134,6 @@ public final class EventSimultaneousCommandScreen extends DMLSMenuScreen {
             validation = Text.empty();
         }
 
-        if (runButton != null) {
-            runButton.active = allValid && (DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client));
-        }
     }
 
     private void updateSuggestion(TextFieldWidget field, int index) {

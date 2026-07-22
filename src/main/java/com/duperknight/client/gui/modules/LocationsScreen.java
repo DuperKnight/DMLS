@@ -36,7 +36,7 @@ public final class LocationsScreen extends DMLSMenuScreen {
             LocationsModule.SavedLocation location = entry.getValue();
             int offset = row * scaled(ROW_HEIGHT_UNSCALED);
             String server = location.isBound() ? location.server() : "unbound";
-            addScrollableChild(ButtonWidget.builder(
+            registerCommandControl(addScrollableChild(ButtonWidget.builder(
                             Text.literal(name + " §8(" + location.x() + ", " + location.y() + ", " + location.z()
                                     + " · " + location.world() + " @ " + server + ")"),
                             button -> {
@@ -48,7 +48,7 @@ public final class LocationsScreen extends DMLSMenuScreen {
                                     status = Text.translatable("dmls.validation.locations.teleport_blocked");
                                 }
                             })
-                    .dimensions(formX, contentY(offset), formWidth - deleteWidth - scaled(4), STANDARD_BUTTON_HEIGHT).build(), offset);
+                    .dimensions(formX, contentY(offset), formWidth - deleteWidth - scaled(4), STANDARD_BUTTON_HEIGHT).build(), offset));
             addScrollableChild(ButtonWidget.builder(Text.literal("✕"), button -> {
                         status = Text.empty();
                         if (module.delete(client, name) == LocationsModule.Outcome.DELETED) {

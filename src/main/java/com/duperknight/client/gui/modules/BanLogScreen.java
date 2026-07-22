@@ -92,9 +92,11 @@ public final class BanLogScreen extends DMLSMenuScreen {
         addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.ban_log.copy"), button -> copy())
                 .dimensions(footerX + footerWidth + footerGap, footerButtonY(), footerWidth,
                         STANDARD_BUTTON_HEIGHT).build());
-        punishButton = addDrawableChild(ButtonWidget.builder(punishLabel(), button -> tryPunish())
+        punishButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
+                        punishLabel(), button -> tryPunish())
                 .dimensions(footerX + (footerWidth + footerGap) * 2, footerButtonY(), footerWidth,
-                        STANDARD_BUTTON_HEIGHT).build());
+                        STANDARD_BUTTON_HEIGHT).build()),
+                () -> PunishmentWorkflow.canPunish(punishmentDropdown.getValue()));
         updatePunishButton();
     }
 
@@ -208,7 +210,6 @@ public final class BanLogScreen extends DMLSMenuScreen {
     private void updatePunishButton() {
         if (punishButton == null || punishmentDropdown == null) return;
         punishButton.setMessage(punishLabel());
-        punishButton.active = PunishmentWorkflow.canPunish(punishmentDropdown.getValue());
     }
 
     @Override

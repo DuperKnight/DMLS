@@ -25,6 +25,7 @@
   "dmls.button.give_pet": "Give Pet",
   "dmls.message.no_modules": "No modules are available for your staff rank.",
   "dmls.message.staff_required": "You must be Stoneworks staff to use DMLS.",
+  "dmls.tooltip.connect_stoneworks": "Connect to Stoneworks to use this module.",
   "dmls.welcome.title": "Welcome to DMLS!",
   "dmls.welcome.summary": "These are the %s modules available to your staff rank.",
   "dmls.welcome.open_menu_hint": "Reopen this menu with /dmls, or assign the Open DMLS Menu keybind under Options → Controls → Key Binds.",

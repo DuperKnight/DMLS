@@ -2,8 +2,6 @@ package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.EventProtectModule;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -57,21 +55,9 @@ public final class EventProtectScreen extends DMLSMenuScreen {
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        broadcastButton = addDrawableChild(ButtonWidget.builder(
+        broadcastButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
                         Text.translatable("dmls.module.event_protect.broadcast"), button -> broadcast())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        refreshBroadcastButton();
-    }
-
-    @Override
-    public void tick() {
-        refreshBroadcastButton();
-    }
-
-    private void refreshBroadcastButton() {
-        if (broadcastButton != null) {
-            broadcastButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
-        }
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build()));
     }
 
     private void broadcast() {

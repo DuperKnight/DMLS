@@ -3,8 +3,6 @@ package com.duperknight.client.gui.modules;
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.DonorPetModule;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -50,9 +48,9 @@ public final class DonorPetScreen extends DMLSMenuScreen {
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.give_pet"), button -> submit())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
+        submitButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
+                        Text.translatable("dmls.button.give_pet"), button -> submit())
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build()));
     }
 
     private void submit() {
@@ -73,11 +71,6 @@ public final class DonorPetScreen extends DMLSMenuScreen {
             case FAILED -> Text.translatable("dmls.validation.operation.start_failed");
             case STARTED -> Text.empty();
         };
-    }
-
-    @Override
-    public void tick() {
-        submitButton.active = DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client);
     }
 
     @Override

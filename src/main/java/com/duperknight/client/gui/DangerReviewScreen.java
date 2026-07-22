@@ -48,10 +48,10 @@ public final class DangerReviewScreen extends DMLSMenuScreen {
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        confirmButton = addDrawableChild(ButtonWidget.builder(confirmLabel.copy().styled(style -> style.withColor(0xFFFF5555)),
-                        button -> confirm())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        confirmButton.active = confirmationActive.getAsBoolean();
+        confirmButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
+                        confirmLabel.copy().styled(style -> style.withColor(0xFFFF5555)), button -> confirm())
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build()),
+                confirmationActive);
     }
 
     private void confirm() {

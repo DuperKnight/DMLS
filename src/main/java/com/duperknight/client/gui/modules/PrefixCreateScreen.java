@@ -3,8 +3,6 @@ package com.duperknight.client.gui.modules;
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.PrefixCreateModule;
-import com.duperknight.client.utils.ClientUtils;
-import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.PrefixTextFormatter;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -110,8 +108,10 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.create"), button -> submit())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        submitButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
+                        Text.translatable("dmls.button.create"), button -> submit())
+                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build()),
+                () -> validation.valid());
         refreshValidation();
     }
 
@@ -146,9 +146,6 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
         }
         preview = PrefixTextFormatter.parse(prefixTextField.getText());
         validation = PrefixCreateModule.validate(ignField.getText().trim(), selectedLimit(), prefixIdField.getText().trim(), prefixTextField.getText());
-        if (submitButton != null) {
-            submitButton.active = (DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client)) && validation.valid();
-        }
         updateScrollableContentHeight(contentHeight());
     }
 

@@ -67,14 +67,15 @@ public final class EventPowerToolScreen extends DMLSMenuScreen {
             refreshValidation();
         });
 
-        addScrollableChild(ButtonWidget.builder(Text.translatable("dmls.button.event_powertool.clear"), button -> {
+        registerCommandControl(addScrollableChild(ButtonWidget.builder(
+                Text.translatable("dmls.button.event_powertool.clear"), button -> {
             status = Text.empty();
             if (module.clear(client)) {
                 closeToGame();
             } else {
                 status = Text.translatable("dmls.validation.event_powertool.action_blocked");
             }
-        }).dimensions(formX, contentY(scaled(92)), formWidth, STANDARD_BUTTON_HEIGHT).build(), scaled(92));
+        }).dimensions(formX, contentY(scaled(92)), formWidth, STANDARD_BUTTON_HEIGHT).build(), scaled(92)));
 
         int deleteWidth = scaled(20);
         int gap = scaled(4);
@@ -84,7 +85,7 @@ public final class EventPowerToolScreen extends DMLSMenuScreen {
             String command = entry.getValue();
             int offset = rowsOffset + row * scaled(ROW_HEIGHT_UNSCALED);
             Text rowText = Text.literal(name + " ").append(Text.literal("/" + command).formatted(Formatting.DARK_GRAY));
-            addScrollableChild(ButtonWidget.builder(rowText, button -> {
+            registerCommandControl(addScrollableChild(ButtonWidget.builder(rowText, button -> {
                         status = Text.empty();
                         if (module.load(client, name)) {
                             closeToGame();
@@ -93,7 +94,7 @@ public final class EventPowerToolScreen extends DMLSMenuScreen {
                         }
                     })
                     .dimensions(formX, contentY(offset), formWidth - deleteWidth - gap,
-                            STANDARD_BUTTON_HEIGHT).build(), offset);
+                            STANDARD_BUTTON_HEIGHT).build(), offset));
             addScrollableChild(ButtonWidget.builder(Text.literal("✕"), button -> {
                         status = Text.empty();
                         if (module.delete(client, name)) {
