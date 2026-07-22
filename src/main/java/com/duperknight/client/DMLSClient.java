@@ -20,6 +20,7 @@ import com.duperknight.client.session.OperationCancelResult;
 import com.duperknight.client.session.OperationCoordinator;
 import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.AlertWordlist;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.api.ClientModInitializer;
@@ -377,6 +378,16 @@ public class DMLSClient implements ClientModInitializer {
                                                                             return module(EventSimultaneousCommandModule.class).setCommandTwo(client,
                                                                                     StringArgumentType.getString(context, "command")) ? 1 : 0;
                                                                         })))
+                                                        .then(ClientCommandManager.literal("set")
+                                                                .then(ClientCommandManager.argument("slot", IntegerArgumentType.integer(
+                                                                                1, EventSimultaneousCommandModule.MAX_COMMANDS))
+                                                                        .then(ClientCommandManager.argument("command", StringArgumentType.greedyString())
+                                                                                .executes(context -> {
+                                                                                    MinecraftClient client = context.getSource().getClient();
+                                                                                    return module(EventSimultaneousCommandModule.class).setCommand(client,
+                                                                                            IntegerArgumentType.getInteger(context, "slot"),
+                                                                                            StringArgumentType.getString(context, "command")) ? 1 : 0;
+                                                                                }))))
                                                         .then(ClientCommandManager.literal("run")
                                                                 .executes(context -> {
                                                                     MinecraftClient client = context.getSource().getClient();
@@ -537,7 +548,7 @@ public class DMLSClient implements ClientModInitializer {
         moduleHelpLine(client, EventPowerToolModule.class,
                 "/dmls event powertool", Text.translatable("dmls.help.eventpowertool"));
         moduleHelpLine(client, EventSimultaneousCommandModule.class,
-                "/dmls event simultaneouscommand", Text.translatable("dmls.help.eventsimultaneous"));
+                "/dmls event simultaneous [set <1-5> <command>|run]", Text.translatable("dmls.help.eventsimultaneous"));
 
         helpLine(client, "/dmls", Text.translatable("dmls.help.menu"));
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
@@ -637,16 +648,16 @@ public class DMLSClient implements ClientModInitializer {
     private boolean reportSimultaneousResult(MinecraftClient client, EventSimultaneousCommandModule.RunResult result) {
         return switch (result) {
             case SENT -> {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.event_simultaneous.sent");
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.event_simultaneous.sent_stored");
                 yield true;
             }
             case SIMULATED -> true;
-            case INVALID_COMMAND_ONE -> {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.no_command_one");
+            case INVALID_COMMAND_COUNT -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.stored_count");
                 yield false;
             }
-            case INVALID_COMMAND_TWO -> {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.no_command_two");
+            case INVALID_COMMAND -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.stored_gap");
                 yield false;
             }
             case RANK_BLOCKED, SERVER_BLOCKED -> false; // module already sent that message
