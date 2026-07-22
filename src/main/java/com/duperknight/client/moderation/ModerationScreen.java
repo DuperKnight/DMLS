@@ -3,6 +3,7 @@ package com.duperknight.client.moderation;
 import com.duperknight.DMLS;
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.gui.widgets.DropdownWidget;
+import com.duperknight.client.instaban.InstaBanChatHighlight;
 import com.duperknight.client.modules.ChatAlertsModule;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.session.CommandDispatch;
@@ -30,6 +31,7 @@ import net.minecraft.screen.ScreenTexts;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.OrderedText;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Formatting;
@@ -62,6 +64,7 @@ public final class ModerationScreen extends Screen {
     private static final int ALERT_BACKGROUND = 0x805F4710;
     private static final int AUTOMATIC_ALERT_BACKGROUND = 0xA0701515;
     private static final int AUTOMATIC_ALERT_HOVER_BACKGROUND = 0xB0882525;
+    private static final int INSTA_BAN_BACKGROUND_ALPHA = 0x60000000;
     private static final int MENU_WIDTH = 118;
     private static final int SUBMENU_WIDTH = 90;
     private static final int SCROLLBAR_INSET = 3;
@@ -86,6 +89,8 @@ public final class ModerationScreen extends Screen {
     );
     private final Screen parent;
     private final PunishmentLogSource punishmentLogSource;
+    private final List<ChatLineHitbox> chatLineHitboxes = new ArrayList<>();
+    private Style hoveredChatStyle;
     private final PaneState globalPane = new PaneState();
     private final PaneState channelPane = new PaneState();
     private final Map<String, SkinTextures> punishmentSkinCache = new HashMap<>();
@@ -323,6 +328,8 @@ public final class ModerationScreen extends Screen {
         // Calling Screen.renderBackground here attempts a second blur and crashes.
         context.fill(0, 0, width, height, 0x70000000);
         Layout layout = layout();
+        chatLineHitboxes.clear();
+        hoveredChatStyle = null;
         messageHitboxes.clear();
         punishmentHitboxes.clear();
         boolean contextMenuConsumesPointer = isPointerOverContextMenu(mouseX, mouseY);
@@ -364,6 +371,11 @@ public final class ModerationScreen extends Screen {
             context.drawStrokedRectangle(x, y, statusWidth, statusHeight, PANEL_BORDER);
             context.drawCenteredTextWithShadow(textRenderer, Text.literal(status), width / 2,
                     y + STATUS_VERTICAL_PADDING, 0xFFFFFFFF);
+        }
+        if (modalType == null && !contextMenuConsumesPointer && hoveredChatStyle != null
+                && hoveredChatStyle.getHoverEvent() != null) {
+            context.createNewRootLayer();
+            context.drawHoverEvent(textRenderer, hoveredChatStyle, mouseX, mouseY);
         }
     }
 
@@ -411,7 +423,11 @@ public final class ModerationScreen extends Screen {
             boolean alert = player && preferences.highlightAlerts()
                     && ChatAlertsModule.findWordlistMatch(message.messageBody()).isPresent();
             boolean automaticAlert = player && automaticFlags.contains(message.sequence());
-            if (automaticAlert) {
+            int instaBanBackground = InstaBanChatHighlight.backgroundRgb(message.text().asOrderedText());
+            if (instaBanBackground != InstaBanChatHighlight.NONE) {
+                context.fill(rowLeft, blockY, contentRight, blockY + block.height(),
+                        INSTA_BAN_BACKGROUND_ALPHA | instaBanBackground);
+            } else if (automaticAlert) {
                 context.fill(rowLeft, blockY, contentRight, blockY + block.height(),
                         hovered || selected ? AUTOMATIC_ALERT_HOVER_BACKGROUND : AUTOMATIC_ALERT_BACKGROUND);
             } else if (alert || hovered || selected) {
@@ -425,6 +441,16 @@ public final class ModerationScreen extends Screen {
             int y = blockY + 2;
             for (OrderedText line : block.lines()) {
                 context.drawTextWithShadow(textRenderer, line, innerX, y, 0xFFFFFFFF);
+                ChatLineHitbox textHitbox = new ChatLineHitbox(line, innerX, y,
+                        textRenderer.getWidth(line), textRenderer.fontHeight, pane);
+                chatLineHitboxes.add(textHitbox);
+                Style hoveredStyle = textHitbox.styleAt(textRenderer, mouseX, mouseY);
+                if (hoveredStyle != null) {
+                    hoveredChatStyle = hoveredStyle;
+                    if (hoveredStyle.getClickEvent() != null) {
+                        context.setCursor(StandardCursors.POINTING_HAND);
+                    }
+                }
                 y += lineHeight;
             }
         }
@@ -933,6 +959,13 @@ public final class ModerationScreen extends Screen {
         }
 
         if (click.button() == 0) {
+            for (ChatLineHitbox hitbox : chatLineHitboxes) {
+                Style style = hitbox.styleAt(textRenderer, click.x(), click.y());
+                if (style != null && style.getClickEvent() != null) {
+                    handleClickEvent(style.getClickEvent(), client, this);
+                    return true;
+                }
+            }
             for (PunishmentHitbox hitbox : punishmentHitboxes) {
                 if (hitbox.contains(click.x(), click.y())) {
                     client.setScreen(new PunishmentDetailsScreen(this, hitbox.entry()));
@@ -1512,6 +1545,26 @@ public final class ModerationScreen extends Screen {
     }
 
     private record MessageBlock(ModerationMessage message, List<OrderedText> lines, int offset, int height) {
+    }
+
+    private record ChatLineHitbox(OrderedText text, int x, int y, int width, int height, Rect clip) {
+        Style styleAt(net.minecraft.client.font.TextRenderer renderer, double mouseX, double mouseY) {
+            if (mouseX < x || mouseX >= x + width || mouseY < Math.max(y, clip.y())
+                    || mouseY >= Math.min(y + height, clip.bottom())) return null;
+            float target = (float) (mouseX - x);
+            float[] offset = {0.0F};
+            Style[] found = {null};
+            text.accept((index, style, codePoint) -> {
+                int characterWidth = renderer.getWidth(OrderedText.styled(codePoint, style));
+                if (target < offset[0] + characterWidth) {
+                    found[0] = style;
+                    return false;
+                }
+                offset[0] += characterWidth;
+                return true;
+            });
+            return found[0];
+        }
     }
 
     private record MessageHitbox(ModerationMessage message, PaneState state,

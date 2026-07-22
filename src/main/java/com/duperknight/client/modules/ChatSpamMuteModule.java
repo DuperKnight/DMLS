@@ -50,18 +50,35 @@ public final class ChatSpamMuteModule extends DMLSModule {
     }
 
     private boolean shouldHide(Text message) {
+        return shouldHideForCurrentSettings(ChatUtils.cleanLine(message.getString()));
+    }
+
+    /** Applies the live module settings to another client-side chat surface. */
+    public static boolean shouldHideForCurrentSettings(String cleanMessage) {
         return shouldHide(
-                ChatUtils.cleanLine(message.getString()),
+                cleanMessage,
                 DMLSConfig.tradeChatMuted(),
-                DMLSConfig.serverMessagesMuted());
+                DMLSConfig.serverMessagesMuted(),
+                DMLSConfig.serverSummonMessagesMuted());
+    }
+
+    /** Moderation keeps trade chat visible while sharing the two server-message filters. */
+    public static boolean shouldHideInModerationView(String cleanMessage) {
+        return shouldHide(
+                cleanMessage,
+                false,
+                DMLSConfig.serverMessagesMuted(),
+                DMLSConfig.serverSummonMessagesMuted());
     }
 
     /** Pure form of the event filter policy, shared by both chat origins and fixture tests. */
     static boolean shouldHide(
             String cleanMessage,
             boolean tradeChatMuted,
-            boolean serverMessagesMuted
+            boolean serverMessagesMuted,
+            boolean serverSummonMessagesMuted
     ) {
-        return ChatSpamFilterPolicy.shouldHide(cleanMessage, tradeChatMuted, serverMessagesMuted);
+        return ChatSpamFilterPolicy.shouldHide(
+                cleanMessage, tradeChatMuted, serverMessagesMuted, serverSummonMessagesMuted);
     }
 }

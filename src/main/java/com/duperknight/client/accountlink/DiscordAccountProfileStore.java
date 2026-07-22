@@ -25,7 +25,9 @@ public final class DiscordAccountProfileStore {
     }
 
     public static synchronized boolean save(DiscordAccountProfile profile) {
-        return saveTo(profileFile(), profile);
+        boolean saved = saveTo(profileFile(), profile);
+        if (saved && profile != null) DiscordLinkAvailability.markLinked(profile.minecraftUuid());
+        return saved;
     }
 
     public static synchronized Optional<DiscordAccountProfile> load(UUID minecraftUuid) {
@@ -33,7 +35,9 @@ public final class DiscordAccountProfileStore {
     }
 
     public static synchronized boolean delete(UUID minecraftUuid) {
-        return deleteFrom(profileFile(), minecraftUuid);
+        boolean deleted = deleteFrom(profileFile(), minecraftUuid);
+        if (deleted) DiscordLinkAvailability.markUnlinked(minecraftUuid);
+        return deleted;
     }
 
     static boolean saveTo(Path file, DiscordAccountProfile profile) {

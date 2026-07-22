@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.duperknight.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ChatHudAccessor",
+    "ChatHudBackgroundMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

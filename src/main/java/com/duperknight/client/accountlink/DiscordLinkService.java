@@ -29,7 +29,7 @@ public final class DiscordLinkService {
             .connectTimeout(TIMEOUT)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
-    private static final DiscordLinkRequestManager REQUEST_MANAGER = new DiscordLinkRequestManager();
+    private static final DiscordLinkRequestManager REQUEST_MANAGER = DiscordLinkRequestManager.shared();
 
     private DiscordLinkService() {
     }
@@ -69,7 +69,7 @@ public final class DiscordLinkService {
                         .handle((response, error) -> {
                             if (error != null) return failureResult(error);
                             return parseExecutionResponse(response.statusCode(), response.body());
-                        }));
+                        })).exceptionally(DiscordLinkService::failureResult);
     }
 
     public static CompletableFuture<LinkStatusResult> checkStatus(UUID minecraftUuid, String clientToken) {
@@ -102,7 +102,7 @@ public final class DiscordLinkService {
                         .handle((response, error) -> {
                             if (error != null) return statusFailureResult(error);
                             return parseStatusExecutionResponse(response.statusCode(), response.body(), minecraftUuid);
-                        }));
+                        })).exceptionally(DiscordLinkService::statusFailureResult);
     }
 
     public static CompletableFuture<UnlinkResult> unlink(String clientToken) {
@@ -134,17 +134,16 @@ public final class DiscordLinkService {
                         .handle((response, error) -> {
                             if (error != null) return unlinkFailureResult(error);
                             return parseUnlinkExecutionResponse(response.statusCode(), response.body());
-                        }));
+                        })).exceptionally(DiscordLinkService::unlinkFailureResult);
     }
 
     static Result parseExecutionResponse(int httpStatus, String body) {
+        if (httpStatus == 429) return Result.failure(Status.RATE_LIMITED, responseMessage(body));
+        if (httpStatus < 200 || httpStatus >= 300) {
+            return Result.failure(Status.SERVICE_ERROR, responseMessage(body));
+        }
         try {
             JsonObject outer = JsonParser.parseString(body).getAsJsonObject();
-            if (httpStatus == 429) return Result.failure(Status.RATE_LIMITED, outerMessage(outer));
-            if (httpStatus < 200 || httpStatus >= 300) {
-                return Result.failure(Status.SERVICE_ERROR, outerMessage(outer));
-            }
-
             JsonElement responseStatusElement = outer.get("responseStatusCode");
             JsonElement responseBodyElement = outer.get("responseBody");
             if (responseStatusElement == null || !responseStatusElement.isJsonPrimitive()
@@ -166,7 +165,7 @@ public final class DiscordLinkService {
             String expiresAt = requiredString(functionResponse, "expiresAt");
             int pollAfterSeconds = functionResponse.get("pollAfterSeconds").getAsInt();
             if (!LINK_CODE.matcher(code).matches() || !CLIENT_TOKEN.matcher(clientToken).matches()
-                    || expiresAt.isBlank() || pollAfterSeconds < 1) {
+                    || expiresAt.isBlank() || pollAfterSeconds < 1 || pollAfterSeconds > 300) {
                 return Result.failure(Status.MALFORMED_RESPONSE, "");
             }
             return Result.success(code, clientToken, expiresAt, pollAfterSeconds);
@@ -176,15 +175,14 @@ public final class DiscordLinkService {
     }
 
     static LinkStatusResult parseStatusExecutionResponse(int httpStatus, String body, UUID expectedUuid) {
+        if (httpStatus == 429) {
+            return LinkStatusResult.failure(LinkStatus.RATE_LIMITED, responseMessage(body));
+        }
+        if (httpStatus < 200 || httpStatus >= 300) {
+            return LinkStatusResult.failure(LinkStatus.SERVICE_ERROR, responseMessage(body));
+        }
         try {
             JsonObject outer = JsonParser.parseString(body).getAsJsonObject();
-            if (httpStatus == 429) {
-                return LinkStatusResult.failure(LinkStatus.RATE_LIMITED, outerMessage(outer));
-            }
-            if (httpStatus < 200 || httpStatus >= 300) {
-                return LinkStatusResult.failure(LinkStatus.SERVICE_ERROR, outerMessage(outer));
-            }
-
             JsonElement statusElement = outer.get("responseStatusCode");
             JsonElement bodyElement = outer.get("responseBody");
             if (statusElement == null || !statusElement.isJsonPrimitive()
@@ -224,7 +222,7 @@ public final class DiscordLinkService {
 
             JsonElement pollElement = functionResponse.get("pollAfterSeconds");
             int pollAfterSeconds = pollElement == null ? 5 : pollElement.getAsInt();
-            if (pollAfterSeconds < 1) {
+            if (pollAfterSeconds < 1 || pollAfterSeconds > 300) {
                 return LinkStatusResult.failure(LinkStatus.MALFORMED_RESPONSE, "");
             }
             return LinkStatusResult.pending(pollAfterSeconds);
@@ -234,13 +232,14 @@ public final class DiscordLinkService {
     }
 
     static UnlinkResult parseUnlinkExecutionResponse(int httpStatus, String body) {
+        if (httpStatus == 429) {
+            return UnlinkResult.failure(UnlinkStatus.RATE_LIMITED, responseMessage(body));
+        }
+        if (httpStatus < 200 || httpStatus >= 300) {
+            return UnlinkResult.failure(UnlinkStatus.SERVICE_ERROR, responseMessage(body));
+        }
         try {
             JsonObject outer = JsonParser.parseString(body).getAsJsonObject();
-            if (httpStatus == 429) return UnlinkResult.failure(UnlinkStatus.RATE_LIMITED, outerMessage(outer));
-            if (httpStatus < 200 || httpStatus >= 300) {
-                return UnlinkResult.failure(UnlinkStatus.SERVICE_ERROR, outerMessage(outer));
-            }
-
             JsonElement statusElement = outer.get("responseStatusCode");
             JsonElement bodyElement = outer.get("responseBody");
             if (statusElement == null || !statusElement.isJsonPrimitive()
@@ -287,6 +286,14 @@ public final class DiscordLinkService {
     private static String outerMessage(JsonObject object) {
         JsonElement message = object.get("message");
         return message != null && message.isJsonPrimitive() ? message.getAsString() : "";
+    }
+
+    private static String responseMessage(String body) {
+        try {
+            return outerMessage(JsonParser.parseString(body).getAsJsonObject());
+        } catch (RuntimeException ignored) {
+            return "";
+        }
     }
 
     private static String functionMessage(JsonObject object) {

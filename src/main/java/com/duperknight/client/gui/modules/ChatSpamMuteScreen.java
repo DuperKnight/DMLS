@@ -23,7 +23,7 @@ public final class ChatSpamMuteScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        configureScrollableContent(module, scaled(74));
+        configureScrollableContent(module, scaled(104));
         int controlWidth = scaled(200);
         int x = width / 2 - controlWidth / 2;
         addScrollableChild(CyclingButtonWidget.builder((Boolean value) -> Text.translatable(value ? "dmls.option.on" : "dmls.option.off")
@@ -49,6 +49,20 @@ public final class ChatSpamMuteScreen extends DMLSMenuScreen {
                                 saveStatus = Text.empty();
                             }
                         }), scaled(30));
+        addScrollableChild(CyclingButtonWidget.builder((Boolean value) -> Text.translatable(
+                                value ? "dmls.option.on" : "dmls.option.off")
+                        .formatted(value ? Formatting.GREEN : Formatting.RED),
+                        DMLSConfig.serverSummonMessagesMuted()).values(true, false)
+                .build(x, contentY(scaled(60)), controlWidth, STANDARD_BUTTON_HEIGHT,
+                        Text.translatable("dmls.module.chat_spam.server_summon_messages_toggle"),
+                        (button, value) -> {
+                            if (!DMLSConfig.setServerSummonMessagesMuted(value)) {
+                                button.setValue(DMLSConfig.serverSummonMessagesMuted());
+                                saveStatus = Text.translatable("dmls.validation.config.save_failed");
+                            } else {
+                                saveStatus = Text.empty();
+                            }
+                        }), scaled(60));
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
     }
@@ -58,7 +72,7 @@ public final class ChatSpamMuteScreen extends DMLSMenuScreen {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
         beginContentScissor(context);
-        int statusY = contentY(scaled(60));
+        int statusY = contentY(scaled(90));
         if (!saveStatus.getString().isEmpty() && isContentVisible(statusY, textRenderer.fontHeight)) {
             context.drawCenteredTextWithShadow(textRenderer, saveStatus, width / 2, statusY, 0xFFFF5555);
         }

@@ -25,4 +25,9 @@ public record ModerationMessage(
     public Optional<UUID> capturedUuidOptional() {
         return Optional.ofNullable(capturedUuid);
     }
+
+    public ModerationMessage withText(Text replacement) {
+        return new ModerationMessage(sequence, time, replacement, cleanText, channel, playerMessage,
+                visibleUsername, messageBody, capturedIgn, capturedUuid);
+    }
 }

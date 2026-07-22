@@ -15,12 +15,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-/** Persists Appwrite client tokens locally without putting them in the general DMLS settings file. */
+/** Persists Appwrite client tokens in a private local JSON file. */
 public final class DiscordLinkTokenStore {
     private static final Pattern CLIENT_TOKEN = Pattern.compile("dmls_[A-Za-z0-9_-]{43}");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -31,18 +32,15 @@ public final class DiscordLinkTokenStore {
     }
 
     public static synchronized boolean save(UUID minecraftUuid, String clientToken) {
-        Path tokenFile = FabricLoader.getInstance().getConfigDir().resolve("dmls-account-links.json");
-        return saveTo(tokenFile, minecraftUuid, clientToken);
+        return saveTo(tokenFile(), minecraftUuid, clientToken);
     }
 
     public static synchronized Optional<String> load(UUID minecraftUuid) {
-        Path tokenFile = FabricLoader.getInstance().getConfigDir().resolve("dmls-account-links.json");
-        return loadFrom(tokenFile, minecraftUuid);
+        return loadFrom(tokenFile(), minecraftUuid);
     }
 
     public static synchronized boolean delete(UUID minecraftUuid) {
-        Path tokenFile = FabricLoader.getInstance().getConfigDir().resolve("dmls-account-links.json");
-        return deleteFrom(tokenFile, minecraftUuid);
+        return deleteFrom(tokenFile(), minecraftUuid);
     }
 
     static boolean saveTo(Path tokenFile, UUID minecraftUuid, String clientToken) {
@@ -54,7 +52,7 @@ public final class DiscordLinkTokenStore {
             Files.createDirectories(tokenFile.getParent());
             JsonObject root = readExisting(tokenFile);
             JsonObject tokens = objectOrNew(root, "tokens");
-            tokens.addProperty(minecraftUuid.toString().toLowerCase(), clientToken);
+            tokens.addProperty(account(minecraftUuid), clientToken);
             root.addProperty("version", 1);
             root.add("tokens", tokens);
             writeRoot(tokenFile, root);
@@ -71,7 +69,7 @@ public final class DiscordLinkTokenStore {
             JsonObject root = readExisting(tokenFile);
             JsonElement tokensElement = root.get("tokens");
             if (tokensElement == null || !tokensElement.isJsonObject()) return Optional.empty();
-            JsonElement tokenElement = tokensElement.getAsJsonObject().get(minecraftUuid.toString().toLowerCase());
+            JsonElement tokenElement = tokensElement.getAsJsonObject().get(account(minecraftUuid));
             if (tokenElement == null || !tokenElement.isJsonPrimitive()) return Optional.empty();
             String token = tokenElement.getAsString();
             return CLIENT_TOKEN.matcher(token).matches() ? Optional.of(token) : Optional.empty();
@@ -86,15 +84,23 @@ public final class DiscordLinkTokenStore {
         try {
             JsonObject root = readExisting(tokenFile);
             JsonObject tokens = objectOrNew(root, "tokens");
-            tokens.remove(minecraftUuid.toString().toLowerCase());
-            root.addProperty("version", 1);
-            root.add("tokens", tokens);
-            writeRoot(tokenFile, root);
+            tokens.remove(account(minecraftUuid));
+            if (tokens.isEmpty()) {
+                Files.deleteIfExists(tokenFile);
+            } else {
+                root.addProperty("version", 1);
+                root.add("tokens", tokens);
+                writeRoot(tokenFile, root);
+            }
             return true;
         } catch (IOException | RuntimeException error) {
             DMLS.LOGGER.warn("Could not delete the Discord link token", error);
             return false;
         }
+    }
+
+    private static Path tokenFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("dmls-account-links.json");
     }
 
     private static void writeRoot(Path tokenFile, JsonObject root) throws IOException {
@@ -135,5 +141,9 @@ public final class DiscordLinkTokenStore {
         } catch (UnsupportedOperationException ignored) {
             // Windows and other non-POSIX file systems apply their own per-user access controls.
         }
+    }
+
+    private static String account(UUID minecraftUuid) {
+        return minecraftUuid.toString().toLowerCase(Locale.ROOT);
     }
 }

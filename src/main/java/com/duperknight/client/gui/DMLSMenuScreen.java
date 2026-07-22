@@ -4,6 +4,7 @@ import com.duperknight.DMLS;
 import com.duperknight.client.accountlink.DiscordAccountProfileStore;
 import com.duperknight.client.accountlink.DiscordAvatarCache;
 import com.duperknight.client.accountlink.DiscordLinkService;
+import com.duperknight.client.accountlink.DiscordLinkAvailability;
 import com.duperknight.client.accountlink.DiscordLinkTokenStore;
 import com.duperknight.client.gui.widgets.DiscordAccountWidget;
 import com.duperknight.client.gui.widgets.DropdownWidget;
@@ -545,7 +546,6 @@ public abstract class DMLSMenuScreen extends Screen {
         String token = DiscordLinkTokenStore.load(minecraftUuid).orElse("");
         if (token.isEmpty()) return;
 
-        // Show the last verified profile immediately while the once-per-session status check runs.
         showCachedDiscordAccount(minecraftUuid);
         if (ACCOUNT_LINK_CHECKS.contains(minecraftUuid)) return;
         if (ACCOUNT_LINK_CHECKS_IN_PROGRESS.add(minecraftUuid)) {
@@ -558,6 +558,7 @@ public abstract class DMLSMenuScreen extends Screen {
             if (result.status() == DiscordLinkService.LinkStatus.LINKED) {
                 ACCOUNT_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
                 ACCOUNT_LINK_CHECKS.add(minecraftUuid);
+                DiscordLinkAvailability.markLinked(minecraftUuid);
                 if (result.profile() != null) {
                     DiscordAccountProfileStore.save(result.profile());
                     DiscordAvatarCache.ensureCached(result.profile());

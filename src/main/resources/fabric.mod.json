@@ -20,6 +20,9 @@
       "com.duperknight.client.gui.ModMenuIntegration"
     ]
   },
+  "mixins": [
+    "dmls.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric-api": "*",

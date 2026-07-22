@@ -11,7 +11,9 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.cursor.StandardCursors;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.item.ItemStack;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 
@@ -42,6 +44,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private int maxScroll;
     private boolean draggingScrollbar;
     private boolean accessAtInit;
+    private Text hoveredDisabledReason;
 
     public DMLSHomeScreen(List<DMLSModule> registeredModules) {
         this(registeredModules, null);
@@ -103,6 +106,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
             init();
         }
         renderMenuBackground(context);
+        hoveredDisabledReason = null;
         visibleModules = registeredModules.stream().filter(DMLSModule::isAvailableToDetectedRank).toList();
         visibleCategories = categoryGroups(visibleModules);
         if (announcement != null) {
@@ -135,6 +139,9 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         }
 
         super.render(context, mouseX, mouseY, delta);
+        if (hoveredDisabledReason != null) {
+            context.drawTooltip(textRenderer, hoveredDisabledReason, mouseX, mouseY);
+        }
     }
 
     private void renderCard(DrawContext context, GridLayout layout, int cardX, int cardY,
@@ -142,11 +149,20 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         boolean hovered = mouseX >= cardX && mouseX < cardX + layout.cardSize()
                 && mouseY >= cardY && mouseY < cardY + layout.cardSize()
                 && mouseY >= layout.viewportY() && mouseY < layout.viewportBottom();
+        boolean disabled = !module.isEnabledForClient(client);
         boolean newlyUnlocked = isNewlyUnlocked(module);
-        int backgroundColor = newlyUnlocked
+        int backgroundColor = disabled
+                ? (hovered ? 0xB82A2A2A : 0xA8181818)
+                : newlyUnlocked
                 ? (hovered ? 0xB82A402A : 0xA8122812)
                 : (hovered ? 0xB8202020 : 0xA8000000);
-        int borderColor = hovered ? 0xFFFFFFFF : newlyUnlocked ? 0xFF55FF55 : 0xFFAAAAAA;
+        int borderColor = disabled
+                ? (hovered ? 0xFF888888 : 0xFF555555)
+                : hovered ? 0xFFFFFFFF : newlyUnlocked ? 0xFF55FF55 : 0xFFAAAAAA;
+        if (hovered && disabled) {
+            hoveredDisabledReason = module.disabledReason(client).orElse(null);
+            context.setCursor(StandardCursors.NOT_ALLOWED);
+        }
         context.fill(cardX, cardY, cardX + layout.cardSize(), cardY + layout.cardSize(), backgroundColor);
         context.drawStrokedRectangle(cardX, cardY, layout.cardSize(), layout.cardSize(), borderColor);
 
@@ -176,7 +192,8 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
             context.getMatrices().pushMatrix();
             context.getMatrices().translate(cardX + layout.cardSize() / 2.0F, labelY);
             context.getMatrices().scale(labelScale, labelScale);
-            context.drawCenteredTextWithShadow(textRenderer, line, 0, 0, 0xFFFFFFFF);
+            context.drawCenteredTextWithShadow(textRenderer, line, 0, 0,
+                    disabled ? 0xFF777777 : 0xFFFFFFFF);
             context.getMatrices().popMatrix();
             labelY += scaled(12);
         }
@@ -253,6 +270,8 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                     if (!collapsedCategories.remove(category)) {
                         collapsedCategories.add(category);
                     }
+                    client.getSoundManager().play(
+                            PositionedSoundInstance.ui(SoundEvents.UI_BUTTON_CLICK, 1.0F));
                     layoutFor(visibleCategories);
                     scrollOffset = Math.clamp(scrollOffset, 0, maxScroll);
                     return true;
@@ -263,7 +282,10 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                     int cardY = categoryLayout.cardsTop() + (index / COLUMNS) * (layout.cardSize() + CARD_GAP);
                     if (click.x() >= cardX && click.x() < cardX + layout.cardSize()
                             && click.y() >= cardY && click.y() < cardY + layout.cardSize()) {
-                        categoryLayout.group().modules().get(index).openScreen(client, this);
+                        DMLSModule module = categoryLayout.group().modules().get(index);
+                        if (module.isEnabledForClient(client)) {
+                            module.tryOpenScreen(client, this);
+                        }
                         return true;
                     }
                 }

@@ -2,6 +2,7 @@ package com.duperknight.client.moderation;
 
 import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.session.ConnectionSnapshot;
+import com.duperknight.client.modules.ChatSpamMuteModule;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
@@ -98,6 +99,11 @@ public final class ModerationChatService {
         return revision;
     }
 
+    /** Adds a DMLS-local chat component that bypasses Fabric's receive-message events. */
+    public static void captureClientMessage(Text text) {
+        capture(text, null, false, false);
+    }
+
     static ChannelMentionTracker channelMentions() {
         return CHANNEL_MENTIONS;
     }
@@ -130,6 +136,7 @@ public final class ModerationChatService {
         String clean = ChatUtils.cleanLine(text.getString());
         if (clean.isEmpty()) return;
         PunishmentLogService.recordChatLine(clean);
+        if (ChatSpamMuteModule.shouldHideInModerationView(clean)) return;
         long now = System.nanoTime();
         if (isCrossEventDuplicate(clean, playerEvent, now)) return;
 
@@ -164,6 +171,28 @@ public final class ModerationChatService {
                 screen.onAutomaticRuleAlert(detection.alertRevision());
             }
         }
+    }
+
+    /** Keeps asynchronously modified vanilla chat lines in sync with the moderation feed. */
+    public static synchronized void replaceRecentText(Text original, Text replacement) {
+        if (original == null || replacement == null || MESSAGES.isEmpty()) return;
+        List<ModerationMessage> messages = new ArrayList<>(MESSAGES);
+        int match = findRecentText(messages, original, true);
+        if (match < 0) match = findRecentText(messages, original, false);
+        if (match < 0) return;
+        messages.set(match, messages.get(match).withText(replacement));
+        MESSAGES.clear();
+        MESSAGES.addAll(messages);
+        revision++;
+    }
+
+    private static int findRecentText(List<ModerationMessage> messages, Text original, boolean identityOnly) {
+        String originalString = identityOnly ? null : original.getString();
+        for (int index = messages.size() - 1; index >= 0; index--) {
+            Text candidate = messages.get(index).text();
+            if (identityOnly ? candidate == original : candidate.getString().equals(originalString)) return index;
+        }
+        return -1;
     }
 
     static Optional<ParsedPlayerLine> parsePlayerLine(String clean) {

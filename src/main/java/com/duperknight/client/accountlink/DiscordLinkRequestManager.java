@@ -8,14 +8,19 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-/** Coalesces identical Discord-link operations and runs different operations one at a time. */
-final class DiscordLinkRequestManager {
+/** Coalesces identical Appwrite operations and runs different operations one at a time. */
+public final class DiscordLinkRequestManager {
+    private static final DiscordLinkRequestManager SHARED = new DiscordLinkRequestManager();
     private final Object lock = new Object();
     private final ArrayDeque<QueuedRequest<?>> queue = new ArrayDeque<>();
     private final Map<Object, CompletableFuture<?>> sharedRequests = new HashMap<>();
     private boolean requestRunning;
 
-    <T> CompletableFuture<T> submit(Object key, Supplier<CompletableFuture<T>> operation) {
+    public static DiscordLinkRequestManager shared() {
+        return SHARED;
+    }
+
+    public <T> CompletableFuture<T> submit(Object key, Supplier<CompletableFuture<T>> operation) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(operation, "operation");
 

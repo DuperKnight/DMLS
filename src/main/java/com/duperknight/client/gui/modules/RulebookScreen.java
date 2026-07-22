@@ -127,9 +127,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
             if (selectedRule == null && requestedRule != null && requestedRule.punishable()) selectedRule = requestedRule;
             RulebookRule anchorRule = requestedRule != null ? requestedRule : selectedRule;
             if (!initialAnchorApplied && anchorRule != null) {
-                Layout anchor = layouts.stream().filter(layout -> layout.block instanceof RuleBox box
-                        && box.ruleId().equalsIgnoreCase(anchorRule.id())).findFirst().orElse(null);
-                if (anchor != null) setContentScrollOffset(Math.max(0, anchor.y - scaled(8)));
+                scrollToRule(anchorRule.id());
                 initialAnchorApplied = true;
             }
         }
@@ -846,12 +844,20 @@ public final class RulebookScreen extends DMLSMenuScreen {
                         client.getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.UI_BUTTON_CLICK, 1.0F));
                         selectedRule = clickedRule;
                         clearAndInit();
+                        scrollToRule(clickedRule.id());
                         return true;
                     }
                 }
             }
         }
         return super.mouseClicked(click, doubled);
+    }
+
+    private void scrollToRule(String ruleId) {
+        if (ruleId == null) return;
+        Layout anchor = layouts.stream().filter(layout -> layout.block instanceof RuleBox box
+                && box.ruleId().equalsIgnoreCase(ruleId)).findFirst().orElse(null);
+        if (anchor != null) setContentScrollOffset(Math.max(0, anchor.y - scaled(8)));
     }
 
     private void renderReloadIcon(DrawContext context) {

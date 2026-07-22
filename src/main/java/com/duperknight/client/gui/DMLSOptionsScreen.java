@@ -1,6 +1,7 @@
 package com.duperknight.client.gui;
 
 import com.duperknight.client.accountlink.DiscordLinkService;
+import com.duperknight.client.accountlink.DiscordLinkAvailability;
 import com.duperknight.client.accountlink.DiscordLinkTokenStore;
 import com.duperknight.client.accountlink.DiscordAccountProfile;
 import com.duperknight.client.accountlink.DiscordAccountProfileStore;
@@ -264,6 +265,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
             linkClientToken = result.clientToken();
             linked = false;
             clearCachedProfile();
+            refreshDiscordAccount();
             linkCodeRevealed = false;
             linkCodeWidget.setCode(linkCode);
             setScrollableChildEnabled(linkCodeWidget, true);
@@ -321,6 +323,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
                 discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.new_code"));
                 if (!pendingStatusShown) {
                     clearCachedProfile();
+                    refreshDiscordAccount();
                     setLinkStatus(Text.translatable(linkCode.isEmpty()
                             ? "dmls.option.discord_link.pending_without_code"
                             : "dmls.option.discord_link.instructions"), STATUS_COLOR);
@@ -351,6 +354,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
 
     private void showLinked(DiscordAccountProfile profile) {
         linked = true;
+        if (client != null) DiscordLinkAvailability.markLinked(client.getSession().getUuidOrNull());
         pendingStatusShown = false;
         linkCode = "";
         linkCodeRevealed = false;

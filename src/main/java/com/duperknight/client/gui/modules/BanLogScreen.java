@@ -45,9 +45,10 @@ public final class BanLogScreen extends DMLSMenuScreen {
     protected void init() {
         String savedIgn = text(ignField);
         String savedDiscord = text(discordField);
+        int savedReasonCursor = reasonField == null ? 0 : reasonField.getCursor();
         String savedReason = reasonField == null ? defaultReason() : reasonField.getText();
         PunishmentOption savedPunishment = punishmentDropdown == null
-                ? PunishmentOption.WARNING : punishmentDropdown.getValue();
+                ? PunishmentOption.BAN : punishmentDropdown.getValue();
         if (durationField != null) durationDraft = durationField.getText();
         String savedTicket = text(ticketField);
         String savedComments = text(commentsField);
@@ -61,6 +62,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
         ignField = field(formX, scaled(12), formWidth, savedIgn, "PlayerName", 32);
         discordField = field(formX, scaled(56), formWidth, savedDiscord, "user#0000 / @user", 64);
         reasonField = field(formX, scaled(100), formWidth, savedReason, "Rule broken and summary", 200);
+        reasonField.setCursor(Math.clamp(savedReasonCursor, 0, savedReason.length()), false);
         List<PunishmentOption> punishmentOptions = Arrays.asList(PunishmentOption.values());
         punishmentDropdown = addScrollableDropdownChild(DropdownWidget.builder(
                         Text.translatable("dmls.field.ban_log.type"), punishmentOptions, savedPunishment,
@@ -102,7 +104,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
 
     private Text punishLabel() {
         if (punishmentDropdown == null) {
-            return Text.translatable("dmls.button.ban_log.warn");
+            return Text.translatable("dmls.button.ban_log.ban");
         }
         return Text.translatable(switch (punishmentDropdown.getValue().type()) {
             case WARNING -> "dmls.button.ban_log.warn";

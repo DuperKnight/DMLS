@@ -1,5 +1,6 @@
 package com.duperknight.client.modules;
 
+import com.duperknight.client.accountlink.DiscordLinkAvailability;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ServerGuard;
@@ -93,8 +94,38 @@ public abstract class DMLSModule {
         return ModuleCategory.GENERAL;
     }
 
+    /** Override for modules whose UI and commands require a verified Discord link. */
+    public boolean requiresDiscordLink() {
+        return false;
+    }
+
+    /** Fast, non-blocking integration check suitable for rendering and Brigadier predicates. */
+    public final boolean isEnabledForClient(MinecraftClient client) {
+        return !requiresDiscordLink() || DiscordLinkAvailability.isLinked(client);
+    }
+
+    /** Reason shown by shared module pickers when a visible module cannot currently be opened. */
+    public final Optional<Text> disabledReason(MinecraftClient client) {
+        if (requiresDiscordLink() && !DiscordLinkAvailability.isLinked(client)) {
+            return Optional.of(Text.translatable("dmls.tooltip.link_discord_for_module"));
+        }
+        return Optional.empty();
+    }
+
+    /** Shared command predicate: rank/department visibility plus required integrations. */
+    public final boolean isCommandAvailable(MinecraftClient client) {
+        return isAvailableToDetectedRank() && isEnabledForClient(client);
+    }
+
     /** Opens this module's screen, returning to the supplied DMLS home screen. */
     public abstract void openScreen(MinecraftClient client, Screen parent);
+
+    /** Shared guarded entry point for module pickers outside the module itself. */
+    public final boolean tryOpenScreen(MinecraftClient client, Screen parent) {
+        if (!isEnabledForClient(client)) return false;
+        openScreen(client, parent);
+        return true;
+    }
 
     /**
      * Checks if the detected staff rank meets the minimum rank of this module.
@@ -134,12 +165,20 @@ public abstract class DMLSModule {
     /** The detected rank controls visibility only; the server remains authoritative. */
     protected boolean canRunPrivilegedOperation(MinecraftClient client) {
         if (!hasRequiredRank(client)) return false;
+        if (!hasRequiredIntegrations(client)) return false;
         // A captured dry-run can safely validate and preview commands without a live connection.
         if (DMLSConfig.dryRun()) return true;
         ServerGuard.GuardResult guard = ServerGuard.check(client);
         if (guard.allowed()) return true;
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.server_guard.blocked",
                 guard.reason(), guard.address());
+        return false;
+    }
+
+    /** Sends the relevant local guidance when a declared integration is unavailable. */
+    protected final boolean hasRequiredIntegrations(MinecraftClient client) {
+        if (!requiresDiscordLink() || DiscordLinkAvailability.isLinked(client)) return true;
+        ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.discord_link.required");
         return false;
     }
 

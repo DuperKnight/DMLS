@@ -32,7 +32,9 @@ public final class DMLSConfig {
     private static final String ALERTS_KEY = "chatAlerts";
     private static final String TRADE_CHAT_MUTED_KEY = "tradeChatMuted";
     private static final String SERVER_MESSAGES_MUTED_KEY = "serverMessagesMuted";
+    private static final String SERVER_SUMMON_MESSAGES_MUTED_KEY = "serverSummonMessagesMuted";
     private static final String GREETER_ENABLED_KEY = "greeterEnabled";
+    private static final String DO_NOT_INSTA_BAN_ENABLED_KEY = "doNotInstaBan.enabled";
     private static final String ALLOWED_SERVERS_KEY = "allowedServers";
     private static final String HEADER_BEHAVIOR_KEY = "headerBehavior";
     private static final String MOD_LOCAL_KEY = "moderation.includeLocal";
@@ -61,7 +63,9 @@ public final class DMLSConfig {
     private static boolean alertsEnabled = true;
     private static boolean tradeChatMuted;
     private static boolean serverMessagesMuted;
+    private static boolean serverSummonMessagesMuted;
     private static boolean greeterEnabled = true;
+    private static boolean doNotInstaBanEnabled;
     private static List<String> allowedServers = ServerGuard.DEFAULT_ALLOWED_SERVERS;
     private static HeaderBehavior headerBehavior = HeaderBehavior.ON_SCROLL;
     private static ModerationPreferences moderationPreferences = ModerationPreferences.defaults();
@@ -179,6 +183,20 @@ public final class DMLSConfig {
         return false;
     }
 
+    public static boolean serverSummonMessagesMuted() {
+        ensureLoaded();
+        return serverSummonMessagesMuted;
+    }
+
+    public static boolean setServerSummonMessagesMuted(boolean muted) {
+        ensureLoaded();
+        boolean previous = serverSummonMessagesMuted;
+        serverSummonMessagesMuted = muted;
+        if (save()) return true;
+        serverSummonMessagesMuted = previous;
+        return false;
+    }
+
     public static boolean greeterEnabled() {
         ensureLoaded();
         return greeterEnabled;
@@ -190,6 +208,20 @@ public final class DMLSConfig {
         greeterEnabled = enabled;
         if (save()) return true;
         greeterEnabled = previous;
+        return false;
+    }
+
+    public static boolean doNotInstaBanEnabled() {
+        ensureLoaded();
+        return doNotInstaBanEnabled;
+    }
+
+    public static boolean setDoNotInstaBanEnabled(boolean enabled) {
+        ensureLoaded();
+        boolean previous = doNotInstaBanEnabled;
+        doNotInstaBanEnabled = enabled;
+        if (save()) return true;
+        doNotInstaBanEnabled = previous;
         return false;
     }
 
@@ -332,7 +364,10 @@ public final class DMLSConfig {
         alertsEnabled = Boolean.parseBoolean(properties.getProperty(ALERTS_KEY, "true"));
         tradeChatMuted = Boolean.parseBoolean(properties.getProperty(TRADE_CHAT_MUTED_KEY, "false"));
         serverMessagesMuted = Boolean.parseBoolean(properties.getProperty(SERVER_MESSAGES_MUTED_KEY, "false"));
+        serverSummonMessagesMuted = Boolean.parseBoolean(
+                properties.getProperty(SERVER_SUMMON_MESSAGES_MUTED_KEY, "false"));
         greeterEnabled = Boolean.parseBoolean(properties.getProperty(GREETER_ENABLED_KEY, "true"));
+        doNotInstaBanEnabled = Boolean.parseBoolean(properties.getProperty(DO_NOT_INSTA_BAN_ENABLED_KEY, "false"));
         headerBehavior = HeaderBehavior.parse(properties.getProperty(HEADER_BEHAVIOR_KEY));
         ModerationPreferences defaults = ModerationPreferences.defaults();
         moderationPreferences = new ModerationPreferences(
@@ -394,7 +429,9 @@ public final class DMLSConfig {
         properties.setProperty(ALERTS_KEY, Boolean.toString(alertsEnabled));
         properties.setProperty(TRADE_CHAT_MUTED_KEY, Boolean.toString(tradeChatMuted));
         properties.setProperty(SERVER_MESSAGES_MUTED_KEY, Boolean.toString(serverMessagesMuted));
+        properties.setProperty(SERVER_SUMMON_MESSAGES_MUTED_KEY, Boolean.toString(serverSummonMessagesMuted));
         properties.setProperty(GREETER_ENABLED_KEY, Boolean.toString(greeterEnabled));
+        properties.setProperty(DO_NOT_INSTA_BAN_ENABLED_KEY, Boolean.toString(doNotInstaBanEnabled));
         properties.setProperty(ALLOWED_SERVERS_KEY, String.join(",", allowedServers));
         properties.setProperty(HEADER_BEHAVIOR_KEY, headerBehavior.name());
         properties.setProperty(MOD_LOCAL_KEY, Boolean.toString(moderationPreferences.includeLocal()));

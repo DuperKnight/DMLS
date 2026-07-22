@@ -1,6 +1,7 @@
 package com.duperknight.client;
 
 import com.duperknight.DMLS;
+import com.duperknight.client.accountlink.DiscordLinkAvailability;
 import com.duperknight.client.gui.DMLSHomeScreen;
 import com.duperknight.client.gui.modules.RulebookScreen;
 import com.duperknight.client.moderation.ModerationChatService;
@@ -47,6 +48,7 @@ public class DMLSClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         DMLS.LOGGER.info("Initializing DMLS client, you are a lazy staff member!");
+        DiscordLinkAvailability.warmUp(MinecraftClient.getInstance());
         ServerMessageRouter.register();
         OperationCoordinator.global().register();
         registerDmlsCommand();
@@ -419,7 +421,7 @@ public class DMLSClient implements ClientModInitializer {
             Class<? extends DMLSModule> moduleType
     ) {
         return ClientCommandManager.literal(name)
-                .requires(source -> module(moduleType).isAvailableToDetectedRank());
+                .requires(source -> module(moduleType).isCommandAvailable(source.getClient()));
     }
 
     private int cancelActiveOperation(MinecraftClient client) {
@@ -679,6 +681,7 @@ public class DMLSClient implements ClientModInitializer {
                 new CoreProtectBuilderModule(),
                 new DemoWaveModule(),
                 new DonorPetModule(),
+                new DoNotInstaBanModule(),
                 new EventPowerToolModule(),
                 new EventProtectModule(),
                 new EventRandomTeleportModule(),
