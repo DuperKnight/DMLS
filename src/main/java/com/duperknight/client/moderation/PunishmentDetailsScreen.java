@@ -89,7 +89,7 @@ public final class PunishmentDetailsScreen extends DMLSMenuScreen {
     }
 
     private int detailPanelY() {
-        return HEADER_HEIGHT + scaled(10);
+        return headerHeight() + scaled(10);
     }
 
     private int detailPanelBottom() {

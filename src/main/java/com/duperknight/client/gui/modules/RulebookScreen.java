@@ -821,6 +821,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
 
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
+        if (handleDiscordAccountClick(click, doubled)) return true;
         if (findOpen && click.x() >= findPanelX && click.x() < findPanelX + findPanelWidth
                 && click.y() >= findPanelY && click.y() < findPanelY + findPanelHeight) {
             return super.mouseClicked(click, doubled);

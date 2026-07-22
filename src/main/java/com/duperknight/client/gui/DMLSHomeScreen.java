@@ -1,11 +1,5 @@
 package com.duperknight.client.gui;
 
-import com.duperknight.client.accountlink.DiscordAccountProfile;
-import com.duperknight.client.accountlink.DiscordAccountProfileStore;
-import com.duperknight.client.accountlink.DiscordAvatarCache;
-import com.duperknight.client.accountlink.DiscordLinkService;
-import com.duperknight.client.accountlink.DiscordLinkTokenStore;
-import com.duperknight.client.gui.widgets.DiscordAccountWidget;
 import com.duperknight.client.modules.DMLSModule;
 import com.duperknight.client.gui.modules.RulebookScreen;
 import com.duperknight.client.modules.ModuleCategory;
@@ -16,25 +10,17 @@ import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.cursor.StandardCursors;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /** The registry-driven DMLS module picker. */
 public final class DMLSHomeScreen extends DMLSMenuScreen {
-    private static final Set<java.util.UUID> HOME_LINK_CHECKS = ConcurrentHashMap.newKeySet();
-    private static final Set<java.util.UUID> HOME_LINK_CHECKS_IN_PROGRESS = ConcurrentHashMap.newKeySet();
     private static final int COLUMNS = 3;
     private static final int CARD_GAP = scaled(18);
     private static final int CARD_MARGIN = scaled(24);
@@ -56,9 +42,6 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private int maxScroll;
     private boolean draggingScrollbar;
     private boolean accessAtInit;
-    private DiscordAccountWidget accountWidget;
-    private DiscordAccountProfile accountProfile;
-    private Identifier accountAvatarTexture;
 
     public DMLSHomeScreen(List<DMLSModule> registeredModules) {
         this(registeredModules, null);
@@ -90,8 +73,6 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
 
     @Override
     protected void init() {
-        releaseAccountTexture();
-        initDiscordAccount();
         accessAtInit = DMLSConfig.hasRecognizedStaffRank();
         if (!accessAtInit) {
             addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.exit"), button -> close())
@@ -154,9 +135,6 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         }
 
         super.render(context, mouseX, mouseY, delta);
-        if (accountWidget != null) {
-            accountWidget.renderShelf(context, mouseX, mouseY);
-        }
     }
 
     private void renderCard(DrawContext context, GridLayout layout, int cardX, int cardY,
@@ -258,12 +236,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
 
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
-        if (accountWidget != null && accountWidget.isShelfOpen()) {
-            if (accountWidget.mouseClicked(click, doubled)) {
-                setFocused(accountWidget);
-                return true;
-            }
-        }
+        if (handleDiscordAccountClick(click, doubled)) return true;
         GridLayout layout = layoutFor(visibleCategories);
         if (layout.scrollable() && isOverScrollbar(layout, click.x(), click.y())) {
             draggingScrollbar = true;
@@ -299,150 +272,6 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         return super.mouseClicked(click, doubled);
     }
 
-    private void initDiscordAccount() {
-        accountWidget = null;
-        accountProfile = null;
-        if (client == null || client.getSession().getUuidOrNull() == null) return;
-        var minecraftUuid = client.getSession().getUuidOrNull();
-        String token = DiscordLinkTokenStore.load(minecraftUuid).orElse("");
-        if (token.isEmpty()) return;
-        if (HOME_LINK_CHECKS.contains(minecraftUuid)) {
-            showCachedDiscordAccount(minecraftUuid);
-            return;
-        }
-        if (HOME_LINK_CHECKS_IN_PROGRESS.add(minecraftUuid)) {
-            checkDiscordAccountOnFirstHomeOpen(minecraftUuid, token);
-        }
-    }
-
-    private void checkDiscordAccountOnFirstHomeOpen(java.util.UUID minecraftUuid, String token) {
-        DiscordLinkService.checkStatus(minecraftUuid, token).thenAccept(result -> client.execute(() -> {
-            if (result.status() == DiscordLinkService.LinkStatus.LINKED) {
-                HOME_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
-                HOME_LINK_CHECKS.add(minecraftUuid);
-                if (result.profile() != null) {
-                    DiscordAccountProfileStore.save(result.profile());
-                    DiscordAvatarCache.ensureCached(result.profile());
-                }
-                if (client.currentScreen == this) showCachedDiscordAccount(minecraftUuid);
-                return;
-            }
-            if (result.status() == DiscordLinkService.LinkStatus.INVALID_TOKEN
-                    || result.status() == DiscordLinkService.LinkStatus.EXPIRED) {
-                clearLocalDiscordAccount(minecraftUuid);
-                return;
-            }
-            if (result.status() == DiscordLinkService.LinkStatus.RATE_LIMITED
-                    || result.status() == DiscordLinkService.LinkStatus.TIMEOUT
-                    || result.status() == DiscordLinkService.LinkStatus.NETWORK_ERROR
-                    || result.status() == DiscordLinkService.LinkStatus.SERVICE_ERROR
-                    || result.status() == DiscordLinkService.LinkStatus.MALFORMED_RESPONSE) {
-                HOME_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
-                return;
-            }
-            HOME_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
-            HOME_LINK_CHECKS.add(minecraftUuid);
-        }));
-    }
-
-    private void showCachedDiscordAccount(java.util.UUID minecraftUuid) {
-        if (accountWidget != null) return;
-        DiscordAccountProfileStore.load(minecraftUuid).ifPresent(profile -> {
-            accountProfile = profile;
-            accountAvatarTexture = DiscordAvatarCache.loadTexture(client, profile);
-            int minimumWidth = scaled(70);
-            int maximumWidth = Math.max(minimumWidth,
-                    Math.min(scaled(210), width / 2 - scaled(110)));
-            int desiredWidth = 32 + textRenderer.getWidth(profile.discordUsername());
-            int widgetWidth = Math.clamp(desiredWidth, minimumWidth, maximumWidth);
-            accountWidget = addDrawableChild(new DiscordAccountWidget(
-                    scaled(8), (HEADER_HEIGHT - DiscordAccountWidget.HEIGHT) / 2,
-                    widgetWidth, profile.discordUsername(), accountAvatarTexture,
-                    this::unlinkDiscordAccount));
-            if (accountAvatarTexture == null) {
-                DiscordAccountWidget targetWidget = accountWidget;
-                DiscordAvatarCache.ensureCached(profile).thenAccept(path -> {
-                    if (path == null) return;
-                    client.execute(() -> {
-                        if (client.currentScreen != this || accountWidget != targetWidget) return;
-                        accountAvatarTexture = DiscordAvatarCache.loadTexture(client, profile);
-                        accountWidget.setAvatarTexture(accountAvatarTexture);
-                    });
-                });
-            }
-        });
-    }
-
-    private void unlinkDiscordAccount() {
-        if (client == null || accountWidget == null || client.getSession().getUuidOrNull() == null) return;
-        var minecraftUuid = client.getSession().getUuidOrNull();
-        String token = DiscordLinkTokenStore.load(minecraftUuid).orElse("");
-        if (token.isEmpty()) {
-            clearLocalDiscordAccount(minecraftUuid);
-            return;
-        }
-
-        DiscordAccountWidget targetWidget = accountWidget;
-        targetWidget.setTooltip(null);
-        targetWidget.setUnlinking(true);
-        attemptDiscordUnlink(minecraftUuid, token, targetWidget, 0);
-    }
-
-    private void attemptDiscordUnlink(java.util.UUID minecraftUuid, String token,
-                                      DiscordAccountWidget targetWidget, int attempt) {
-        DiscordLinkService.unlink(token).thenAccept(result -> client.execute(() -> {
-            if (accountWidget != targetWidget) return;
-            if (result.unlinkedLocally()) {
-                clearLocalDiscordAccount(minecraftUuid);
-                return;
-            }
-            boolean retriable = result.status() != DiscordLinkService.UnlinkStatus.RATE_LIMITED;
-            if (retriable && attempt < 4) {
-                int retryDelaySeconds = 2 << attempt;
-                CompletableFuture.delayedExecutor(retryDelaySeconds, TimeUnit.SECONDS).execute(() ->
-                        client.execute(() -> {
-                            if (accountWidget == targetWidget) {
-                                attemptDiscordUnlink(minecraftUuid, token, targetWidget, attempt + 1);
-                            }
-                        }));
-                return;
-            }
-            targetWidget.setUnlinking(false);
-            targetWidget.setTooltip(Tooltip.of(Text.translatable(
-                    result.status() == DiscordLinkService.UnlinkStatus.RATE_LIMITED
-                            ? "dmls.account.unlink.error.rate_limited"
-                            : "dmls.account.unlink.error.service")));
-        }));
-    }
-
-    private void clearLocalDiscordAccount(java.util.UUID minecraftUuid) {
-        HOME_LINK_CHECKS.remove(minecraftUuid);
-        HOME_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
-        DiscordLinkTokenStore.delete(minecraftUuid);
-        DiscordAccountProfileStore.delete(minecraftUuid);
-        if (accountProfile != null) DiscordAvatarCache.deleteCached(accountProfile);
-        releaseAccountTexture();
-        if (accountWidget != null) {
-            accountWidget.visible = false;
-            remove(accountWidget);
-        }
-        accountWidget = null;
-        accountProfile = null;
-    }
-
-    private void releaseAccountTexture() {
-        if (client != null && accountAvatarTexture != null) {
-            client.getTextureManager().destroyTexture(accountAvatarTexture);
-        }
-        accountAvatarTexture = null;
-    }
-
-    @Override
-    public void removed() {
-        releaseAccountTexture();
-        super.removed();
-    }
-
     @Override
     public boolean mouseReleased(Click click) {
         draggingScrollbar = false;
@@ -455,7 +284,9 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
             GridLayout layout = layoutFor(visibleCategories);
             int thumbHeight = scrollbarThumbHeight(layout);
             int track = Math.max(1, layout.viewportHeight() - thumbHeight);
+            int previousOffset = scrollOffset;
             scrollOffset = Math.clamp(scrollOffset + (int) Math.round(deltaY * maxScroll / track), 0, maxScroll);
+            updateHeaderForScrollChange(previousOffset, scrollOffset);
             return true;
         }
         return super.mouseDragged(click, deltaX, deltaY);
@@ -464,9 +295,11 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         GridLayout layout = layoutFor(visibleCategories);
-        if (layout.scrollable() && mouseX >= layout.panelX() && mouseX < layout.panelX() + layout.panelWidth()
-                && mouseY >= layout.viewportY() && mouseY < layout.viewportBottom()) {
+        if (layout.scrollable()
+                && mouseY >= headerHeight() && mouseY < height - FOOTER_TOP_OFFSET) {
+            int previousOffset = scrollOffset;
             scrollOffset = Math.clamp(scrollOffset - (int) (verticalAmount * scaled(24)), 0, maxScroll);
+            updateHeaderForScrollChange(previousOffset, scrollOffset);
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
@@ -475,7 +308,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private GridLayout layoutFor(List<CategoryGroup> categories) {
         int panelWidth = Math.clamp(width - scaled(32), scaled(300), scaled(470));
         int panelX = (width - panelWidth) / 2;
-        int viewportY = HEADER_HEIGHT + announcementHeight();
+        int viewportY = headerHeight() + announcementHeight();
         int minimumViewportHeight = announcement == null ? scaled(80) : scaled(40);
         int viewportHeight = Math.max(minimumViewportHeight, height - FOOTER_TOP_OFFSET - viewportY);
         int cardMargin = announcement == null ? CARD_MARGIN : scaled(8);
@@ -560,11 +393,11 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                 ? "dmls.welcome.title"
                 : "dmls.promotion.title");
         context.drawCenteredTextWithShadow(textRenderer, heading,
-                width / 2, HEADER_HEIGHT + scaled(4) + topPadding, 0xFFFFFFFF);
+                width / 2, headerHeight() + scaled(4) + topPadding, 0xFFFFFFFF);
 
         int panelWidth = Math.min(scaled(220), width - scaled(48));
         int panelX = width / 2 - panelWidth / 2;
-        int panelY = HEADER_HEIGHT + scaled(24) + topPadding;
+        int panelY = headerHeight() + scaled(24) + topPadding;
         renderPanel(context, panelX, panelY, panelWidth, STANDARD_BUTTON_HEIGHT);
         context.drawCenteredTextWithShadow(textRenderer, announcement.currentRank.displayName(),
                 width / 2, panelY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2 + scaled(2), 0xFFFFFFFF);
@@ -580,12 +413,12 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                     announcement.previousRank.displayName(), newlyUnlocked);
         }
         context.drawCenteredTextWithShadow(textRenderer, summary,
-                width / 2, HEADER_HEIGHT + scaled(57) + topPadding, 0xFFDDDDDD);
+                width / 2, headerHeight() + scaled(57) + topPadding, 0xFFDDDDDD);
 
         if (announcement.type == AnnouncementType.WELCOME) {
             Text hint = Text.translatable("dmls.welcome.open_menu_hint");
             int hintWidth = Math.min(scaled(430), width - scaled(32));
-            int hintY = HEADER_HEIGHT + scaled(73) + topPadding;
+            int hintY = headerHeight() + scaled(73) + topPadding;
             for (OrderedText line : textRenderer.wrapLines(hint, hintWidth)) {
                 context.drawCenteredTextWithShadow(textRenderer, line, width / 2, hintY, 0xFFAAAAAA);
                 hintY += scaled(11);
@@ -627,7 +460,9 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         int thumbHeight = scrollbarThumbHeight(layout);
         int track = Math.max(1, layout.viewportHeight() - thumbHeight);
         double relative = Math.clamp((int) (mouseY - layout.viewportY() - thumbHeight / 2.0), 0, track);
+        int previousOffset = scrollOffset;
         scrollOffset = Math.clamp((int) Math.round(relative * maxScroll / track), 0, maxScroll);
+        updateHeaderForScrollChange(previousOffset, scrollOffset);
     }
 
     private record GridLayout(int panelX, int panelWidth, int viewportX, int viewportY, int viewportWidth,

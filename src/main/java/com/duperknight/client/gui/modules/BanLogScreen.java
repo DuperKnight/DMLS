@@ -54,7 +54,7 @@ public final class BanLogScreen extends DMLSMenuScreen {
         String savedEvidence = text(evidenceField);
 
         boolean showDuration = savedPunishment.type().durationRequired();
-        configureScrollableContent(HEADER_HEIGHT + scaled(10), scaled(showDuration ? 384 : 340));
+        configureScrollableContent(headerHeight() + scaled(10), scaled(showDuration ? 384 : 340));
         int formWidth = Math.min(scaled(350), width - scaled(56));
         int formX = (width - formWidth) / 2;
 

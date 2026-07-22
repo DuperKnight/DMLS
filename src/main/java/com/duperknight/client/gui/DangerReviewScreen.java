@@ -43,7 +43,7 @@ public final class DangerReviewScreen extends DMLSMenuScreen {
         for (Text line : preview) {
             wrappedPreview.addAll(textRenderer.wrapLines(line, previewWidth - scaled(16)));
         }
-        configureScrollableContent(HEADER_HEIGHT + scaled(34),
+        configureScrollableContent(headerHeight() + scaled(34),
                 Math.max(scaled(70), wrappedPreview.size() * scaled(12) + scaled(28)));
 
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
@@ -82,7 +82,7 @@ public final class DangerReviewScreen extends DMLSMenuScreen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, HEADER_HEIGHT + scaled(16), 0xFFFFAA00);
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, headerHeight() + scaled(16), 0xFFFFAA00);
 
         beginContentScissor(context);
         int panelWidth = Math.min(scaled(420), width - scaled(48));

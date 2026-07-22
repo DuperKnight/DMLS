@@ -29,17 +29,20 @@ public final class DiscordLinkService {
             .connectTimeout(TIMEOUT)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
+    private static final DiscordLinkRequestManager REQUEST_MANAGER = new DiscordLinkRequestManager();
 
     private DiscordLinkService() {
     }
 
     public static CompletableFuture<Result> request(UUID minecraftUuid, String minecraftUsername) {
         Objects.requireNonNull(minecraftUuid, "minecraftUuid");
+        String normalizedUsername = minecraftUsername != null && USERNAME.matcher(minecraftUsername).matches()
+                ? minecraftUsername : "";
 
         JsonObject functionBody = new JsonObject();
         functionBody.addProperty("minecraftUuid", minecraftUuid.toString().toLowerCase());
-        if (minecraftUsername != null && USERNAME.matcher(minecraftUsername).matches()) {
-            functionBody.addProperty("minecraftUsername", minecraftUsername);
+        if (!normalizedUsername.isEmpty()) {
+            functionBody.addProperty("minecraftUsername", normalizedUsername);
         }
 
         JsonObject executionBody = new JsonObject();
@@ -60,11 +63,13 @@ public final class DiscordLinkService {
                 .POST(HttpRequest.BodyPublishers.ofString(executionBody.toString()))
                 .build();
 
-        return HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .handle((response, error) -> {
-                    if (error != null) return failureResult(error);
-                    return parseExecutionResponse(response.statusCode(), response.body());
-                });
+        RequestKey key = new RequestKey(Operation.CREATE, minecraftUuid, "", normalizedUsername);
+        return REQUEST_MANAGER.submit(key, () ->
+                HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                        .handle((response, error) -> {
+                            if (error != null) return failureResult(error);
+                            return parseExecutionResponse(response.statusCode(), response.body());
+                        }));
     }
 
     public static CompletableFuture<LinkStatusResult> checkStatus(UUID minecraftUuid, String clientToken) {
@@ -91,11 +96,13 @@ public final class DiscordLinkService {
                 .POST(HttpRequest.BodyPublishers.ofString(executionBody.toString()))
                 .build();
 
-        return HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .handle((response, error) -> {
-                    if (error != null) return statusFailureResult(error);
-                    return parseStatusExecutionResponse(response.statusCode(), response.body(), minecraftUuid);
-                });
+        RequestKey key = new RequestKey(Operation.STATUS, minecraftUuid, clientToken, "");
+        return REQUEST_MANAGER.submit(key, () ->
+                HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                        .handle((response, error) -> {
+                            if (error != null) return statusFailureResult(error);
+                            return parseStatusExecutionResponse(response.statusCode(), response.body(), minecraftUuid);
+                        }));
     }
 
     public static CompletableFuture<UnlinkResult> unlink(String clientToken) {
@@ -121,11 +128,13 @@ public final class DiscordLinkService {
                 .POST(HttpRequest.BodyPublishers.ofString(executionBody.toString()))
                 .build();
 
-        return HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .handle((response, error) -> {
-                    if (error != null) return unlinkFailureResult(error);
-                    return parseUnlinkExecutionResponse(response.statusCode(), response.body());
-                });
+        RequestKey key = new RequestKey(Operation.UNLINK, null, clientToken, "");
+        return REQUEST_MANAGER.submit(key, () ->
+                HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                        .handle((response, error) -> {
+                            if (error != null) return unlinkFailureResult(error);
+                            return parseUnlinkExecutionResponse(response.statusCode(), response.body());
+                        }));
     }
 
     static Result parseExecutionResponse(int httpStatus, String body) {
@@ -403,5 +412,15 @@ public final class DiscordLinkService {
         NETWORK_ERROR,
         SERVICE_ERROR,
         MALFORMED_RESPONSE
+    }
+
+    private record RequestKey(Operation operation, UUID minecraftUuid, String clientToken,
+                              String minecraftUsername) {
+    }
+
+    private enum Operation {
+        CREATE,
+        STATUS,
+        UNLINK
     }
 }

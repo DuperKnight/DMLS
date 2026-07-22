@@ -34,6 +34,7 @@ public final class DMLSConfig {
     private static final String SERVER_MESSAGES_MUTED_KEY = "serverMessagesMuted";
     private static final String GREETER_ENABLED_KEY = "greeterEnabled";
     private static final String ALLOWED_SERVERS_KEY = "allowedServers";
+    private static final String HEADER_BEHAVIOR_KEY = "headerBehavior";
     private static final String MOD_LOCAL_KEY = "moderation.includeLocal";
     private static final String MOD_TRADE_KEY = "moderation.includeTrade";
     private static final String MOD_RP_KEY = "moderation.includeRp";
@@ -62,6 +63,7 @@ public final class DMLSConfig {
     private static boolean serverMessagesMuted;
     private static boolean greeterEnabled = true;
     private static List<String> allowedServers = ServerGuard.DEFAULT_ALLOWED_SERVERS;
+    private static HeaderBehavior headerBehavior = HeaderBehavior.ON_SCROLL;
     private static ModerationPreferences moderationPreferences = ModerationPreferences.defaults();
     private static final Map<String, Boolean> moderationRuleOverrides = new HashMap<>();
     private static MiniMeHudPreferences miniMeHudPreferences = MiniMeHudPreferences.defaults();
@@ -263,6 +265,21 @@ public final class DMLSConfig {
         return false;
     }
 
+    public static HeaderBehavior headerBehavior() {
+        ensureLoaded();
+        return headerBehavior;
+    }
+
+    public static boolean setHeaderBehavior(HeaderBehavior behavior) {
+        ensureLoaded();
+        if (behavior == null) return false;
+        HeaderBehavior previous = headerBehavior;
+        headerBehavior = behavior;
+        if (save()) return true;
+        headerBehavior = previous;
+        return false;
+    }
+
     /**
      * Parses a staff rank from persisted or scoreboard text, also accepting aliases like "mod" and "srmod".
      *
@@ -316,6 +333,7 @@ public final class DMLSConfig {
         tradeChatMuted = Boolean.parseBoolean(properties.getProperty(TRADE_CHAT_MUTED_KEY, "false"));
         serverMessagesMuted = Boolean.parseBoolean(properties.getProperty(SERVER_MESSAGES_MUTED_KEY, "false"));
         greeterEnabled = Boolean.parseBoolean(properties.getProperty(GREETER_ENABLED_KEY, "true"));
+        headerBehavior = HeaderBehavior.parse(properties.getProperty(HEADER_BEHAVIOR_KEY));
         ModerationPreferences defaults = ModerationPreferences.defaults();
         moderationPreferences = new ModerationPreferences(
                 Boolean.parseBoolean(properties.getProperty(MOD_LOCAL_KEY, Boolean.toString(defaults.includeLocal()))),
@@ -378,6 +396,7 @@ public final class DMLSConfig {
         properties.setProperty(SERVER_MESSAGES_MUTED_KEY, Boolean.toString(serverMessagesMuted));
         properties.setProperty(GREETER_ENABLED_KEY, Boolean.toString(greeterEnabled));
         properties.setProperty(ALLOWED_SERVERS_KEY, String.join(",", allowedServers));
+        properties.setProperty(HEADER_BEHAVIOR_KEY, headerBehavior.name());
         properties.setProperty(MOD_LOCAL_KEY, Boolean.toString(moderationPreferences.includeLocal()));
         properties.setProperty(MOD_TRADE_KEY, Boolean.toString(moderationPreferences.includeTrade()));
         properties.setProperty(MOD_RP_KEY, Boolean.toString(moderationPreferences.includeRp()));

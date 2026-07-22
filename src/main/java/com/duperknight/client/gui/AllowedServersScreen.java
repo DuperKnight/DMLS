@@ -31,7 +31,7 @@ public final class AllowedServersScreen extends DMLSMenuScreen {
         int formX = (width - formWidth) / 2;
         int addWidth = scaled(64);
         int fieldWidth = formWidth - addWidth - scaled(4);
-        int viewportTop = HEADER_HEIGHT + scaled(72);
+        int viewportTop = headerHeight() + scaled(72);
         int contentHeight = scaled(44) + servers.size() * scaled(28) + scaled(34);
         configureScrollableContent(viewportTop, contentHeight);
 
@@ -95,10 +95,10 @@ public final class AllowedServersScreen extends DMLSMenuScreen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, HEADER_HEIGHT + scaled(16), 0xFFFFFFFF);
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, headerHeight() + scaled(16), 0xFFFFFFFF);
         int descriptionWidth = Math.min(scaled(360), width - scaled(48));
         List<OrderedText> description = textRenderer.wrapLines(Text.translatable("dmls.option.allowed_servers.description"), descriptionWidth);
-        int y = HEADER_HEIGHT + scaled(32);
+        int y = headerHeight() + scaled(32);
         for (OrderedText line : description) {
             context.drawCenteredTextWithShadow(textRenderer, line, width / 2, y, 0xFFCCCCCC);
             y += scaled(11);

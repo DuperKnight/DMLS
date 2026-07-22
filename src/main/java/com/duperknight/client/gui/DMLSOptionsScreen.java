@@ -11,6 +11,7 @@ import com.duperknight.client.modules.DepartmentRank;
 import com.duperknight.client.modules.StaffDepartment;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.utils.DMLSConfig;
+import com.duperknight.client.utils.HeaderBehavior;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -27,18 +28,21 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     private static final long STATUS_DURATION_MILLIS = 5_000L;
     private static final int STATUS_COLOR = 0xFFDDDDDD;
     private static final int ERROR_COLOR = 0xFFFF7777;
+    private static final int MINIMUM_CONTENT_HEIGHT = STANDARD_BUTTON_HEIGHT * 4 + scaled(165);
     private int rankX;
-    private int rankY;
+    private int rankOffset;
     private int rankWidth;
     private int departmentsX;
-    private int departmentsY;
+    private int departmentsOffset;
     private int departmentsWidth;
-    private int dividerY;
-    private int departmentDropdownY;
-    private int allowedServersY;
-    private int integrationsDividerY;
-    private int discordLinkY;
-    private int linkCodeY;
+    private int dividerOffset;
+    private int departmentDropdownOffset;
+    private int settingsOffset;
+    private int integrationsDividerOffset;
+    private int discordLinkOffset;
+    private int linkCodeOffset;
+    private int contentBottomPadding;
+    private int baseContentHeight;
     private ButtonWidget discordLinkButton;
     private LinkCodeWidget linkCodeWidget;
     private String linkCode = "";
@@ -61,60 +65,90 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     protected void init() {
         rankWidth = Math.min(scaled(240), width - scaled(32));
         rankX = width / 2 - rankWidth / 2;
-        int footerTop = height - FOOTER_TOP_OFFSET;
-        int contentTop = HEADER_HEIGHT + scaled(25);
+        int contentTop = headerHeight() + scaled(29);
+        int contentBottom = height - FOOTER_TOP_OFFSET - scaled(8);
+        int settledContentTop = settledHeaderHeight() + scaled(29);
+        int topPadding = Math.max(0, (contentBottom - settledContentTop - MINIMUM_CONTENT_HEIGHT) / 2);
+        contentBottomPadding = topPadding;
+        baseContentHeight = MINIMUM_CONTENT_HEIGHT + topPadding * 2;
+        rankOffset = topPadding;
         boolean showAllowedServers = DMLSConfig.staffRank().isAtLeast(StaffRank.SENIOR_MODERATOR);
-        int contentHeight = STANDARD_BUTTON_HEIGHT * (showAllowedServers ? 5 : 4)
-                + scaled(showAllowedServers ? 125 : 95);
-        rankY = contentTop + Math.max(0, (footerTop - contentTop - contentHeight) / 2);
 
         departmentsWidth = Math.min(scaled(480), width - scaled(32));
         departmentsX = width / 2 - departmentsWidth / 2;
-        allowedServersY = rankY + STANDARD_BUTTON_HEIGHT + scaled(12);
-        dividerY = showAllowedServers
-                ? allowedServersY + STANDARD_BUTTON_HEIGHT + scaled(18)
-                : rankY + STANDARD_BUTTON_HEIGHT + scaled(18);
-        departmentsY = dividerY + scaled(14);
-        departmentDropdownY = departmentsY + scaled(15);
-        integrationsDividerY = departmentDropdownY + STANDARD_BUTTON_HEIGHT + scaled(18);
-        discordLinkY = integrationsDividerY + scaled(14);
-        linkCodeY = discordLinkY + STANDARD_BUTTON_HEIGHT + scaled(8);
+        settingsOffset = rankOffset + STANDARD_BUTTON_HEIGHT + scaled(12);
+        dividerOffset = settingsOffset + STANDARD_BUTTON_HEIGHT + scaled(18);
+        departmentsOffset = dividerOffset + scaled(14);
+        departmentDropdownOffset = departmentsOffset + scaled(15);
+        integrationsDividerOffset = departmentDropdownOffset + STANDARD_BUTTON_HEIGHT + scaled(18);
+        discordLinkOffset = integrationsDividerOffset + scaled(14);
+        linkCodeOffset = discordLinkOffset + STANDARD_BUTTON_HEIGHT + scaled(8);
+        configureScrollableContent(contentTop, contentBottom, baseContentHeight);
+
         int gap = scaled(8);
         int departmentWidth = (departmentsWidth - gap * 2) / 3;
 
         int index = 0;
         for (StaffDepartment department : StaffDepartment.values()) {
             int x = departmentsX + index * (departmentWidth + gap);
-            addDropdownChild(DropdownWidget.builder(
+            addScrollableDropdownChild(DropdownWidget.builder(
                             department.displayName(),
                             DepartmentRank.optionsFor(department),
                             DMLSConfig.departmentRank(department),
                             DepartmentRank::displayName,
                             (dropdown, value) -> DMLSConfig.setDepartmentRank(department, value))
-                    .dimensions(x, departmentDropdownY, departmentWidth, STANDARD_BUTTON_HEIGHT)
+                    .dimensions(x, contentY(departmentDropdownOffset), departmentWidth, STANDARD_BUTTON_HEIGHT)
                     .maxVisibleRows(4)
                     .showOptionLabel(false)
-                    .build());
+                    .build(), departmentDropdownOffset);
             index++;
         }
 
+        int settingGap = scaled(8);
+        int behaviorX = rankX;
+        int behaviorWidth = rankWidth;
         if (showAllowedServers) {
-            addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.option.allowed_servers"),
+            int settingWidth = (departmentsWidth - settingGap) / 2;
+            addScrollableChild(ButtonWidget.builder(Text.translatable("dmls.option.allowed_servers"),
                             button -> client.setScreen(new AllowedServersScreen(this)))
-                    .dimensions(rankX, allowedServersY, rankWidth, STANDARD_BUTTON_HEIGHT).build());
+                    .dimensions(departmentsX, contentY(settingsOffset), settingWidth, STANDARD_BUTTON_HEIGHT).build(),
+                    settingsOffset);
+            behaviorX = departmentsX + settingWidth + settingGap;
+            behaviorWidth = settingWidth;
         }
-        discordLinkButton = addDrawableChild(ButtonWidget.builder(
+        boolean collapseForced = isHeaderCollapseForced();
+        DropdownWidget<HeaderBehavior> behaviorDropdown = DropdownWidget.builder(
+                        Text.translatable("dmls.option.header_behavior"),
+                        HeaderBehavior.options(),
+                        collapseForced ? HeaderBehavior.ALWAYS_SMALL : DMLSConfig.headerBehavior(),
+                        HeaderBehavior::displayName,
+                        (dropdown, value) -> {
+                            if (DMLSConfig.setHeaderBehavior(value)) {
+                                applyHeaderPreferenceImmediately();
+                                clearAndInit();
+                            } else {
+                                dropdown.setValue(DMLSConfig.headerBehavior());
+                            }
+                        })
+                .dimensions(behaviorX, contentY(settingsOffset), behaviorWidth, STANDARD_BUTTON_HEIGHT)
+                .maxVisibleRows(3)
+                .showOptionLabel(true)
+                .build();
+        behaviorDropdown.active = !collapseForced;
+        addScrollableDropdownChild(behaviorDropdown, settingsOffset);
+        discordLinkButton = addScrollableChild(ButtonWidget.builder(
                         discordLinkButtonText(),
                         button -> requestDiscordLink())
-                .dimensions(rankX, discordLinkY, rankWidth, STANDARD_BUTTON_HEIGHT).build());
+                .dimensions(rankX, contentY(discordLinkOffset), rankWidth, STANDARD_BUTTON_HEIGHT).build(),
+                discordLinkOffset);
         discordLinkButton.active = !linked;
-        linkCodeWidget = addDrawableChild(new LinkCodeWidget(
-                rankX, linkCodeY, rankWidth, STANDARD_BUTTON_HEIGHT, linkCode, linkCodeRevealed,
+        linkCodeWidget = addScrollableChild(new LinkCodeWidget(
+                rankX, contentY(linkCodeOffset), rankWidth, STANDARD_BUTTON_HEIGHT, linkCode, linkCodeRevealed,
                 () -> linkCodeRevealed = true,
                 () -> {
                     setLinkStatus(Text.translatable("dmls.option.discord_link.copied"), STATUS_COLOR);
-                }));
-        linkCodeWidget.visible = !linked && !linkCode.isEmpty();
+                }), linkCodeOffset);
+        setScrollableChildEnabled(linkCodeWidget, !linked && !linkCode.isEmpty());
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
 
@@ -127,35 +161,50 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, HEADER_HEIGHT + scaled(16), 0xFFFFFFFF);
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, headerHeight() + scaled(16), 0xFFFFFFFF);
 
+        if (linkStatus != null && System.currentTimeMillis() >= linkStatusUntilMillis) {
+            clearLinkStatus();
+        }
+        List<OrderedText> statusLines = linkStatus == null
+                ? List.of() : textRenderer.wrapLines(linkStatus, departmentsWidth);
+        boolean showLinkCode = !linked && !linkCode.isEmpty();
+        int statusOffset = linkCodeOffset + (showLinkCode
+                ? STANDARD_BUTTON_HEIGHT + scaled(7) : scaled(2));
+        int requiredContentHeight = statusLines.isEmpty() ? baseContentHeight : Math.max(baseContentHeight,
+                statusOffset + statusLines.size() * scaled(11) + scaled(8) + contentBottomPadding);
+        updateScrollableContentHeight(requiredContentHeight);
+
+        beginContentScissor(context);
+        int rankY = contentY(rankOffset);
         renderPanel(context, rankX, rankY, rankWidth, STANDARD_BUTTON_HEIGHT);
         context.drawCenteredTextWithShadow(textRenderer, DMLSConfig.staffRank().displayName(),
                 width / 2, rankY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2 + scaled(1), 0xFFFFFFFF);
 
-        renderSectionDivider(context, dividerY, Text.translatable("dmls.option.departments"));
+        renderSectionDivider(context, contentY(dividerOffset), Text.translatable("dmls.option.departments"));
 
         int gap = scaled(8);
         int departmentWidth = (departmentsWidth - gap * 2) / 3;
         int index = 0;
         for (StaffDepartment department : StaffDepartment.values()) {
             int centerX = departmentsX + index * (departmentWidth + gap) + departmentWidth / 2;
-            context.drawCenteredTextWithShadow(textRenderer, department.displayName(), centerX, departmentsY, 0xFFDDDDDD);
+            context.drawCenteredTextWithShadow(textRenderer, department.displayName(), centerX,
+                    contentY(departmentsOffset), 0xFFDDDDDD);
             index++;
         }
-        renderSectionDivider(context, integrationsDividerY, Text.translatable("dmls.option.integrations"));
-        if (linkStatus != null && System.currentTimeMillis() >= linkStatusUntilMillis) {
-            clearLinkStatus();
-        }
-        if (linkStatus != null) {
-            List<OrderedText> statusLines = textRenderer.wrapLines(linkStatus, departmentsWidth);
-            int statusY = linkCodeWidget != null && linkCodeWidget.visible
-                    ? linkCodeY + STANDARD_BUTTON_HEIGHT + scaled(7)
-                    : linkCodeY + scaled(2);
+        renderSectionDivider(context, contentY(integrationsDividerOffset), Text.translatable("dmls.option.integrations"));
+        if (!statusLines.isEmpty()) {
+            int statusY = contentY(statusOffset);
             for (OrderedText line : statusLines) {
-                context.drawCenteredTextWithShadow(textRenderer, line, width / 2, statusY, linkStatusColor);
+                if (isContentVisible(statusY, textRenderer.fontHeight)) {
+                    context.drawCenteredTextWithShadow(textRenderer, line, width / 2, statusY, linkStatusColor);
+                }
                 statusY += scaled(11);
             }
+        }
+        endContentScissor(context);
+        if (linkCodeWidget != null) {
+            setScrollableChildEnabled(linkCodeWidget, !linked && !linkCode.isEmpty());
         }
         super.render(context, mouseX, mouseY, delta);
     }
@@ -169,6 +218,11 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
                 departmentsX + departmentsWidth, y + 1, PANEL_BORDER_COLOR);
         context.drawCenteredTextWithShadow(textRenderer, label,
                 width / 2, y - textRenderer.fontHeight / 2, 0xFFFFFFFF);
+    }
+
+    @Override
+    protected int contentScrollbarX() {
+        return departmentsX + departmentsWidth + scaled(7);
     }
 
     private void requestDiscordLink() {
@@ -201,7 +255,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
                 linkCode = "";
                 linkClientToken = "";
                 linkCodeRevealed = false;
-                linkCodeWidget.visible = false;
+                setScrollableChildEnabled(linkCodeWidget, false);
                 discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link"));
                 setLinkStatus(Text.translatable("dmls.option.discord_link.error.storage"), ERROR_COLOR);
                 return;
@@ -212,7 +266,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
             clearCachedProfile();
             linkCodeRevealed = false;
             linkCodeWidget.setCode(linkCode);
-            linkCodeWidget.visible = true;
+            setScrollableChildEnabled(linkCodeWidget, true);
             discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.new_code"));
             setLinkStatus(Text.translatable("dmls.option.discord_link.instructions"), STATUS_COLOR);
             pendingStatusShown = true;
@@ -278,7 +332,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
             case EXPIRED -> clearInvalidToken("dmls.option.discord_link.error.expired");
             case AUTHORIZATION_STALE -> {
                 linked = false;
-                linkCodeWidget.visible = false;
+                setScrollableChildEnabled(linkCodeWidget, false);
                 discordLinkButton.active = false;
                 discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.stale"));
                 setLinkStatus(Text.translatable("dmls.option.discord_link.error.stale"), ERROR_COLOR);
@@ -300,7 +354,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         pendingStatusShown = false;
         linkCode = "";
         linkCodeRevealed = false;
-        linkCodeWidget.visible = false;
+        setScrollableChildEnabled(linkCodeWidget, false);
         discordLinkButton.active = false;
         discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.linked"));
         clearLinkStatus();
@@ -308,6 +362,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
             DiscordAccountProfileStore.save(profile);
             DiscordAvatarCache.ensureCached(profile);
         }
+        refreshDiscordAccount();
     }
 
     private void clearInvalidToken(String messageKey) {
@@ -321,10 +376,11 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         linkCode = "";
         linkClientToken = "";
         linkCodeRevealed = false;
-        linkCodeWidget.visible = false;
+        setScrollableChildEnabled(linkCodeWidget, false);
         discordLinkButton.active = true;
         discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link"));
         setLinkStatus(Text.translatable(messageKey), ERROR_COLOR);
+        refreshDiscordAccount();
     }
 
     private void retryStatusCheck(int generation, String messageKey, int delaySeconds) {

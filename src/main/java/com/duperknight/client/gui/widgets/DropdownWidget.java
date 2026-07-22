@@ -36,6 +36,7 @@ public final class DropdownWidget<T> extends PressableWidget {
     private static final int MIN_SCROLLBAR_THUMB_HEIGHT = 8;
     private static final int INDICATOR_TEXTURE_SIZE = 16;
     private static final int INDICATOR_RENDER_SIZE = 12;
+    private static final int EXPANDED_BACKGROUND_COLOR = 0xEC101010;
 
     private final Text optionText;
     private final List<T> values;
@@ -151,7 +152,7 @@ public final class DropdownWidget<T> extends PressableWidget {
 
         layoutVisibleButtons();
         context.createNewRootLayer();
-        drawPanel(context, getX(), menuTop(), width, menuHeight());
+        drawExpandedPanel(context, getX(), menuTop(), width, menuHeight());
         int end = Math.min(values.size(), scrollOffset + visibleRowCount());
         for (int index = scrollOffset; index < end; index++) {
             optionButtons.get(index).render(context, mouseX, mouseY, delta);
@@ -353,6 +354,11 @@ public final class DropdownWidget<T> extends PressableWidget {
 
     private static void drawPanel(DrawContext context, int x, int y, int width, int height) {
         context.fill(x, y, x + width, y + height, DMLSMenuScreen.PANEL_BACKGROUND_COLOR);
+        context.drawStrokedRectangle(x, y, width, height, DMLSMenuScreen.PANEL_BORDER_COLOR);
+    }
+
+    private static void drawExpandedPanel(DrawContext context, int x, int y, int width, int height) {
+        context.fill(x, y, x + width, y + height, EXPANDED_BACKGROUND_COLOR);
         context.drawStrokedRectangle(x, y, width, height, DMLSMenuScreen.PANEL_BORDER_COLOR);
     }
 

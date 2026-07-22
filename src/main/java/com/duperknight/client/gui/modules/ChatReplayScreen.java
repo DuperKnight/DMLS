@@ -236,8 +236,10 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         ReplayLayout layout = replayLayout();
         if (isOverSessionViewport(layout, mouseX, mouseY) && maxSessionScroll > 0) {
+            int previousOffset = sessionScrollOffset;
             sessionScrollOffset = Math.clamp(sessionScrollOffset - (int) (verticalAmount * scaled(24)),
                     0, maxSessionScroll);
+            updateHeaderForScrollChange(previousOffset, sessionScrollOffset);
             updateSessionButtonPositions();
             return true;
         }
@@ -361,8 +363,9 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
+        updateSessionScrollBounds();
         context.drawCenteredTextWithShadow(textRenderer, title, width / 2,
-                HEADER_HEIGHT + scaled(16), 0xFFFFFFFF);
+                headerHeight() + scaled(16), 0xFFFFFFFF);
 
         beginContentScissor(context);
         if (loading && lines.isEmpty()) {
@@ -428,7 +431,7 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         int sessionX = (width - totalWidth) / 2;
         int contentX = sessionX + sessionWidth + PANE_GAP;
         int contentWidth = Math.max(scaled(100), totalWidth - sessionWidth - PANE_GAP - scaled(38));
-        int viewportTop = HEADER_HEIGHT + scaled(34);
+        int viewportTop = headerHeight() + scaled(34);
         int scrollbarX = contentX + contentWidth + scaled(4);
         return new ReplayLayout(sessionX, sessionWidth, sessionX + sessionWidth + scaled(3),
                 contentX, contentWidth, scrollbarX,
@@ -490,8 +493,10 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         int thumbHeight = scrollbarThumbHeight(viewportHeight, viewportHeight + maxSessionScroll);
         int trackHeight = Math.max(1, viewportHeight - thumbHeight);
         double relative = Math.clamp((int) (mouseY - layout.viewportTop() - thumbHeight / 2.0), 0, trackHeight);
+        int previousOffset = sessionScrollOffset;
         sessionScrollOffset = Math.clamp((int) Math.round(relative * maxSessionScroll / trackHeight),
                 0, maxSessionScroll);
+        updateHeaderForScrollChange(previousOffset, sessionScrollOffset);
         updateSessionButtonPositions();
     }
 
