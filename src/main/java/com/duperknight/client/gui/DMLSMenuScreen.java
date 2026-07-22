@@ -120,8 +120,14 @@ public abstract class DMLSMenuScreen extends Screen {
         scrollableWidgets.clear();
         contentViewportTop = viewportTop;
         contentViewportBottom = Math.max(contentViewportTop + 1, viewportBottom);
+        updateScrollableContentHeight(contentHeight);
+    }
+
+    /** Updates a form's scroll range when custom-drawn content changes height. */
+    protected void updateScrollableContentHeight(int contentHeight) {
         maxContentScroll = Math.max(0, contentHeight - (contentViewportBottom - contentViewportTop));
         contentScrollOffset = Math.clamp(contentScrollOffset, 0, maxContentScroll);
+        updateScrollableWidgets();
     }
 
     protected int contentY(int offset) {

@@ -2,6 +2,9 @@ package com.duperknight.client.gui;
 
 import com.duperknight.client.accountlink.DiscordLinkService;
 import com.duperknight.client.accountlink.DiscordLinkTokenStore;
+import com.duperknight.client.accountlink.DiscordAccountProfile;
+import com.duperknight.client.accountlink.DiscordAccountProfileStore;
+import com.duperknight.client.accountlink.DiscordAvatarCache;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.gui.widgets.LinkCodeWidget;
 import com.duperknight.client.modules.DepartmentRank;
@@ -206,6 +209,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
             linkCode = result.code();
             linkClientToken = result.clientToken();
             linked = false;
+            clearCachedProfile();
             linkCodeRevealed = false;
             linkCodeWidget.setCode(linkCode);
             linkCodeWidget.visible = true;
@@ -256,12 +260,13 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         if (client == null || client.currentScreen != this || generation != statusGeneration) return;
 
         switch (result.status()) {
-            case LINKED -> showLinked();
+            case LINKED -> showLinked(result.profile());
             case PENDING -> {
                 linked = false;
                 discordLinkButton.active = true;
                 discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.new_code"));
                 if (!pendingStatusShown) {
+                    clearCachedProfile();
                     setLinkStatus(Text.translatable(linkCode.isEmpty()
                             ? "dmls.option.discord_link.pending_without_code"
                             : "dmls.option.discord_link.instructions"), STATUS_COLOR);
@@ -290,7 +295,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         }
     }
 
-    private void showLinked() {
+    private void showLinked(DiscordAccountProfile profile) {
         linked = true;
         pendingStatusShown = false;
         linkCode = "";
@@ -299,11 +304,16 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         discordLinkButton.active = false;
         discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.linked"));
         clearLinkStatus();
+        if (profile != null) {
+            DiscordAccountProfileStore.save(profile);
+            DiscordAvatarCache.ensureCached(profile);
+        }
     }
 
     private void clearInvalidToken(String messageKey) {
         if (client != null && client.getSession().getUuidOrNull() != null) {
             DiscordLinkTokenStore.delete(client.getSession().getUuidOrNull());
+            clearCachedProfile();
         }
         statusGeneration++;
         linked = false;
@@ -346,6 +356,13 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     private void clearLinkStatus() {
         linkStatus = null;
         linkStatusUntilMillis = 0L;
+    }
+
+    private void clearCachedProfile() {
+        if (client == null || client.getSession().getUuidOrNull() == null) return;
+        var minecraftUuid = client.getSession().getUuidOrNull();
+        DiscordAccountProfileStore.load(minecraftUuid).ifPresent(DiscordAvatarCache::deleteCached);
+        DiscordAccountProfileStore.delete(minecraftUuid);
     }
 
     private static String safeMessage(String message) {

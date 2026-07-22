@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class DiscordLinkServiceTest {
@@ -61,11 +62,17 @@ final class DiscordLinkServiceTest {
         JsonObject functionResponse = new JsonObject();
         functionResponse.addProperty("status", "linked");
         functionResponse.addProperty("minecraftUuid", MINECRAFT_UUID.toString());
+        functionResponse.addProperty("discordUserId", "123456789012345678");
+        functionResponse.addProperty("discordUsername", "username");
+        functionResponse.addProperty("discordDisplayName", "Server nickname");
+        functionResponse.addProperty("discordAvatarUrl", "https://cdn.discordapp.com/avatars/123/avatar.png");
 
         DiscordLinkService.LinkStatusResult result = DiscordLinkService.parseStatusExecutionResponse(
                 201, executionResponse(200, functionResponse), MINECRAFT_UUID);
 
         assertEquals(DiscordLinkService.LinkStatus.LINKED, result.status());
+        assertEquals("username", result.profile().discordUsername());
+        assertEquals("Server nickname", result.profile().discordDisplayName());
     }
 
     @Test
@@ -93,6 +100,43 @@ final class DiscordLinkServiceTest {
                 201, executionResponse(401, functionResponse), MINECRAFT_UUID);
 
         assertEquals(DiscordLinkService.LinkStatus.INVALID_TOKEN, result.status());
+    }
+
+    @Test
+    void acceptsLinkedStatusBeforeProfileBackfill() {
+        JsonObject functionResponse = new JsonObject();
+        functionResponse.addProperty("status", "linked");
+        functionResponse.addProperty("minecraftUuid", MINECRAFT_UUID.toString());
+        functionResponse.addProperty("discordUserId", "123456789012345678");
+
+        DiscordLinkService.LinkStatusResult result = DiscordLinkService.parseStatusExecutionResponse(
+                201, executionResponse(200, functionResponse), MINECRAFT_UUID);
+
+        assertEquals(DiscordLinkService.LinkStatus.LINKED, result.status());
+        assertNull(result.profile());
+    }
+
+    @Test
+    void treatsDocumentedUnlinkStatusesAsLocallyUnlinked() {
+        for (int responseStatus : new int[]{200, 401, 405}) {
+            JsonObject functionResponse = new JsonObject();
+            functionResponse.addProperty("status", responseStatus == 200 ? "unlinked" : "error");
+            DiscordLinkService.UnlinkResult result = DiscordLinkService.parseUnlinkExecutionResponse(
+                    201, executionResponse(responseStatus, functionResponse));
+            assertTrue(result.unlinkedLocally());
+        }
+    }
+
+    @Test
+    void preservesAccountOnUnlinkRateLimit() {
+        JsonObject functionResponse = new JsonObject();
+        functionResponse.addProperty("error", "rate_limited");
+        functionResponse.addProperty("message", "Too many requests.");
+
+        DiscordLinkService.UnlinkResult result = DiscordLinkService.parseUnlinkExecutionResponse(
+                201, executionResponse(429, functionResponse));
+
+        assertEquals(DiscordLinkService.UnlinkStatus.RATE_LIMITED, result.status());
     }
 
     private static String executionResponse(int status, JsonObject functionResponse) {

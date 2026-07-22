@@ -19,6 +19,10 @@ import java.util.List;
 /** Form for creating a formatted server prefix. */
 public final class PrefixCreateScreen extends DMLSMenuScreen {
     private static final int PREVIEW_HEIGHT = 24;
+    private static final int COMMAND_STATUS_OFFSET = scaled(238);
+    private static final int VALIDATION_OFFSET = scaled(258);
+    private static final int VALIDATION_LINE_SPACING = scaled(12);
+    private static final int CONTENT_BOTTOM_PADDING = scaled(10);
 
     private final PrefixCreateModule module;
     private TextFieldWidget ignField;
@@ -42,7 +46,7 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
         String savedPrefixText = fieldText(prefixTextField);
         String savedCustomLimit = fieldText(customLimitField);
 
-        configureScrollableContent(module, scaled(370));
+        configureScrollableContent(module, contentHeight());
         int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
         int splitWidth = (formWidth * 2) / 3;
@@ -145,6 +149,7 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
         if (submitButton != null) {
             submitButton.active = (DMLSConfig.dryRun() || !ClientUtils.isNotConnected(client)) && validation.valid();
         }
+        updateScrollableContentHeight(contentHeight());
     }
 
     private void submit() {
@@ -198,7 +203,7 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
 
     private void renderCommandStatus(DrawContext context, int formX, int formWidth) {
         int commandLength = PrefixCreateModule.createCommand(prefixIdField.getText().trim(), prefixTextField.getText()).length();
-        int statusY = contentY(scaled(238));
+        int statusY = contentY(COMMAND_STATUS_OFFSET);
         int color = commandLength > PrefixCreateModule.MAX_COMMAND_LENGTH ? 0xFFFF5555 : 0xFFAAAAAA;
         if (isContentVisible(statusY, textRenderer.fontHeight)) {
             context.drawTextWithShadow(textRenderer, Text.translatable("dmls.prefix.command_length", commandLength, PrefixCreateModule.MAX_COMMAND_LENGTH),
@@ -210,14 +215,26 @@ public final class PrefixCreateScreen extends DMLSMenuScreen {
         if (validation.valid() || validation.message().getString().isEmpty()) {
             return;
         }
-        int y = contentY(scaled(258));
+        int y = contentY(VALIDATION_OFFSET);
         List<OrderedText> lines = textRenderer.wrapLines(validation.message(), formWidth);
         for (OrderedText line : lines) {
             if (isContentVisible(y, textRenderer.fontHeight)) {
                 context.drawCenteredTextWithShadow(textRenderer, line, width / 2, y, 0xFFFF5555);
             }
-            y += scaled(12);
+            y += VALIDATION_LINE_SPACING;
         }
+    }
+
+    private int contentHeight() {
+        int contentBottom = COMMAND_STATUS_OFFSET + textRenderer.fontHeight;
+        if (!validation.valid() && !validation.message().getString().isEmpty()) {
+            int formWidth = Math.min(scaled(360), width - scaled(48));
+            int lineCount = textRenderer.wrapLines(validation.message(), formWidth).size();
+            contentBottom = VALIDATION_OFFSET
+                    + Math.max(0, lineCount - 1) * VALIDATION_LINE_SPACING
+                    + textRenderer.fontHeight;
+        }
+        return contentBottom + CONTENT_BOTTOM_PADDING;
     }
 
     private void drawContentLabel(DrawContext context, Text label, int x, int y) {

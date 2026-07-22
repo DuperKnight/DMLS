@@ -13,11 +13,16 @@ import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.screen.ScreenTexts;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import java.util.List;
 
 /** Form that composes CoreProtect commands with validation and a live preview. */
 public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
+    private static final int PREVIEW_OFFSET = scaled(246);
+    private static final int PREVIEW_WARNING_GAP = scaled(5);
+    private static final int CONTENT_BOTTOM_PADDING = scaled(10);
+
     private final CoreProtectBuilderModule module;
     private TextFieldWidget userField;
     private TextFieldWidget timeField;
@@ -143,6 +148,7 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
         if (copyButton != null) {
             copyButton.active = result.valid();
         }
+        updateScrollableContentHeight(previewContentHeight());
     }
 
     @Override
@@ -164,25 +170,24 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
         drawLabel(context, "dmls.field.co.include.label", includeField.getX(), scaled(126));
         drawLabel(context, "dmls.field.co.exclude.label", excludeField.getX(), scaled(172));
 
-        int previewY = contentY(scaled(246));
-        if (result.valid()) {
-            List<OrderedText> lines = textRenderer.wrapLines(Text.literal("§7> §6/" + result.command()),
-                    Math.min(scaled(360), width - scaled(48)));
-            for (OrderedText line : lines) {
-                if (isContentVisible(previewY, textRenderer.fontHeight)) {
-                    context.drawCenteredTextWithShadow(textRenderer, line, width / 2, previewY, 0xFFFFFFFF);
-                }
-                previewY += textRenderer.fontHeight + 1;
+        int textY = contentY(PREVIEW_OFFSET);
+        int lineSpacing = textRenderer.fontHeight + 1;
+        List<OrderedText> previewLines = previewLines();
+        int previewColor = result.valid() ? 0xFFFFFFFF : 0xFFFF5555;
+        for (OrderedText line : previewLines) {
+            if (isContentVisible(textY, textRenderer.fontHeight)) {
+                context.drawCenteredTextWithShadow(textRenderer, line, width / 2, textY, previewColor);
             }
-        } else if (isContentVisible(previewY, textRenderer.fontHeight)) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.translatable(result.errorKey()), width / 2, previewY, 0xFFFF5555);
+            textY += lineSpacing;
         }
 
         if (!mode.equals("lookup")) {
-            int warningY = contentY(scaled(292));
-            if (isContentVisible(warningY, textRenderer.fontHeight)) {
-                context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.module.co_builder.warning"),
-                        width / 2, warningY, 0xFFFFAA00);
+            textY += PREVIEW_WARNING_GAP;
+            for (OrderedText line : warningLines()) {
+                if (isContentVisible(textY, textRenderer.fontHeight)) {
+                    context.drawCenteredTextWithShadow(textRenderer, line, width / 2, textY, 0xFFFF5555);
+                }
+                textY += lineSpacing;
             }
         }
         endContentScissor(context);
@@ -198,5 +203,33 @@ public final class CoreProtectBuilderScreen extends DMLSMenuScreen {
         if (isContentVisible(y, textRenderer.fontHeight)) {
             context.drawTextWithShadow(textRenderer, Text.translatable(key), x, y, 0xFFCCCCCC);
         }
+    }
+
+    private List<OrderedText> previewLines() {
+        Text preview = result.valid()
+                ? Text.literal("> ").formatted(Formatting.GRAY)
+                        .append(Text.literal("/" + result.command()).formatted(Formatting.GOLD))
+                : Text.translatable(result.errorKey());
+        return textRenderer.wrapLines(preview, previewTextWidth());
+    }
+
+    private List<OrderedText> warningLines() {
+        return textRenderer.wrapLines(Text.translatable("dmls.module.co_builder.warning"), previewTextWidth());
+    }
+
+    private int previewTextWidth() {
+        int standardWidth = Math.min(scaled(360), width - scaled(48));
+        int safeRightEdge = contentScrollbarX() - scaled(8);
+        int scrollbarSafeWidth = Math.max(1, (safeRightEdge - width / 2) * 2);
+        return Math.max(1, Math.min(standardWidth, scrollbarSafeWidth));
+    }
+
+    private int previewContentHeight() {
+        int lineSpacing = textRenderer.fontHeight + 1;
+        int contentBottom = PREVIEW_OFFSET + previewLines().size() * lineSpacing;
+        if (!mode.equals("lookup")) {
+            contentBottom += PREVIEW_WARNING_GAP + warningLines().size() * lineSpacing;
+        }
+        return Math.max(scaled(280), contentBottom + CONTENT_BOTTOM_PADDING);
     }
 }

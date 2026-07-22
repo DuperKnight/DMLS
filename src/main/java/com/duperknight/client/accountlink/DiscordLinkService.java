@@ -98,6 +98,36 @@ public final class DiscordLinkService {
                 });
     }
 
+    public static CompletableFuture<UnlinkResult> unlink(String clientToken) {
+        if (clientToken == null || !CLIENT_TOKEN.matcher(clientToken).matches()) {
+            return CompletableFuture.completedFuture(UnlinkResult.unlinked());
+        }
+
+        JsonObject executionBody = new JsonObject();
+        executionBody.addProperty("body", "");
+        executionBody.addProperty("async", false);
+        executionBody.addProperty("path", "/v1/link");
+        executionBody.addProperty("method", "DELETE");
+        JsonObject forwardedHeaders = new JsonObject();
+        forwardedHeaders.addProperty("authorization", "Bearer " + clientToken);
+        executionBody.add("headers", forwardedHeaders);
+
+        HttpRequest request = HttpRequest.newBuilder(EXECUTION_URI)
+                .timeout(TIMEOUT)
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/json")
+                .header("X-Appwrite-Project", APPWRITE_PROJECT)
+                .header("User-Agent", "DuperKnight/DMLS")
+                .POST(HttpRequest.BodyPublishers.ofString(executionBody.toString()))
+                .build();
+
+        return HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .handle((response, error) -> {
+                    if (error != null) return unlinkFailureResult(error);
+                    return parseUnlinkExecutionResponse(response.statusCode(), response.body());
+                });
+    }
+
     static Result parseExecutionResponse(int httpStatus, String body) {
         try {
             JsonObject outer = JsonParser.parseString(body).getAsJsonObject();
@@ -176,7 +206,9 @@ public final class DiscordLinkService {
             if (!expectedUuid.toString().equalsIgnoreCase(minecraftUuid)) {
                 return LinkStatusResult.failure(LinkStatus.MALFORMED_RESPONSE, "");
             }
-            if ("linked".equals(status)) return LinkStatusResult.linked();
+            if ("linked".equals(status)) {
+                return LinkStatusResult.linked(optionalProfile(functionResponse, expectedUuid));
+            }
             if (!"pending".equals(status)) {
                 return LinkStatusResult.failure(LinkStatus.MALFORMED_RESPONSE, "");
             }
@@ -192,12 +224,55 @@ public final class DiscordLinkService {
         }
     }
 
+    static UnlinkResult parseUnlinkExecutionResponse(int httpStatus, String body) {
+        try {
+            JsonObject outer = JsonParser.parseString(body).getAsJsonObject();
+            if (httpStatus == 429) return UnlinkResult.failure(UnlinkStatus.RATE_LIMITED, outerMessage(outer));
+            if (httpStatus < 200 || httpStatus >= 300) {
+                return UnlinkResult.failure(UnlinkStatus.SERVICE_ERROR, outerMessage(outer));
+            }
+
+            JsonElement statusElement = outer.get("responseStatusCode");
+            JsonElement bodyElement = outer.get("responseBody");
+            if (statusElement == null || !statusElement.isJsonPrimitive()
+                    || bodyElement == null || !bodyElement.isJsonPrimitive()) {
+                return UnlinkResult.failure(UnlinkStatus.MALFORMED_RESPONSE, "");
+            }
+            int responseStatus = statusElement.getAsInt();
+            JsonObject functionResponse = JsonParser.parseString(bodyElement.getAsString()).getAsJsonObject();
+            if (responseStatus == 200 || responseStatus == 401 || responseStatus == 405) {
+                return UnlinkResult.unlinked();
+            }
+            if (responseStatus == 429) {
+                return UnlinkResult.failure(UnlinkStatus.RATE_LIMITED, functionMessage(functionResponse));
+            }
+            return UnlinkResult.failure(UnlinkStatus.SERVICE_ERROR, functionMessage(functionResponse));
+        } catch (RuntimeException error) {
+            return UnlinkResult.failure(UnlinkStatus.MALFORMED_RESPONSE, "");
+        }
+    }
+
     private static String requiredString(JsonObject object, String name) {
         JsonElement element = object.get(name);
         if (!(element instanceof JsonPrimitive primitive) || !primitive.isString()) {
             throw new IllegalStateException("Missing response field: " + name);
         }
         return primitive.getAsString();
+    }
+
+    private static DiscordAccountProfile optionalProfile(JsonObject object, UUID minecraftUuid) {
+        String userId = optionalString(object, "discordUserId");
+        String username = optionalString(object, "discordUsername");
+        String displayName = optionalString(object, "discordDisplayName");
+        String avatarUrl = optionalString(object, "discordAvatarUrl");
+        if (userId == null || username == null || displayName == null || avatarUrl == null) return null;
+        return new DiscordAccountProfile(minecraftUuid, userId, username, displayName, avatarUrl);
+    }
+
+    private static String optionalString(JsonObject object, String name) {
+        JsonElement element = object.get(name);
+        return element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()
+                ? element.getAsString() : null;
     }
 
     private static String outerMessage(JsonObject object) {
@@ -220,6 +295,12 @@ public final class DiscordLinkService {
         Throwable cause = unwrap(error);
         return LinkStatusResult.failure(cause instanceof java.net.http.HttpTimeoutException
                 ? LinkStatus.TIMEOUT : LinkStatus.NETWORK_ERROR, "");
+    }
+
+    private static UnlinkResult unlinkFailureResult(Throwable error) {
+        Throwable cause = unwrap(error);
+        return UnlinkResult.failure(cause instanceof java.net.http.HttpTimeoutException
+                ? UnlinkStatus.TIMEOUT : UnlinkStatus.NETWORK_ERROR, "");
     }
 
     private static Throwable unwrap(Throwable error) {
@@ -263,22 +344,23 @@ public final class DiscordLinkService {
         MALFORMED_RESPONSE
     }
 
-    public record LinkStatusResult(LinkStatus status, int pollAfterSeconds, String message) {
+    public record LinkStatusResult(LinkStatus status, int pollAfterSeconds, String message,
+                                   DiscordAccountProfile profile) {
         public LinkStatusResult {
             Objects.requireNonNull(status, "status");
             message = message == null ? "" : message;
         }
 
-        static LinkStatusResult linked() {
-            return new LinkStatusResult(LinkStatus.LINKED, 0, "");
+        static LinkStatusResult linked(DiscordAccountProfile profile) {
+            return new LinkStatusResult(LinkStatus.LINKED, 0, "", profile);
         }
 
         static LinkStatusResult pending(int pollAfterSeconds) {
-            return new LinkStatusResult(LinkStatus.PENDING, pollAfterSeconds, "");
+            return new LinkStatusResult(LinkStatus.PENDING, pollAfterSeconds, "", null);
         }
 
         static LinkStatusResult failure(LinkStatus status, String message) {
-            return new LinkStatusResult(status, 0, message);
+            return new LinkStatusResult(status, 0, message, null);
         }
     }
 
@@ -288,6 +370,34 @@ public final class DiscordLinkService {
         INVALID_TOKEN,
         AUTHORIZATION_STALE,
         EXPIRED,
+        RATE_LIMITED,
+        TIMEOUT,
+        NETWORK_ERROR,
+        SERVICE_ERROR,
+        MALFORMED_RESPONSE
+    }
+
+    public record UnlinkResult(UnlinkStatus status, String message) {
+        public UnlinkResult {
+            Objects.requireNonNull(status, "status");
+            message = message == null ? "" : message;
+        }
+
+        static UnlinkResult unlinked() {
+            return new UnlinkResult(UnlinkStatus.UNLINKED, "");
+        }
+
+        static UnlinkResult failure(UnlinkStatus status, String message) {
+            return new UnlinkResult(status, message);
+        }
+
+        public boolean unlinkedLocally() {
+            return status == UnlinkStatus.UNLINKED;
+        }
+    }
+
+    public enum UnlinkStatus {
+        UNLINKED,
         RATE_LIMITED,
         TIMEOUT,
         NETWORK_ERROR,
