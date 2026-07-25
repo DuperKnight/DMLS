@@ -2,6 +2,7 @@ package com.duperknight.client.utils;
 
 import com.duperknight.DMLS;
 import com.duperknight.client.modules.DepartmentRank;
+import com.duperknight.client.modules.GreeterMessages;
 import com.duperknight.client.modules.MiniMeHudPreferences;
 import com.duperknight.client.modules.StaffDepartment;
 import com.duperknight.client.modules.StaffRank;
@@ -32,8 +33,10 @@ public final class DMLSConfig {
     private static final String ALERTS_KEY = "chatAlerts";
     private static final String TRADE_CHAT_MUTED_KEY = "tradeChatMuted";
     private static final String SERVER_MESSAGES_MUTED_KEY = "serverMessagesMuted";
-    private static final String SERVER_SUMMON_MESSAGES_MUTED_KEY = "serverSummonMessagesMuted";
+    private static final String PLAYER_COMMAND_FEEDBACK_MUTED_KEY = "playerCommandFeedbackMuted";
+    private static final String LEGACY_SERVER_SUMMON_MESSAGES_MUTED_KEY = "serverSummonMessagesMuted";
     private static final String GREETER_ENABLED_KEY = "greeterEnabled";
+    private static final String GREETER_MESSAGE_PREFIX = "greeter.message.";
     private static final String DO_NOT_INSTA_BAN_ENABLED_KEY = "doNotInstaBan.enabled";
     private static final String ALLOWED_SERVERS_KEY = "allowedServers";
     private static final String HEADER_BEHAVIOR_KEY = "headerBehavior";
@@ -63,8 +66,9 @@ public final class DMLSConfig {
     private static boolean alertsEnabled = true;
     private static boolean tradeChatMuted;
     private static boolean serverMessagesMuted;
-    private static boolean serverSummonMessagesMuted;
+    private static boolean playerCommandFeedbackMuted;
     private static boolean greeterEnabled = true;
+    private static List<String> greeterMessages = List.of();
     private static boolean doNotInstaBanEnabled;
     private static List<String> allowedServers = ServerGuard.DEFAULT_ALLOWED_SERVERS;
     private static HeaderBehavior headerBehavior = HeaderBehavior.ON_SCROLL;
@@ -183,17 +187,17 @@ public final class DMLSConfig {
         return false;
     }
 
-    public static boolean serverSummonMessagesMuted() {
+    public static boolean playerCommandFeedbackMuted() {
         ensureLoaded();
-        return serverSummonMessagesMuted;
+        return playerCommandFeedbackMuted;
     }
 
-    public static boolean setServerSummonMessagesMuted(boolean muted) {
+    public static boolean setPlayerCommandFeedbackMuted(boolean muted) {
         ensureLoaded();
-        boolean previous = serverSummonMessagesMuted;
-        serverSummonMessagesMuted = muted;
+        boolean previous = playerCommandFeedbackMuted;
+        playerCommandFeedbackMuted = muted;
         if (save()) return true;
-        serverSummonMessagesMuted = previous;
+        playerCommandFeedbackMuted = previous;
         return false;
     }
 
@@ -208,6 +212,25 @@ public final class DMLSConfig {
         greeterEnabled = enabled;
         if (save()) return true;
         greeterEnabled = previous;
+        return false;
+    }
+
+    public static List<String> greeterMessages() {
+        ensureLoaded();
+        return greeterMessages;
+    }
+
+    /**
+     * Persists validated custom greeter templates. An empty list means to use the built-in default.
+     */
+    public static boolean setGreeterMessages(List<String> messages) {
+        ensureLoaded();
+        Optional<List<String>> normalized = GreeterMessages.normalizeTemplates(messages);
+        if (normalized.isEmpty()) return false;
+        List<String> previous = greeterMessages;
+        greeterMessages = normalized.get();
+        if (save()) return true;
+        greeterMessages = previous;
         return false;
     }
 
@@ -364,9 +387,11 @@ public final class DMLSConfig {
         alertsEnabled = Boolean.parseBoolean(properties.getProperty(ALERTS_KEY, "true"));
         tradeChatMuted = Boolean.parseBoolean(properties.getProperty(TRADE_CHAT_MUTED_KEY, "false"));
         serverMessagesMuted = Boolean.parseBoolean(properties.getProperty(SERVER_MESSAGES_MUTED_KEY, "false"));
-        serverSummonMessagesMuted = Boolean.parseBoolean(
-                properties.getProperty(SERVER_SUMMON_MESSAGES_MUTED_KEY, "false"));
+        playerCommandFeedbackMuted = Boolean.parseBoolean(properties.getProperty(
+                PLAYER_COMMAND_FEEDBACK_MUTED_KEY,
+                properties.getProperty(LEGACY_SERVER_SUMMON_MESSAGES_MUTED_KEY, "false")));
         greeterEnabled = Boolean.parseBoolean(properties.getProperty(GREETER_ENABLED_KEY, "true"));
+        greeterMessages = loadGreeterMessages(properties);
         doNotInstaBanEnabled = Boolean.parseBoolean(properties.getProperty(DO_NOT_INSTA_BAN_ENABLED_KEY, "false"));
         headerBehavior = HeaderBehavior.parse(properties.getProperty(HEADER_BEHAVIOR_KEY));
         ModerationPreferences defaults = ModerationPreferences.defaults();
@@ -429,8 +454,11 @@ public final class DMLSConfig {
         properties.setProperty(ALERTS_KEY, Boolean.toString(alertsEnabled));
         properties.setProperty(TRADE_CHAT_MUTED_KEY, Boolean.toString(tradeChatMuted));
         properties.setProperty(SERVER_MESSAGES_MUTED_KEY, Boolean.toString(serverMessagesMuted));
-        properties.setProperty(SERVER_SUMMON_MESSAGES_MUTED_KEY, Boolean.toString(serverSummonMessagesMuted));
+        properties.setProperty(PLAYER_COMMAND_FEEDBACK_MUTED_KEY, Boolean.toString(playerCommandFeedbackMuted));
         properties.setProperty(GREETER_ENABLED_KEY, Boolean.toString(greeterEnabled));
+        for (int index = 0; index < greeterMessages.size(); index++) {
+            properties.setProperty(GREETER_MESSAGE_PREFIX + index, greeterMessages.get(index));
+        }
         properties.setProperty(DO_NOT_INSTA_BAN_ENABLED_KEY, Boolean.toString(doNotInstaBanEnabled));
         properties.setProperty(ALLOWED_SERVERS_KEY, String.join(",", allowedServers));
         properties.setProperty(HEADER_BEHAVIOR_KEY, headerBehavior.name());
@@ -475,6 +503,26 @@ public final class DMLSConfig {
         return ranks;
     }
 
+    private static List<String> loadGreeterMessages(Properties properties) {
+        return properties.stringPropertyNames().stream()
+                .filter(key -> key.startsWith(GREETER_MESSAGE_PREFIX))
+                .map(key -> new IndexedMessage(
+                        parseMessageIndex(key.substring(GREETER_MESSAGE_PREFIX.length())),
+                        properties.getProperty(key, "")))
+                .filter(message -> message.index() >= 0)
+                .sorted(java.util.Comparator.comparingInt(IndexedMessage::index))
+                .map(IndexedMessage::text)
+                .toList();
+    }
+
+    private static int parseMessageIndex(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
+    }
+
     private static List<String> withMandatoryAllowedServers(List<String> servers) {
         List<String> configured = servers == null ? List.of() : servers;
         return java.util.stream.Stream.concat(ServerGuard.DEFAULT_ALLOWED_SERVERS.stream(), configured.stream())
@@ -491,5 +539,8 @@ public final class DMLSConfig {
         } catch (IllegalStateException ignored) {
             // Normal while disconnected or before the server's command packet arrives.
         }
+    }
+
+    private record IndexedMessage(int index, String text) {
     }
 }

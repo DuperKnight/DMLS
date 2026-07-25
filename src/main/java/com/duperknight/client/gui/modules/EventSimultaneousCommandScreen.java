@@ -1,6 +1,7 @@
 package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
+import com.duperknight.client.gui.widgets.RemoveButtonWidget;
 import com.duperknight.client.modules.EventSimultaneousCommandModule;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -67,9 +68,10 @@ public final class EventSimultaneousCommandScreen extends DMLSMenuScreen {
             commandFields.add(field);
 
             if (removable) {
-                addScrollableChild(ButtonWidget.builder(Text.literal("✕"), button -> removeCommand(commandIndex))
-                        .dimensions(formX + formWidth - removeWidth, contentY(rowOffset + scaled(14)),
-                                removeWidth, STANDARD_BUTTON_HEIGHT).build(), rowOffset + scaled(14));
+                addScrollableChild(new RemoveButtonWidget(
+                        formX + formWidth - removeWidth, contentY(rowOffset + scaled(14)),
+                        removeWidth, STANDARD_BUTTON_HEIGHT,
+                        button -> removeCommand(commandIndex)), rowOffset + scaled(14));
             }
         }
 

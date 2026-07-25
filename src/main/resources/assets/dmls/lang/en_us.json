@@ -137,7 +137,7 @@
   "dmls.module.chat_spam.description": "Hide trade chat and server messages on this client.",
   "dmls.module.chat_spam.trade_chat_toggle": "Trade Chat Muted",
   "dmls.module.chat_spam.server_messages_toggle": "Server Messages Muted",
-  "dmls.module.chat_spam.server_summon_messages_toggle": "Server Summon Messages Muted",
+  "dmls.module.chat_spam.player_command_feedback_toggle": "Player Command Feedback Muted",
   "dmls.module.do_not_insta_ban.name": "Do Not Insta Ban",
   "dmls.module.do_not_insta_ban.description.1": "Checks green online IGNs from staff scan results against DMLS.",
   "dmls.module.do_not_insta_ban.description.2": "Results link directly to indexed Discord evidence when available.",
@@ -492,6 +492,13 @@
   ,"dmls.module.greeter.name": "New Player Greeter"
   ,"dmls.module.greeter.description": "Spot first-join broadcasts and welcome new players with one click."
   ,"dmls.module.greeter.toggle": "First-join prompts"
+  ,"dmls.module.greeter.variable_hint": "Variable: %s inserts the new player's name."
+  ,"dmls.module.greeter.default_hint": "Leave every message empty to use the built-in welcome."
+  ,"dmls.module.greeter.message_field": "Welcome message %s"
+  ,"dmls.module.greeter.message_placeholder": "Welcome to Stoneworks, {player}!"
+  ,"dmls.module.greeter.add_message": "Add another message"
+  ,"dmls.module.greeter.messages_saved": "Welcome messages saved."
+  ,"dmls.validation.greeter.message": "Messages must fit within 256 characters after substitution; only {player} is supported."
   ,"dmls.chat.greeter.button": "[Welcome them]"
   ,"dmls.chat.greeter.button.hover": "Sends a public welcome message for %s."
   ,"dmls.chat.greeter.enabled": "First-join prompts enabled."
