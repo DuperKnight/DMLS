@@ -1,7 +1,7 @@
 package com.duperknight.client;
 
 import com.duperknight.DMLS;
-import com.duperknight.client.accountlink.DiscordLinkAvailability;
+import com.duperknight.client.accountlink.DiscordLinkSessionValidator;
 import com.duperknight.client.gui.DMLSHomeScreen;
 import com.duperknight.client.gui.modules.RulebookScreen;
 import com.duperknight.client.moderation.ModerationChatService;
@@ -20,6 +20,7 @@ import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.session.OperationCancelResult;
 import com.duperknight.client.session.OperationCoordinator;
 import com.duperknight.client.session.OperationStartResult;
+import com.duperknight.client.session.OutboundSpamSafety;
 import com.duperknight.client.utils.AlertWordlist;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -48,9 +49,10 @@ public class DMLSClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         DMLS.LOGGER.info("Initializing DMLS client, you are a lazy staff member!");
-        DiscordLinkAvailability.warmUp(MinecraftClient.getInstance());
+        DiscordLinkSessionValidator.validateSavedLink(MinecraftClient.getInstance());
         ServerMessageRouter.register();
         OperationCoordinator.global().register();
+        OutboundSpamSafety.register();
         registerDmlsCommand();
         registerScreenKeybinds();
         ModerationChatService.register();
@@ -135,6 +137,12 @@ public class DMLSClient implements ClientModInitializer {
                                                                     StringArgumentType.getString(context, "prefixid"),
                                                                     StringArgumentType.getString(context, "prefixtext")).valid() ? 1 : 0;
                                                         }))))))
+                        .then(moduleLiteral("reimbursement", ReimbursementModule.class)
+                                .executes(context -> {
+                                    MinecraftClient client = context.getSource().getClient();
+                                    client.send(() -> module(ReimbursementModule.class).openScreen(client, null));
+                                    return 1;
+                                }))
                         .then(moduleLiteral("donorpet", DonorPetModule.class)
                                 .then(ClientCommandManager.argument("ign", StringArgumentType.word())
                                         .then(ClientCommandManager.argument("pet", StringArgumentType.word()).executes(context -> {
@@ -507,6 +515,8 @@ public class DMLSClient implements ClientModInitializer {
                 "/dmls xray <ign>|confirm|cancel", Text.translatable("dmls.help.xray", StaffRank.SENIOR_MODERATOR.displayName()));
         moduleHelpLine(client, PrefixCreateModule.class,
                 "/dmls prefix <ign> <limit> <prefixid> <prefixtext>", Text.translatable("dmls.help.prefix", StaffRank.SUPPORT.displayName()));
+        moduleHelpLine(client, ReimbursementModule.class,
+                "/dmls reimbursement", Text.translatable("dmls.help.reimbursement", StaffRank.SUPPORT.displayName()));
         moduleHelpLine(client, DonorPetModule.class,
                 "/dmls donorpet <ign> <pet>", Text.translatable("dmls.help.donorpet", StaffRank.ADMIN.displayName()));
         moduleHelpLine(client, PromoWaveModule.class,
@@ -638,6 +648,11 @@ public class DMLSClient implements ClientModInitializer {
                         "dmls.chat.event_random_teleport.teleported", result.target());
                 yield true;
             }
+            case QUEUED -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX,
+                        "dmls.chat.event_random_teleport.queued", result.target());
+                yield true;
+            }
             case SIMULATED -> true; // module already sent one concise dry-run summary
             case NO_PLAYERS -> {
                 ChatUtils.sendTranslatedMessage(client, PREFIX,
@@ -660,6 +675,10 @@ public class DMLSClient implements ClientModInitializer {
             }
             case INVALID_COMMAND -> {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.stored_gap");
+                yield false;
+            }
+            case BUSY -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.busy");
                 yield false;
             }
             case RANK_BLOCKED, SERVER_BLOCKED -> false; // module already sent that message
@@ -691,6 +710,7 @@ public class DMLSClient implements ClientModInitializer {
                 new LocationsModule(),
                 new MiniMeHudModule(),
                 new PrefixCreateModule(),
+                new ReimbursementModule(),
                 new PromoWaveModule(),
                 new UuidLookupModule(),
                 new XrayRollbackModule()

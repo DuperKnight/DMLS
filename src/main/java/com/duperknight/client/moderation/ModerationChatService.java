@@ -2,7 +2,9 @@ package com.duperknight.client.moderation;
 
 import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.session.ConnectionSnapshot;
+import com.duperknight.client.session.OutboundSpamSafety;
 import com.duperknight.client.modules.ChatSpamMuteModule;
+import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
@@ -330,19 +332,22 @@ public final class ModerationChatService {
 
     private static synchronized void startNextRealname(MinecraftClient client) {
         if (activeRealname != null || REALNAME_QUEUE.isEmpty()) return;
+        RealnameRequest next = REALNAME_QUEUE.getFirst();
         if (DMLSConfig.dryRun()) {
             RealnameRequest blocked = REALNAME_QUEUE.removeFirst();
             blocked.callback().accept(Optional.empty());
             startNextRealname(client);
             return;
         }
-        RealnameRequest next = REALNAME_QUEUE.removeFirst();
         String cached = RESOLVED_IGN_BY_SEQUENCE.get(next.messageSequence());
         if (cached != null) {
+            REALNAME_QUEUE.removeFirst();
             next.callback().accept(Optional.of(cached));
             startNextRealname(client);
             return;
         }
+        if (!OutboundSpamSafety.canDispatch(DMLSConfig.staffRank() == StaffRank.ADMIN)) return;
+        REALNAME_QUEUE.removeFirst();
         CommandDispatch dispatch = ClientUtils.dispatchCommand(client, "realname " + next.visibleUsername(), false,
                 ConnectionSnapshot.capture(client));
         if (dispatch != CommandDispatch.SENT) {
@@ -365,9 +370,9 @@ public final class ModerationChatService {
         }
         if (expired != null) {
             expired.accept(Optional.empty());
-            synchronized (ModerationChatService.class) {
-                startNextRealname(client);
-            }
+        }
+        synchronized (ModerationChatService.class) {
+            startNextRealname(client);
         }
     }
 

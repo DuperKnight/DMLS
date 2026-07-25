@@ -46,6 +46,7 @@ public abstract class DMLSMenuScreen extends Screen {
     protected static final Identifier SCROLLER = Identifier.ofVanilla("widget/scroller");
     protected static final Identifier SCROLLER_BACKGROUND = Identifier.ofVanilla("widget/scroller_background");
     public static final int SCROLLBAR_WIDTH = 6;
+    public static final int CONTENT_SHADE_COLOR = 0x58000000;
     public static final int PANEL_BACKGROUND_COLOR = 0xC0101010;
     public static final int PANEL_BORDER_COLOR = 0xFF9A9A9A;
     private static final int LOGO_TEXTURE_WIDTH = 2040;
@@ -117,14 +118,29 @@ public abstract class DMLSMenuScreen extends Screen {
                 LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT);
 
         int footerTop = height - FOOTER_TOP_OFFSET;
-        context.fill(0, headerHeight, width, footerTop, 0xA6000000);
+        int contentShade = menuContentShade();
+        if ((contentShade >>> 24) != 0) {
+            context.fill(0, headerHeight, width, footerTop, contentShade);
+        }
         context.fill(0, footerTop, width, height, 0x20000000);
 
         // Use the same two-layer translucent separators as vanilla in-world lists.
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, HEADER_SEPARATOR, 0, headerHeight - 2,
-                0.0F, 0.0F, width, 2, 32, 2);
+        if (renderSharedHeaderSeparator()) {
+            context.drawTexture(RenderPipelines.GUI_TEXTURED, HEADER_SEPARATOR, 0, headerHeight - 2,
+                    0.0F, 0.0F, width, 2, 32, 2);
+        }
         context.drawTexture(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
                 0.0F, 0.0F, width, 2, 32, 2);
+    }
+
+    /** Allows a screen to expose the blurred world behind vanilla list-background textures. */
+    protected int menuContentShade() {
+        return CONTENT_SHADE_COLOR;
+    }
+
+    /** Screens whose tabs occupy the header boundary can replace the shared separator. */
+    protected boolean renderSharedHeaderSeparator() {
+        return true;
     }
 
     /** Full-height variant for dense readers that do not need the shared logo header. */
@@ -132,7 +148,7 @@ public abstract class DMLSMenuScreen extends Screen {
         initializeDiscordAccount();
         if (accountWidget != null) accountWidget.setY(scaled(2));
         int footerTop = height - FOOTER_TOP_OFFSET;
-        context.fill(0, 0, width, footerTop, 0xA6000000);
+        context.fill(0, 0, width, footerTop, menuContentShade());
         context.fill(0, footerTop, width, height, 0x20000000);
         context.drawTexture(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
                 0.0F, 0.0F, width, 2, 32, 2);
@@ -559,6 +575,7 @@ public abstract class DMLSMenuScreen extends Screen {
                 ACCOUNT_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
                 ACCOUNT_LINK_CHECKS.add(minecraftUuid);
                 DiscordLinkAvailability.markLinked(minecraftUuid);
+                DMLSConfig.enableDoNotInstaBanByDefaultForConfirmedLink();
                 if (result.profile() != null) {
                     DiscordAccountProfileStore.save(result.profile());
                     DiscordAvatarCache.ensureCached(result.profile());

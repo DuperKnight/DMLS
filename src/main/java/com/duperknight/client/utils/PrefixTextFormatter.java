@@ -3,6 +3,7 @@ package com.duperknight.client.utils;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import net.minecraft.text.Text;
@@ -33,6 +34,43 @@ public final class PrefixTextFormatter {
                     ? "The prefix formatting is invalid."
                     : "Invalid prefix formatting: " + message);
         }
+    }
+
+    /** Serializes the same MiniMessage/legacy input used by the preview into vanilla text JSON. */
+    public static JsonResult serializeJson(String input) {
+        if (input == null || input.isEmpty()) {
+            return JsonResult.error("Enter text to format it.");
+        }
+        try {
+            Component component = MINI_MESSAGE.deserialize(normalizeLegacyFormatting(input));
+            return JsonResult.success(GsonComponentSerializer.gson().serialize(component));
+        } catch (RuntimeException exception) {
+            String message = exception.getMessage();
+            return JsonResult.error(message == null || message.isBlank()
+                    ? "The text formatting is invalid."
+                    : "Invalid text formatting: " + message);
+        }
+    }
+
+    /** Returns the visible, formatting-free MiniMessage text for audit logs. */
+    public static PlainResult plainText(String input) {
+        if (input == null || input.isEmpty()) return PlainResult.error("Enter text to format it.");
+        try {
+            Component component = MINI_MESSAGE.deserialize(normalizeLegacyFormatting(input));
+            StringBuilder plain = new StringBuilder();
+            appendPlain(component, plain);
+            return PlainResult.success(plain.toString());
+        } catch (RuntimeException exception) {
+            String message = exception.getMessage();
+            return PlainResult.error(message == null || message.isBlank()
+                    ? "The text formatting is invalid."
+                    : "Invalid text formatting: " + message);
+        }
+    }
+
+    private static void appendPlain(Component component, StringBuilder target) {
+        if (component instanceof TextComponent text) target.append(text.content());
+        component.children().forEach(child -> appendPlain(child, target));
     }
 
     /** Converts legacy formatting into MiniMessage tags while leaving the submitted text untouched. */
@@ -111,6 +149,34 @@ public final class PrefixTextFormatter {
 
         public static ParseResult error(String error) {
             return new ParseResult(Text.empty(), error);
+        }
+
+        public boolean valid() {
+            return error.isEmpty();
+        }
+    }
+
+    public record JsonResult(String json, String error) {
+        public static JsonResult success(String json) {
+            return new JsonResult(json, "");
+        }
+
+        public static JsonResult error(String error) {
+            return new JsonResult("", error);
+        }
+
+        public boolean valid() {
+            return error.isEmpty();
+        }
+    }
+
+    public record PlainResult(String text, String error) {
+        public static PlainResult success(String text) {
+            return new PlainResult(text, "");
+        }
+
+        public static PlainResult error(String error) {
+            return new PlainResult("", error);
         }
 
         public boolean valid() {

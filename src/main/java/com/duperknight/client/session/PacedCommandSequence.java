@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 /**
@@ -38,6 +39,7 @@ public final class PacedCommandSequence<T> {
     private final int responseTimeoutTicks;
     private final Function<T, CommandDispatch> dispatcher;
     private final BiFunction<T, String, ResponseStatus> parser;
+    private final BooleanSupplier dispatchReady;
 
     private State state = State.NEW;
     private int currentIndex;
@@ -55,6 +57,17 @@ public final class PacedCommandSequence<T> {
             Function<T, CommandDispatch> dispatcher,
             BiFunction<T, String, ResponseStatus> parser
     ) {
+        this(steps, commandGapTicks, responseTimeoutTicks, dispatcher, parser, () -> true);
+    }
+
+    public PacedCommandSequence(
+            List<T> steps,
+            int commandGapTicks,
+            int responseTimeoutTicks,
+            Function<T, CommandDispatch> dispatcher,
+            BiFunction<T, String, ResponseStatus> parser,
+            BooleanSupplier dispatchReady
+    ) {
         this.steps = List.copyOf(Objects.requireNonNull(steps, "steps"));
         if (commandGapTicks < 0) throw new IllegalArgumentException("commandGapTicks");
         if (responseTimeoutTicks < 1) throw new IllegalArgumentException("responseTimeoutTicks");
@@ -62,6 +75,7 @@ public final class PacedCommandSequence<T> {
         this.responseTimeoutTicks = responseTimeoutTicks;
         this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher");
         this.parser = Objects.requireNonNull(parser, "parser");
+        this.dispatchReady = Objects.requireNonNull(dispatchReady, "dispatchReady");
     }
 
     public State start() {
@@ -78,7 +92,8 @@ public final class PacedCommandSequence<T> {
         if (state == State.AWAITING_RESPONSE) {
             if (++responseTicks >= responseTimeoutTicks) state = State.TIMED_OUT;
         } else if (state == State.PACING) {
-            if (pacingTicks <= 0 || --pacingTicks <= 0) dispatchCurrent();
+            if (pacingTicks > 0) pacingTicks--;
+            if (pacingTicks <= 0) dispatchCurrent();
         }
         return state;
     }
@@ -148,6 +163,15 @@ public final class PacedCommandSequence<T> {
 
     private void dispatchCurrent() {
         responseTicks = 0;
+        try {
+            if (!dispatchReady.getAsBoolean()) {
+                state = State.PACING;
+                return;
+            }
+        } catch (RuntimeException exception) {
+            state = State.FAILED;
+            return;
+        }
         try {
             lastDispatch = Objects.requireNonNull(dispatcher.apply(steps.get(currentIndex)), "dispatch result");
         } catch (RuntimeException exception) {

@@ -355,6 +355,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     private void showLinked(DiscordAccountProfile profile) {
         linked = true;
         if (client != null) DiscordLinkAvailability.markLinked(client.getSession().getUuidOrNull());
+        DMLSConfig.enableDoNotInstaBanByDefaultForConfirmedLink();
         pendingStatusShown = false;
         linkCode = "";
         linkCodeRevealed = false;

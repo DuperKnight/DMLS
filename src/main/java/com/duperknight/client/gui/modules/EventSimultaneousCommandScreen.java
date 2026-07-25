@@ -150,6 +150,7 @@ public final class EventSimultaneousCommandScreen extends DMLSMenuScreen {
             case INVALID_COMMAND_COUNT -> Text.translatable("dmls.validation.event_simultaneous.count",
                     EventSimultaneousCommandModule.MIN_COMMANDS, EventSimultaneousCommandModule.MAX_COMMANDS);
             case INVALID_COMMAND -> Text.translatable("dmls.validation.event_simultaneous.command");
+            case BUSY -> Text.translatable("dmls.validation.event_simultaneous.busy");
             case RANK_BLOCKED -> Text.translatable("dmls.chat.department.required",
                     com.duperknight.client.modules.StaffDepartment.EVENTS.displayName());
             case SERVER_BLOCKED -> Text.translatable("dmls.validation.server_blocked");

@@ -326,7 +326,7 @@ public final class ModerationScreen extends Screen {
         }
         // Minecraft has already applied the in-game screen blur for this frame.
         // Calling Screen.renderBackground here attempts a second blur and crashes.
-        context.fill(0, 0, width, height, 0x70000000);
+        context.fill(0, 0, width, height, DMLSMenuScreen.CONTENT_SHADE_COLOR);
         Layout layout = layout();
         chatLineHitboxes.clear();
         hoveredChatStyle = null;

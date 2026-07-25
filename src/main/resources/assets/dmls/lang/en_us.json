@@ -130,6 +130,11 @@
   "dmls.module.prefix.name": "Prefix Creation",
   "dmls.module.prefix.description.1": "Create a formatted prefix, set its player limit",
   "dmls.module.prefix.description.2": "and manager in one go.",
+  "dmls.module.reimbursement.name": "Reimbursement Helper",
+  "dmls.module.reimbursement.description.1": "Build item and money reimbursements with capacity checks,",
+  "dmls.module.reimbursement.description.2": "safe command pacing, routing, and a copyable staff log.",
+  "dmls.reimbursement.tab.entries": "Reimbursement",
+  "dmls.reimbursement.tab.config": "Log",
   "dmls.module.promo_wave.name": "Promo Wave",
   "dmls.module.promo_wave.description.1": "Promote a whole wave of staff to a rank in one command.",
   "dmls.module.promo_wave.description.2": "Separate names with commas or spaces.",
@@ -137,9 +142,9 @@
   "dmls.module.chat_spam.description": "Hide trade chat and server messages on this client.",
   "dmls.module.chat_spam.trade_chat_toggle": "Trade Chat Muted",
   "dmls.module.chat_spam.server_messages_toggle": "Server Messages Muted",
-  "dmls.module.chat_spam.player_command_feedback_toggle": "Player Command Feedback Muted",
+  "dmls.module.chat_spam.staff_command_feedback_toggle": "Staff Command Feedback Muted",
   "dmls.module.do_not_insta_ban.name": "Do Not Insta Ban",
-  "dmls.module.do_not_insta_ban.description.1": "Checks green online IGNs from staff scan results against DMLS.",
+  "dmls.module.do_not_insta_ban.description.1": "Checks online IGNs from staff scan results against DNIB channel.",
   "dmls.module.do_not_insta_ban.description.2": "Results link directly to indexed Discord evidence when available.",
   "dmls.module.do_not_insta_ban.toggle": "Do Not Insta Ban Checks",
   "dmls.chat.do_not_insta_ban.invalid_ign": "The scan contained an invalid IGN: %s. Nothing was sent.",
@@ -179,20 +184,22 @@
   "dmls.module.event_simultaneous.command_placeholder.5": "e.g. weather clear",
   "dmls.module.event_simultaneous.add": "+ Add Command",
   "dmls.module.event_simultaneous.run": "Run Commands",
-  "dmls.chat.event_simultaneous.sent": "%s commands were sent.",
-  "dmls.chat.event_simultaneous.sent_stored": "Stored commands were sent.",
+  "dmls.chat.event_simultaneous.sent": "%s commands were queued.",
+  "dmls.chat.event_simultaneous.sent_stored": "Stored commands were queued.",
   "dmls.chat.event_simultaneous.set": "Stored command %s: §6%s§7.",
   "dmls.validation.event_simultaneous.count": "Add between %s and %s commands.",
   "dmls.validation.event_simultaneous.command": "Each command must be 1-256 characters with no control characters.",
   "dmls.validation.event_simultaneous.incomplete": "Enter a command in every row.",
   "dmls.validation.event_simultaneous.stored_count": "Store at least two commands before running them.",
   "dmls.validation.event_simultaneous.stored_gap": "Stored command slots must be consecutive, starting at 1.",
+  "dmls.validation.event_simultaneous.busy": "A simultaneous command sequence is already running.",
 
   "dmls.module.event_random_teleport.name": "Event Random Teleport",
   "dmls.module.event_random_teleport.description": "Teleport to a random online player.",
   "dmls.module.event_random_teleport.teleport": "Teleport to Random Player",
   "dmls.module.event_random_teleport.idle": "Click the button to teleport to a random online player.",
   "dmls.chat.event_random_teleport.teleported": "Teleporting to %s.",
+  "dmls.chat.event_random_teleport.queued": "Teleport to %s queued until it is safe to send.",
   "dmls.chat.event_random_teleport.simulated": "Dry run: would teleport to %s.",
   "dmls.chat.event_random_teleport.blocked": "Teleport was blocked; check chat for details.",
   "dmls.chat.event_random_teleport.no_players": "No other players online to teleport to.",
@@ -291,6 +298,7 @@
   ,"dmls.help.uuid": "Looks up one or more Minecraft usernames using Mojang's bulk profile API."
   ,"dmls.help.xray": "Stages an exact rollback preview, then requires a 30-second token confirmation. Requires %s§r."
   ,"dmls.help.prefix": "Creates a formatted prefix and sets its player limit and manager. Requires %s§r."
+  ,"dmls.help.reimbursement": "Builds and safely executes an item or money reimbursement. Requires %s§r."
   ,"dmls.help.donorpet": "Gives a donor permission for their elite mount pet. Requires %s§r."
   ,"dmls.help.promowave": "Stages a paced, response-confirmed promotion wave for review. Requires %s§r."
   ,"dmls.help.rank": "Shows the staff rank last detected from the Stoneworks hub scoreboard."

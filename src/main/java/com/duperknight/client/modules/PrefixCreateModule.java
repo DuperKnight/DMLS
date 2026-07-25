@@ -24,6 +24,7 @@ import net.minecraft.text.Text;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.BooleanSupplier;
 
 public final class PrefixCreateModule extends DMLSModule {
     public static final int MAX_COMMAND_LENGTH = 256;
@@ -169,6 +170,14 @@ public final class PrefixCreateModule extends DMLSModule {
             CreateRequest request,
             Function<String, CommandDispatch> dispatcher
     ) {
+        return createSequence(request, dispatcher, () -> true);
+    }
+
+    static PacedCommandSequence<PrefixResponseParser.Command> createSequence(
+            CreateRequest request,
+            Function<String, CommandDispatch> dispatcher,
+            BooleanSupplier dispatchReady
+    ) {
         return new PacedCommandSequence<>(
                 List.of(PrefixResponseParser.Command.values()),
                 0,
@@ -179,7 +188,8 @@ public final class PrefixCreateModule extends DMLSModule {
                     case CONFIRMED -> ResponseStatus.CONFIRMED;
                     case REJECTED -> ResponseStatus.REJECTED;
                     case UNRELATED -> ResponseStatus.UNRELATED;
-                }
+                },
+                dispatchReady
         );
     }
 
@@ -229,7 +239,8 @@ public final class PrefixCreateModule extends DMLSModule {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.prefix.start",
                         request.prefixId(), request.ign());
             }
-            sequence = createSequence(request, command -> handle.dispatchCommand(client, command));
+            sequence = createSequence(request, command -> handle.dispatchCommand(client, command),
+                    handle::canDispatchAutomatedCommand);
             handleState(handle, client, sequence.start());
         }
 

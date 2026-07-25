@@ -52,12 +52,12 @@ public final class ChatSpamMuteScreen extends DMLSMenuScreen {
         addScrollableChild(CyclingButtonWidget.builder((Boolean value) -> Text.translatable(
                                 value ? "dmls.option.on" : "dmls.option.off")
                         .formatted(value ? Formatting.GREEN : Formatting.RED),
-                        DMLSConfig.playerCommandFeedbackMuted()).values(true, false)
+                        DMLSConfig.staffCommandFeedbackMuted()).values(true, false)
                 .build(x, contentY(scaled(60)), controlWidth, STANDARD_BUTTON_HEIGHT,
-                        Text.translatable("dmls.module.chat_spam.player_command_feedback_toggle"),
+                        Text.translatable("dmls.module.chat_spam.staff_command_feedback_toggle"),
                         (button, value) -> {
-                            if (!DMLSConfig.setPlayerCommandFeedbackMuted(value)) {
-                                button.setValue(DMLSConfig.playerCommandFeedbackMuted());
+                            if (!DMLSConfig.setStaffCommandFeedbackMuted(value)) {
+                                button.setValue(DMLSConfig.staffCommandFeedbackMuted());
                                 saveStatus = Text.translatable("dmls.validation.config.save_failed");
                             } else {
                                 saveStatus = Text.empty();

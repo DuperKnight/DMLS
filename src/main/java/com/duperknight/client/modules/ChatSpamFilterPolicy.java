@@ -6,18 +6,18 @@ final class ChatSpamFilterPolicy {
     }
 
     static boolean shouldHide(String cleanMessage, boolean tradeChatMuted, boolean serverMessagesMuted,
-                              boolean playerCommandFeedbackMuted) {
+                              boolean staffCommandFeedbackMuted) {
         if (cleanMessage == null || cleanMessage.isEmpty()) return false;
         if (tradeChatMuted && cleanMessage.startsWith("[T]")) return true;
         if (serverMessagesMuted && cleanMessage.startsWith("[Server: ")) return true;
-        return playerCommandFeedbackMuted && isPlayerCommandFeedback(cleanMessage);
+        return staffCommandFeedbackMuted && isStaffCommandFeedback(cleanMessage);
     }
 
     /**
      * Matches command feedback shaped like "[sender: feedback]". The sender is deliberately
      * treated as an opaque token rather than validated as a Minecraft username.
      */
-    static boolean isPlayerCommandFeedback(String cleanMessage) {
+    static boolean isStaffCommandFeedback(String cleanMessage) {
         if (cleanMessage == null || cleanMessage.length() < 6
                 || cleanMessage.charAt(0) != '[' || cleanMessage.charAt(cleanMessage.length() - 1) != ']') {
             return false;

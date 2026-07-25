@@ -2,9 +2,13 @@ package com.duperknight.client.modules;
 
 import com.duperknight.client.gui.modules.EventSimultaneousCommandScreen;
 import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.session.ConnectionSnapshot;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ServerGuard;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -22,16 +26,26 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     public static final int MIN_COMMANDS = 2;
     public static final int MAX_COMMANDS = 5;
     public static final int MAX_COMMAND_LENGTH = 256;
+    public static final int COMMAND_GAP_TICKS = 2;
 
     private final List<String> storedCommands = new ArrayList<>(Collections.nCopies(MAX_COMMANDS, null));
+    private PendingRun pendingRun;
 
     public enum RunResult {
         SENT,
         SIMULATED,
         INVALID_COMMAND_COUNT,
         INVALID_COMMAND,
+        BUSY,
         RANK_BLOCKED,
         SERVER_BLOCKED
+    }
+
+    private record PendingRun(
+            TickSpacedCommandQueue queue,
+            boolean dryRunCaptured,
+            ConnectionSnapshot connection
+    ) {
     }
 
     public EventSimultaneousCommandModule() {
@@ -65,7 +79,8 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
 
     @Override
     public void register() {
-        // No event listeners needed
+        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> pendingRun = null);
     }
 
     public List<String> storedCommands() {
@@ -127,20 +142,29 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
         if (validated.isEmpty()) {
             return RunResult.INVALID_COMMAND;
         }
+        if (pendingRun != null) {
+            return RunResult.BUSY;
+        }
         if (!hasRequiredRank(client)) {
             return RunResult.RANK_BLOCKED;
         }
 
-        boolean anySimulated = false;
-        for (String command : validated.get()) {
-            CommandDispatch dispatch = ClientUtils.dispatchCommand(client, command);
-            if (dispatch == CommandDispatch.BLOCKED) {
-                sendGuardBlockedMessage(client);
-                return RunResult.SERVER_BLOCKED;
-            }
-            anySimulated |= dispatch == CommandDispatch.SIMULATED;
+        boolean dryRunCaptured = DMLSConfig.dryRun();
+        ConnectionSnapshot connection = ConnectionSnapshot.capture(client);
+        List<String> validatedCommands = validated.get();
+        CommandDispatch firstDispatch = ClientUtils.dispatchCommand(
+                client, validatedCommands.getFirst(), dryRunCaptured, connection);
+        if (firstDispatch == CommandDispatch.BLOCKED) {
+            sendGuardBlockedMessage(client);
+            return RunResult.SERVER_BLOCKED;
         }
-        return anySimulated ? RunResult.SIMULATED : RunResult.SENT;
+
+        pendingRun = new PendingRun(
+                new TickSpacedCommandQueue(validatedCommands.subList(1, validatedCommands.size()),
+                        COMMAND_GAP_TICKS),
+                dryRunCaptured,
+                connection);
+        return firstDispatch == CommandDispatch.SIMULATED ? RunResult.SIMULATED : RunResult.SENT;
     }
 
     /** Backward-compatible two-command entry point. */
@@ -152,6 +176,27 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
         ServerGuard.GuardResult guard = ServerGuard.check(client);
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.server_guard.blocked",
                 guard.reason(), guard.address());
+    }
+
+    private void tick(MinecraftClient client) {
+        PendingRun run = pendingRun;
+        if (run == null) return;
+        if (!run.connection().matches(client)) {
+            pendingRun = null;
+            return;
+        }
+
+        run.queue().tick().ifPresent(command -> {
+            CommandDispatch dispatch = ClientUtils.dispatchCommand(
+                    client, command, run.dryRunCaptured(), run.connection());
+            if (dispatch == CommandDispatch.BLOCKED) {
+                sendGuardBlockedMessage(client);
+                pendingRun = null;
+            }
+        });
+        if (pendingRun == run && run.queue().isEmpty()) {
+            pendingRun = null;
+        }
     }
 
     /** Trims and validates every command while preserving list order. */

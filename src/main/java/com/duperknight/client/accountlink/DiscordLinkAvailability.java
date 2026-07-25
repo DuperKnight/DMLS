@@ -23,13 +23,9 @@ public final class DiscordLinkAvailability {
         return minecraftUuid != null && STATES.get(minecraftUuid) == State.LINKED;
     }
 
-    /** Optimistically restores the last confirmed local link until the API explicitly revokes it. */
+    /** Starts a remote session validation without trusting cached profile data as proof of a current link. */
     public static void warmUp(MinecraftClient client) {
-        if (client == null || client.getSession().getUuidOrNull() == null) return;
-        UUID minecraftUuid = client.getSession().getUuidOrNull();
-        boolean locallyConfirmed = DiscordLinkTokenStore.load(minecraftUuid).isPresent()
-                && DiscordAccountProfileStore.load(minecraftUuid).isPresent();
-        setState(minecraftUuid, locallyConfirmed ? State.LINKED : State.UNLINKED);
+        DiscordLinkSessionValidator.validateSavedLink(client);
     }
 
     public static void markLinked(UUID minecraftUuid) {

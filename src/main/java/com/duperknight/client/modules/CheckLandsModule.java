@@ -157,7 +157,12 @@ public final class CheckLandsModule extends DMLSModule {
                 .orElseGet(() -> new ClaimResult(claim, 1, false));
     }
 
-    private enum Stage { WAITING_FOR_LANDS, SENDING_NEXT_INFO_COMMAND, WAITING_FOR_INFO }
+    private enum Stage {
+        WAITING_TO_SEND_LANDS,
+        WAITING_FOR_LANDS,
+        SENDING_NEXT_INFO_COMMAND,
+        WAITING_FOR_INFO
+    }
 
     private final class CheckSession implements ManagedOperation {
         private final List<String> players;
@@ -174,6 +179,7 @@ public final class CheckLandsModule extends DMLSModule {
         private String currentClaim;
         private MenuCommandQuery activeQuery;
         private CommandDispatch initialDispatch = CommandDispatch.BLOCKED;
+        private boolean initialDispatchFailed;
 
         private CheckSession(List<String> players) {
             this.players = List.copyOf(players);
@@ -206,6 +212,7 @@ public final class CheckLandsModule extends DMLSModule {
         @Override
         public void onTick(OperationHandle handle, MinecraftClient client) {
             switch (stage) {
+                case WAITING_TO_SEND_LANDS -> trySendLandListCommand(client);
                 case WAITING_FOR_LANDS -> waitForLands(client);
                 case SENDING_NEXT_INFO_COMMAND -> sendNextInfoCommand(client);
                 case WAITING_FOR_INFO -> waitForInfo(client);
@@ -242,15 +249,23 @@ public final class CheckLandsModule extends DMLSModule {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_lands.checking", ign);
             activeQuery = new MenuCommandQuery("la player " + ign, "Player " + ign,
                     MENU_TIMEOUT_TICKS, LAND_LIST_SLOT);
+            stage = Stage.WAITING_TO_SEND_LANDS;
+            trySendLandListCommand(client);
+        }
+
+        private void trySendLandListCommand(MinecraftClient client) {
+            if (!handle.canDispatchAutomatedCommand()) return;
             initialDispatch = activeQuery.start(client, handle::dispatchCommand);
             if (initialDispatch == CommandDispatch.BLOCKED) {
+                initialDispatchFailed = true;
                 handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
+                return;
             }
             stage = Stage.WAITING_FOR_LANDS;
         }
 
         private boolean acceptedAtStart() {
-            return initialDispatch != CommandDispatch.BLOCKED;
+            return !initialDispatchFailed;
         }
 
         private void resetPlayerState() {
@@ -286,6 +301,7 @@ public final class CheckLandsModule extends DMLSModule {
         }
 
         private void sendNextInfoCommand(MinecraftClient client) {
+            if (!handle.canDispatchAutomatedCommand()) return;
             currentClaim = remainingClaims.poll();
             if (currentClaim == null) {
                 report(client);
@@ -294,7 +310,11 @@ public final class CheckLandsModule extends DMLSModule {
             }
             activeQuery = new MenuCommandQuery("la info " + currentClaim, currentClaim,
                     MENU_TIMEOUT_TICKS, PLAYER_LIST_SLOT);
-            activeQuery.start(client, handle::dispatchCommand);
+            CommandDispatch dispatch = activeQuery.start(client, handle::dispatchCommand);
+            if (dispatch == CommandDispatch.BLOCKED) {
+                handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
+                return;
+            }
             stage = Stage.WAITING_FOR_INFO;
         }
 
