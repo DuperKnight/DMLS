@@ -22,6 +22,8 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     public static final int MIN_COMMANDS = 2;
     public static final int MAX_COMMANDS = 5;
     public static final int MAX_COMMAND_LENGTH = 256;
+    public static final int MIN_REPEAT_COUNT = 1;
+    public static final int MAX_REPEAT_COUNT = 100;
 
     private final List<String> storedCommands = new ArrayList<>(Collections.nCopies(MAX_COMMANDS, null));
 
@@ -30,6 +32,7 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
         SIMULATED,
         INVALID_COMMAND_COUNT,
         INVALID_COMMAND,
+        INVALID_REPEAT_COUNT,
         RANK_BLOCKED,
         SERVER_BLOCKED
     }
@@ -102,8 +105,13 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
         return setCommand(client, 2, command);
     }
 
-    /** Runs the consecutive stored commands, starting at slot one. */
+    /** Runs the consecutive stored commands, starting at slot one, a single time. */
     public RunResult runStored(MinecraftClient client) {
+        return runStored(client, 1);
+    }
+
+    /** Runs the consecutive stored commands, starting at slot one, repeatCount times. */
+    public RunResult runStored(MinecraftClient client, int repeatCount) {
         int lastCommand = -1;
         for (int index = storedCommands.size() - 1; index >= 0; index--) {
             if (storedCommands.get(index) != null) {
@@ -115,13 +123,21 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
             return RunResult.INVALID_COMMAND_COUNT;
         }
         List<String> commands = storedCommands.subList(0, lastCommand + 1);
-        return commands.contains(null) ? RunResult.INVALID_COMMAND : run(client, commands);
+        return commands.contains(null) ? RunResult.INVALID_COMMAND : run(client, commands, repeatCount);
     }
 
-    /** Validates every command before dispatching the full list in order. */
+    /** Validates every command before dispatching the full list in order, a single time. */
     public RunResult run(MinecraftClient client, List<String> commands) {
+        return run(client, commands, 1);
+    }
+
+    /** Validates every command before dispatching the full list in order, repeatCount times. */
+    public RunResult run(MinecraftClient client, List<String> commands, int repeatCount) {
         if (commands == null || commands.size() < MIN_COMMANDS || commands.size() > MAX_COMMANDS) {
             return RunResult.INVALID_COMMAND_COUNT;
+        }
+        if (repeatCount < MIN_REPEAT_COUNT || repeatCount > MAX_REPEAT_COUNT) {
+            return RunResult.INVALID_REPEAT_COUNT;
         }
         Optional<List<String>> validated = validateCommands(commands);
         if (validated.isEmpty()) {
@@ -132,20 +148,27 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
         }
 
         boolean anySimulated = false;
-        for (String command : validated.get()) {
-            CommandDispatch dispatch = ClientUtils.dispatchCommand(client, command);
-            if (dispatch == CommandDispatch.BLOCKED) {
-                sendGuardBlockedMessage(client);
-                return RunResult.SERVER_BLOCKED;
+        for (int pass = 0; pass < repeatCount; pass++) {
+            for (String command : validated.get()) {
+                CommandDispatch dispatch = ClientUtils.dispatchCommand(client, command);
+                if (dispatch == CommandDispatch.BLOCKED) {
+                    sendGuardBlockedMessage(client);
+                    return RunResult.SERVER_BLOCKED;
+                }
+                anySimulated |= dispatch == CommandDispatch.SIMULATED;
             }
-            anySimulated |= dispatch == CommandDispatch.SIMULATED;
         }
         return anySimulated ? RunResult.SIMULATED : RunResult.SENT;
     }
 
-    /** Backward-compatible two-command entry point. */
+    /** Backward-compatible two-command entry point, a single time. */
     public RunResult run(MinecraftClient client, String commandOne, String commandTwo) {
-        return run(client, Arrays.asList(commandOne, commandTwo));
+        return run(client, Arrays.asList(commandOne, commandTwo), 1);
+    }
+
+    /** Backward-compatible two-command entry point, repeatCount times. */
+    public RunResult run(MinecraftClient client, String commandOne, String commandTwo, int repeatCount) {
+        return run(client, Arrays.asList(commandOne, commandTwo), repeatCount);
     }
 
     private void sendGuardBlockedMessage(MinecraftClient client) {
@@ -182,5 +205,10 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
         }
         boolean unsafe = trimmed.codePoints().anyMatch(Character::isISOControl);
         return unsafe ? Optional.empty() : Optional.of(trimmed);
+    }
+
+    /** Validates a repeat count is within the allowed [1, MAX_REPEAT_COUNT] range. */
+    public static boolean isValidRepeatCount(int repeatCount) {
+        return repeatCount >= MIN_REPEAT_COUNT && repeatCount <= MAX_REPEAT_COUNT;
     }
 }
