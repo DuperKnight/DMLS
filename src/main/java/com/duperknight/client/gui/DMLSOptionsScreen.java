@@ -152,6 +152,9 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         setScrollableChildEnabled(linkCodeWidget, !linked && !linkCode.isEmpty());
         addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
                 .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
+        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.feedback.open"),
+                        button -> client.setScreen(new FeedbackScreen(this)))
+                .dimensions(width - scaled(132), footerButtonY(), scaled(116), STANDARD_BUTTON_HEIGHT).build());
 
         if (!storedTokenLoaded) {
             storedTokenLoaded = true;

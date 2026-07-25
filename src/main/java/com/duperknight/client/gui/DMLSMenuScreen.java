@@ -4,7 +4,6 @@ import com.duperknight.DMLS;
 import com.duperknight.client.accountlink.DiscordAccountProfileStore;
 import com.duperknight.client.accountlink.DiscordAvatarCache;
 import com.duperknight.client.accountlink.DiscordLinkService;
-import com.duperknight.client.accountlink.DiscordLinkAvailability;
 import com.duperknight.client.accountlink.DiscordLinkTokenStore;
 import com.duperknight.client.gui.widgets.DiscordAccountWidget;
 import com.duperknight.client.gui.widgets.DropdownWidget;
@@ -29,7 +28,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
@@ -37,8 +35,6 @@ import java.util.function.BooleanSupplier;
 public abstract class DMLSMenuScreen extends Screen {
     private static final Tooltip STONEWORKS_CONNECTION_TOOLTIP = Tooltip.of(
             Text.translatable("dmls.tooltip.connect_stoneworks"));
-    private static final Set<java.util.UUID> ACCOUNT_LINK_CHECKS = ConcurrentHashMap.newKeySet();
-    private static final Set<java.util.UUID> ACCOUNT_LINK_CHECKS_IN_PROGRESS = ConcurrentHashMap.newKeySet();
     protected static final float UI_SCALE = 0.85F;
     private static final Identifier LOGO = Identifier.of(DMLS.MOD_ID.toLowerCase(), "logo.png");
     private static final Identifier HEADER_SEPARATOR = Identifier.ofVanilla("textures/gui/inworld_header_separator.png");
@@ -88,7 +84,7 @@ public abstract class DMLSMenuScreen extends Screen {
     protected DMLSMenuScreen(Text title, Screen parent) {
         super(title);
         this.parent = parent;
-        headerCompactProgress = DMLSConfig.headerBehavior() == HeaderBehavior.ALWAYS_SMALL ? 1.0F : 0.0F;
+        headerCompactProgress = 1.0F;
     }
 
     protected void renderMenuBackground(DrawContext context) {
@@ -323,6 +319,16 @@ public abstract class DMLSMenuScreen extends Screen {
         return interpolate(HEADER_HEIGHT, COMPACT_HEADER_HEIGHT, easedHeaderCompactProgress());
     }
 
+    /** Only the home screen follows the user's expanded, compact, or on-scroll preference. */
+    protected boolean usesConfigurableHeaderBehavior() {
+        return false;
+    }
+
+    /** Initializes the one screen that follows the persisted header preference. */
+    protected final void initializeConfigurableHeaderBehavior() {
+        headerCompactProgress = DMLSConfig.headerBehavior() == HeaderBehavior.ALWAYS_SMALL ? 1.0F : 0.0F;
+    }
+
     /** Small windows temporarily force the compact header without changing the persisted preference. */
     protected boolean isHeaderCollapseForced() {
         return width < MIN_EXPANDED_HEADER_WIDTH || height < MIN_EXPANDED_HEADER_HEIGHT;
@@ -335,6 +341,7 @@ public abstract class DMLSMenuScreen extends Screen {
 
     /** Applies scrollbar movement with hysteresis so small direction changes do not keep toggling the header. */
     protected void updateHeaderForScrollChange(int previousOffset, int newOffset) {
+        if (!usesConfigurableHeaderBehavior()) return;
         if (newOffset > previousOffset) {
             downwardHeaderScrollDistance += newOffset - previousOffset;
             if (downwardHeaderScrollDistance >= HEADER_COMPACT_SCROLL_THRESHOLD) {
@@ -563,45 +570,6 @@ public abstract class DMLSMenuScreen extends Screen {
         if (token.isEmpty()) return;
 
         showCachedDiscordAccount(minecraftUuid);
-        if (ACCOUNT_LINK_CHECKS.contains(minecraftUuid)) return;
-        if (ACCOUNT_LINK_CHECKS_IN_PROGRESS.add(minecraftUuid)) {
-            checkDiscordAccount(minecraftUuid, token);
-        }
-    }
-
-    private void checkDiscordAccount(java.util.UUID minecraftUuid, String token) {
-        DiscordLinkService.checkStatus(minecraftUuid, token).thenAccept(result -> client.execute(() -> {
-            if (result.status() == DiscordLinkService.LinkStatus.LINKED) {
-                ACCOUNT_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
-                ACCOUNT_LINK_CHECKS.add(minecraftUuid);
-                DiscordLinkAvailability.markLinked(minecraftUuid);
-                DMLSConfig.enableDoNotInstaBanByDefaultForConfirmedLink();
-                if (result.profile() != null) {
-                    DiscordAccountProfileStore.save(result.profile());
-                    DiscordAvatarCache.ensureCached(result.profile());
-                }
-                if (client.currentScreen instanceof DMLSMenuScreen screen) {
-                    screen.showCachedDiscordAccount(minecraftUuid);
-                }
-                return;
-            }
-            if (result.status() == DiscordLinkService.LinkStatus.INVALID_TOKEN
-                    || result.status() == DiscordLinkService.LinkStatus.EXPIRED) {
-                clearStoredDiscordAccount(minecraftUuid);
-                if (client.currentScreen instanceof DMLSMenuScreen screen) {
-                    screen.clearDiscordAccountDisplay();
-                }
-                return;
-            }
-            ACCOUNT_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
-            if (result.status() != DiscordLinkService.LinkStatus.RATE_LIMITED
-                    && result.status() != DiscordLinkService.LinkStatus.TIMEOUT
-                    && result.status() != DiscordLinkService.LinkStatus.NETWORK_ERROR
-                    && result.status() != DiscordLinkService.LinkStatus.SERVICE_ERROR
-                    && result.status() != DiscordLinkService.LinkStatus.MALFORMED_RESPONSE) {
-                ACCOUNT_LINK_CHECKS.add(minecraftUuid);
-            }
-        }));
     }
 
     private void showCachedDiscordAccount(java.util.UUID minecraftUuid) {
@@ -679,8 +647,6 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     private static void clearStoredDiscordAccount(java.util.UUID minecraftUuid) {
-        ACCOUNT_LINK_CHECKS.remove(minecraftUuid);
-        ACCOUNT_LINK_CHECKS_IN_PROGRESS.remove(minecraftUuid);
         DiscordAccountProfileStore.load(minecraftUuid).ifPresent(DiscordAvatarCache::deleteCached);
         DiscordLinkTokenStore.delete(minecraftUuid);
         DiscordAccountProfileStore.delete(minecraftUuid);
@@ -748,6 +714,7 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     private boolean shouldCollapseHeader() {
+        if (!usesConfigurableHeaderBehavior()) return true;
         if (isHeaderCollapseForced()) return true;
         return switch (DMLSConfig.headerBehavior()) {
             case ALWAYS_BIG -> false;

@@ -56,8 +56,14 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
 
     private DMLSHomeScreen(List<DMLSModule> registeredModules, Screen parent, RankAnnouncement announcement) {
         super(Text.translatable("dmls.title.home"), parent);
+        initializeConfigurableHeaderBehavior();
         this.registeredModules = List.copyOf(registeredModules);
         this.announcement = announcement;
+    }
+
+    @Override
+    protected boolean usesConfigurableHeaderBehavior() {
+        return true;
     }
 
     public static DMLSHomeScreen welcome(List<DMLSModule> registeredModules, StaffRank currentRank) {
