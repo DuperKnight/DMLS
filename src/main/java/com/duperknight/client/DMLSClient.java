@@ -93,6 +93,12 @@ public class DMLSClient implements ClientModInitializer {
                                 }))
                         .then(staffLiteral("cancel")
                                 .executes(context -> cancelActiveOperation(context.getSource().getClient())))
+                        .then(moduleLiteral("war", WarManagerModule.class)
+                                .executes(context -> {
+                                    MinecraftClient client = context.getSource().getClient();
+                                    client.send(() -> module(WarManagerModule.class).openScreen(client, null));
+                                    return 1;
+                                }))
                         .then(moduleLiteral("lands", CheckLandsModule.class)
                                 .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
                                     return module(CheckLandsModule.class).submit(context.getSource().getClient(),
@@ -561,6 +567,8 @@ public class DMLSClient implements ClientModInitializer {
                 "/dmls event powertool", Text.translatable("dmls.help.eventpowertool"));
         moduleHelpLine(client, EventSimultaneousCommandModule.class,
                 "/dmls event simultaneous [set <1-5> <command>|run]", Text.translatable("dmls.help.eventsimultaneous"));
+        moduleHelpLine(client, WarManagerModule.class,
+                "/dmls war", Text.translatable("dmls.help.war_manager"));
 
         helpLine(client, "/dmls", Text.translatable("dmls.help.menu"));
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
@@ -713,6 +721,7 @@ public class DMLSClient implements ClientModInitializer {
                 new ReimbursementModule(),
                 new PromoWaveModule(),
                 new UuidLookupModule(),
+                new WarManagerModule(),
                 new XrayRollbackModule()
         );
     }
