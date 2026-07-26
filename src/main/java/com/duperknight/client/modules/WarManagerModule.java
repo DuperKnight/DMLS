@@ -948,7 +948,9 @@ public final class WarManagerModule extends DMLSModule {
             this.server = server;
             WarManagerState.Home home = state.home;
             commands = starting
-                    ? List.of("gamerule keep_inventory false", "tp " + home.coordinates(),
+                    ? List.of("gamerule keep_inventory false",
+                    "broadcastraw public &a&l &c&lPURGE &a&lis starting, it will stay for &c&l1 hour &a&lyour items will be lost upon death.",
+                    "tp " + home.coordinates(),
                     "mm mobs spawn PURGEBAR", "back")
                     : List.of("tp " + home.coordinates(), "gamerule keep_inventory true",
                     "mm mobs kill PURGEBAR");
