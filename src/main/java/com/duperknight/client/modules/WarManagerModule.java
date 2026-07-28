@@ -318,6 +318,70 @@ public final class WarManagerModule extends DMLSModule {
                 == OperationStartResult.STARTED;
     }
 
+    public boolean cancelPaused(MinecraftClient client, String warId) {
+        Optional<War> found = findWar(warId);
+        if (found.isEmpty() || found.get().status != Status.PAUSED || coordinator.isBusy()
+                || storageLocked() || !canRunPrivilegedOperation(client)) return false;
+        War war = found.get();
+        if (!sameCurrentServer(client, war.server)) return false;
+
+        Status previousStatus = war.status;
+        Phase previousPhase = war.phase;
+        String previousPendingCommand = war.pendingCommand;
+        Phase previousPendingNextPhase = war.pendingNextPhase;
+        String previousError = war.error;
+        long previousEndMillis = war.scheduledEndMillis;
+        long previousCancelledAtMillis = war.cancelledAtMillis;
+
+        boolean warStartMayHaveDispatched = war.phase == Phase.START_WAR
+                && war.pendingCommand.startsWith("war admin start ");
+        boolean shouldEndWar = war.phase == Phase.CANCEL_WAR || warStartMayHaveDispatched;
+        long now = System.currentTimeMillis();
+        war.pendingCommand = "";
+        war.pendingNextPhase = null;
+        war.error = "";
+        war.cancelledAtMillis = now;
+        war.scheduledEndMillis = now;
+        war.status = shouldEndWar ? Status.CANCELLING : Status.RESTORING;
+        war.phase = shouldEndWar ? Phase.CANCEL_WAR : Phase.RESTORE_ATTACKER_INFO;
+
+        if (!store.save(state)) {
+            restorePausedCancellationState(war, previousStatus, previousPhase,
+                    previousPendingCommand, previousPendingNextPhase, previousError,
+                    previousEndMillis, previousCancelledAtMillis);
+            return false;
+        }
+
+        ManagedOperation operation = shouldEndWar ? new CancelOperation(war) : new RestoreOperation(war);
+        if (coordinator.start(client, OPERATION_ID, displayName().getString(), operation)
+                == OperationStartResult.STARTED) return true;
+
+        restorePausedCancellationState(war, previousStatus, previousPhase,
+                previousPendingCommand, previousPendingNextPhase, previousError,
+                previousEndMillis, previousCancelledAtMillis);
+        store.save(state);
+        return false;
+    }
+
+    private static void restorePausedCancellationState(
+            War war,
+            Status status,
+            Phase phase,
+            String pendingCommand,
+            Phase pendingNextPhase,
+            String error,
+            long endMillis,
+            long cancelledAtMillis
+    ) {
+        war.status = status;
+        war.phase = phase;
+        war.pendingCommand = pendingCommand;
+        war.pendingNextPhase = pendingNextPhase;
+        war.error = error;
+        war.scheduledEndMillis = endMillis;
+        war.cancelledAtMillis = cancelledAtMillis;
+    }
+
     public boolean cancelScheduled(MinecraftClient client, String warId) {
         Optional<War> found = findWar(warId);
         if (found.isEmpty() || storageLocked() || !canRunPrivilegedOperation(client)) return false;
@@ -1098,7 +1162,8 @@ public final class WarManagerModule extends DMLSModule {
 
         private void resumeSide(MinecraftClient client) {
             Claim claim = war.claim(side);
-            if (claim.restored || claim.membership == Membership.NONE) {
+            if (claim.restored || claim.membership == Membership.NONE
+                    || claim.membership == Membership.UNKNOWN) {
                 claim.restored = true;
                 markSideRestored(client);
                 return;

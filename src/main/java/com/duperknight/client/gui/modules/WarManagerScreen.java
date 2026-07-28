@@ -130,6 +130,9 @@ public final class WarManagerScreen extends DMLSMenuScreen {
                     + (scaled(WAR_ROW_HEIGHT) - STANDARD_BUTTON_HEIGHT) / 2;
             if (war.status() == com.duperknight.client.war.WarManagerState.Status.PAUSED) {
                 int retryWidth = scaled(62);
+                int cancelWidth = scaled(62);
+                int actionGap = scaled(4);
+                int cancelX = formX + formWidth - cancelWidth - scaled(WAR_ROW_ACTION_INSET);
                 addScrollableChild(registerCommandControl(ButtonWidget.builder(
                                 Text.translatable("dmls.button.war.retry"),
                                 button -> {
@@ -140,9 +143,22 @@ public final class WarManagerScreen extends DMLSMenuScreen {
                                         validation = Text.translatable("dmls.validation.war.retry");
                                     }
                                 })
-                        .dimensions(formX + formWidth - retryWidth - scaled(WAR_ROW_ACTION_INSET),
+                        .dimensions(cancelX - actionGap - retryWidth,
                                 contentY(rowButtonOffset),
                                 retryWidth, STANDARD_BUTTON_HEIGHT).build()), rowButtonOffset);
+                addScrollableChild(registerCommandControl(ButtonWidget.builder(
+                                Text.translatable("dmls.button.war.cancel_paused"),
+                                button -> {
+                                    if (module.cancelPaused(client, war.id())) {
+                                        validation = Text.empty();
+                                        clearAndInit();
+                                    } else {
+                                        validation = Text.translatable(
+                                                "dmls.validation.war.cancel_paused");
+                                    }
+                                })
+                        .dimensions(cancelX, contentY(rowButtonOffset),
+                                cancelWidth, STANDARD_BUTTON_HEIGHT).build()), rowButtonOffset);
             } else if (war.scheduledCancelable(now)) {
                 int cancelWidth = scaled(76);
                 addScrollableChild(ButtonWidget.builder(
@@ -246,7 +262,7 @@ public final class WarManagerScreen extends DMLSMenuScreen {
         preview.add(Text.literal("/la edit … → /n leave confirm (both claims)"));
         preview.add(Text.literal("/war admin start " + draft.attacker() + " " + draft.defender()
                 + " 0 " + CompactDurationFormatter.formatMinutes(draft.countdownMinutes())));
-        preview.add(Text.literal("At war start: /gamerule, /tp, /mm spawn, /back"));
+        preview.add(Text.literal("At war start: /gamerule, /broadcastraw, /tp, /mm spawn, /back"));
         preview.add(Text.literal("At war end: purge cleanup and nation restoration"));
 
         client.setScreen(new DangerReviewScreen(this,
