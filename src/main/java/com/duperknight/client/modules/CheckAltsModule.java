@@ -120,7 +120,9 @@ public final class CheckAltsModule extends DMLSModule {
     }
 
     private enum Stage {
+        WAITING_TO_SEND_ALTS,
         WAITING_FOR_ALTS,
+        WAITING_TO_SEND_HISTORY,
         WAITING_FOR_HISTORY
     }
 
@@ -135,7 +137,7 @@ public final class CheckAltsModule extends DMLSModule {
         private final List<String> skippedAccounts = new ArrayList<>();
 
         private OperationHandle handle;
-        private Stage stage = Stage.WAITING_FOR_ALTS;
+        private Stage stage = Stage.WAITING_TO_SEND_ALTS;
         private int waitTicks;
         private int altsListQuietTicks;
         private boolean altsListStarted;
@@ -143,6 +145,7 @@ public final class CheckAltsModule extends DMLSModule {
         private String currentAccount;
         private HistoryOutputParser historyParser;
         private CommandDispatch initialDispatch = CommandDispatch.BLOCKED;
+        private boolean initialDispatchFailed;
 
         private CheckSession(String ign) {
             this.ign = ign;
@@ -155,29 +158,31 @@ public final class CheckAltsModule extends DMLSModule {
             if (!handle.descriptor().dryRunCaptured()) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_alts.checking", ign);
             }
-            initialDispatch = handle.dispatchCommand(client, "alts " + ign);
-            handleDispatch(client, initialDispatch, "/alts " + ign);
+            trySendAlts(client);
         }
 
         private boolean acceptedAtStart() {
-            return initialDispatch != CommandDispatch.BLOCKED;
+            return !initialDispatchFailed;
         }
 
         @Override
         public void onTick(OperationHandle handle, MinecraftClient client) {
-            waitTicks++;
             switch (stage) {
+                case WAITING_TO_SEND_ALTS -> trySendAlts(client);
                 case WAITING_FOR_ALTS -> {
+                    waitTicks++;
                     if (altsListStarted && ++altsListQuietTicks > ALTS_OUTPUT_QUIET_TICKS) {
                         finishAltsList(client);
                     } else if (!altsListStarted && waitTicks > ALTS_TIMEOUT_TICKS) {
                         failAltsReadAndContinue(client);
                     }
                 }
+                case WAITING_TO_SEND_HISTORY -> trySendNextHistoryCommand(client);
                 case WAITING_FOR_HISTORY -> {
+                    waitTicks++;
                     if (waitTicks > HISTORY_WINDOW_TICKS) {
                         finishCurrentHistory();
-                        sendNextHistoryCommand(client);
+                        stage = Stage.WAITING_TO_SEND_HISTORY;
                     }
                 }
             }
@@ -187,6 +192,7 @@ public final class CheckAltsModule extends DMLSModule {
         public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
             if (message.origin() != MessageOrigin.SERVER_SYSTEM) return;
             switch (stage) {
+                case WAITING_TO_SEND_ALTS, WAITING_TO_SEND_HISTORY -> { }
                 case WAITING_FOR_ALTS -> handleAltsMessage(client, message.cleanText());
                 case WAITING_FOR_HISTORY -> handleHistoryMessage(client, message.cleanText());
             }
@@ -267,7 +273,7 @@ public final class CheckAltsModule extends DMLSModule {
             altsResolved = true;
             remainingAccounts.add(ign);
             remainingAccounts.addAll(alts);
-            sendNextHistoryCommand(client);
+            stage = Stage.WAITING_TO_SEND_HISTORY;
         }
 
         private void handleHistoryMessage(MinecraftClient client, String message) {
@@ -276,7 +282,7 @@ public final class CheckAltsModule extends DMLSModule {
             if (event == HistoryOutputParser.Event.RECOGNIZED) waitTicks = 0;
             if (event == HistoryOutputParser.Event.COMPLETE || event == HistoryOutputParser.Event.FAILED) {
                 finishCurrentHistory();
-                sendNextHistoryCommand(client);
+                stage = Stage.WAITING_TO_SEND_HISTORY;
             }
         }
 
@@ -287,7 +293,19 @@ public final class CheckAltsModule extends DMLSModule {
             currentAccount = null;
         }
 
-        private void sendNextHistoryCommand(MinecraftClient client) {
+        private void trySendAlts(MinecraftClient client) {
+            if (!handle.canDispatchAutomatedCommand()) return;
+            initialDispatch = handle.dispatchCommand(client, "alts " + ign);
+            initialDispatchFailed = initialDispatch == CommandDispatch.BLOCKED;
+            if (initialDispatch == CommandDispatch.SENT) {
+                waitTicks = 0;
+                stage = Stage.WAITING_FOR_ALTS;
+            }
+            handleDispatch(client, initialDispatch, "/alts " + ign);
+        }
+
+        private void trySendNextHistoryCommand(MinecraftClient client) {
+            if (!handle.canDispatchAutomatedCommand()) return;
             String next = remainingAccounts.poll();
             if (next == null) {
                 finish(client);

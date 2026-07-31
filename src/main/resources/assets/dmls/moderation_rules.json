@@ -15,12 +15,6 @@
           "windowMs": 5000,
           "similarityThreshold": 0.8,
           "fuzzyMinLength": 8
-        },
-        {
-          "metric": "message_count",
-          "groupBy": "sender",
-          "minimum": 3,
-          "windowMs": 2500
         }
       ]
     },

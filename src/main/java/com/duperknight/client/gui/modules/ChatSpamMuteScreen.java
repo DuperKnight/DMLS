@@ -24,7 +24,7 @@ public final class ChatSpamMuteScreen extends DMLSMenuScreen {
     @Override
     protected void init() {
         configureScrollableContent(module, scaled(104));
-        int controlWidth = scaled(200);
+        int controlWidth = Math.min(scaled(240), width - scaled(48));
         int x = width / 2 - controlWidth / 2;
         addScrollableChild(CyclingButtonWidget.builder((Boolean value) -> Text.translatable(value ? "dmls.option.on" : "dmls.option.off")
                         .formatted(value ? Formatting.GREEN : Formatting.RED), DMLSConfig.tradeChatMuted()).values(true, false)
@@ -52,12 +52,12 @@ public final class ChatSpamMuteScreen extends DMLSMenuScreen {
         addScrollableChild(CyclingButtonWidget.builder((Boolean value) -> Text.translatable(
                                 value ? "dmls.option.on" : "dmls.option.off")
                         .formatted(value ? Formatting.GREEN : Formatting.RED),
-                        DMLSConfig.serverSummonMessagesMuted()).values(true, false)
+                        DMLSConfig.staffCommandFeedbackMuted()).values(true, false)
                 .build(x, contentY(scaled(60)), controlWidth, STANDARD_BUTTON_HEIGHT,
-                        Text.translatable("dmls.module.chat_spam.server_summon_messages_toggle"),
+                        Text.translatable("dmls.module.chat_spam.staff_command_feedback_toggle"),
                         (button, value) -> {
-                            if (!DMLSConfig.setServerSummonMessagesMuted(value)) {
-                                button.setValue(DMLSConfig.serverSummonMessagesMuted());
+                            if (!DMLSConfig.setStaffCommandFeedbackMuted(value)) {
+                                button.setValue(DMLSConfig.staffCommandFeedbackMuted());
                                 saveStatus = Text.translatable("dmls.validation.config.save_failed");
                             } else {
                                 saveStatus = Text.empty();

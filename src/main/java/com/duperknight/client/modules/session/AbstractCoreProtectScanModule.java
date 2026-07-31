@@ -108,6 +108,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
         if (started != OperationStartResult.STARTED) {
             return handleStartFailure(client, started);
         }
+        if (operation.initialPending) return SubmissionResult.STARTED;
         return switch (operation.initialDispatch) {
             case SENT -> SubmissionResult.STARTED;
             case SIMULATED -> SubmissionResult.SIMULATED;
@@ -324,6 +325,8 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
         private final ScanRequest request;
         private final CoreProtectScanSession session;
         private CommandDispatch initialDispatch = CommandDispatch.BLOCKED;
+        private boolean initialPending;
+        private Integer pendingPage;
         private boolean reported;
 
         private ScanOperation(ScanRequest request) {
@@ -333,6 +336,15 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
 
         @Override
         public void onStarted(OperationHandle handle, MinecraftClient client) {
+            if (!handle.canDispatchAutomatedCommand()) {
+                initialPending = true;
+                return;
+            }
+            dispatchInitial(handle, client);
+        }
+
+        private void dispatchInitial(OperationHandle handle, MinecraftClient client) {
+            initialPending = false;
             initialDispatch = handle.dispatchCommand(client, request.command());
             switch (initialDispatch) {
                 case SENT -> ChatUtils.sendTranslatedMessage(client, prefix,
@@ -355,6 +367,14 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
 
         @Override
         public void onTick(OperationHandle handle, MinecraftClient client) {
+            if (initialPending) {
+                if (handle.canDispatchAutomatedCommand()) dispatchInitial(handle, client);
+                return;
+            }
+            if (pendingPage != null) {
+                if (handle.canDispatchAutomatedCommand()) dispatchPage(handle, client, pendingPage);
+                return;
+            }
             apply(handle, client, session.tick());
         }
 
@@ -363,6 +383,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
             if (message.origin() != MessageOrigin.SERVER_SYSTEM) {
                 return;
             }
+            if (initialPending || pendingPage != null) return;
             apply(handle, client, session.accept(message.cleanText()));
         }
 
@@ -398,22 +419,29 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
                 return;
             }
             if (action.type() == CoreProtectScanSession.ActionType.REQUEST_PAGE) {
-                CommandDispatch dispatch = handle.dispatchCommand(client, "co page " + action.page());
-                if (dispatch == CommandDispatch.SENT) {
-                    session.pageRequested(action.page());
-                    if (action.page() % 5 == 0) {
-                        ChatUtils.sendTranslatedMessage(client, prefix, translationNamespace + ".progress",
-                                action.page(), session.snapshot().totalPages());
-                    }
-                } else {
-                    finishAndReport(handle, client,
-                            dispatch == CommandDispatch.SIMULATED
-                                    ? CoreProtectScanSession.Completion.SIMULATED
-                                    : CoreProtectScanSession.Completion.DISPATCH_BLOCKED);
-                }
+                pendingPage = action.page();
+                if (handle.canDispatchAutomatedCommand()) dispatchPage(handle, client, action.page());
                 return;
             }
             finishAndReport(handle, client, action.completion());
+        }
+
+        private void dispatchPage(OperationHandle handle, MinecraftClient client, int page) {
+            CommandDispatch dispatch = handle.dispatchCommand(client, "co page " + page);
+            if (dispatch == CommandDispatch.SENT) {
+                pendingPage = null;
+                session.pageRequested(page);
+                if (page % 5 == 0) {
+                    ChatUtils.sendTranslatedMessage(client, prefix, translationNamespace + ".progress",
+                            page, session.snapshot().totalPages());
+                }
+            } else {
+                pendingPage = null;
+                finishAndReport(handle, client,
+                        dispatch == CommandDispatch.SIMULATED
+                                ? CoreProtectScanSession.Completion.SIMULATED
+                                : CoreProtectScanSession.Completion.DISPATCH_BLOCKED);
+            }
         }
 
         private void finishAndReport(

@@ -5,11 +5,14 @@ import com.duperknight.client.message.MessageOrigin;
 import com.duperknight.client.message.ServerMessage;
 import com.duperknight.client.message.ServerMessageRouter;
 import com.duperknight.client.session.CommandDispatch;
+import com.duperknight.client.session.OutboundSpamSafety;
 import com.duperknight.client.utils.CannedReplies;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
+import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ServerGuard;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
@@ -57,6 +60,10 @@ public final class AwayModule extends DMLSModule {
     private long lastReplyAtMillis;
     private final Map<String, Long> lastReplyBySender = new HashMap<>();
     private final List<String> sendersWhileAway = new ArrayList<>();
+    private PendingReply pendingReply;
+
+    private record PendingReply(String sender, String reply) {
+    }
 
     public AwayModule() {
         this(System::currentTimeMillis);
@@ -91,6 +98,8 @@ public final class AwayModule extends DMLSModule {
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         ServerMessageRouter.subscribe(EnumSet.of(MessageOrigin.PLAYER_CHAT, MessageOrigin.SERVER_SYSTEM), this::handleServerMessage);
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> pendingReply = null);
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> pendingReply = null);
     }
 
     public Mode mode() {
@@ -221,6 +230,7 @@ public final class AwayModule extends DMLSModule {
         if (mode == Mode.BRB && now() >= brbExpiresAtMillis) {
             disable(client);
         }
+        tryDispatchPendingReply(client);
     }
 
     private void handleServerMessage(ServerMessage message) {
@@ -265,15 +275,33 @@ public final class AwayModule extends DMLSModule {
             return;
         }
 
+        if (pendingReply != null) return;
+        pendingReply = new PendingReply(sender, reply.get());
+        tryDispatchPendingReply(client);
+    }
+
+    private void tryDispatchPendingReply(MinecraftClient client) {
+        if (pendingReply == null || mode == Mode.OFF || ClientUtils.isNotConnected(client)) return;
+        long now = now();
+        if (now - lastReplyAtMillis < GLOBAL_REPLY_GAP_MILLIS) return;
+        if (!DMLSConfig.dryRun()
+                && !OutboundSpamSafety.canDispatch(DMLSConfig.staffRank() == StaffRank.ADMIN)) return;
+        if (!ServerGuard.check(client).allowed()) {
+            pendingReply = null;
+            return;
+        }
+
+        PendingReply pending = pendingReply;
         CommandDispatch dispatch = ClientUtils.dispatchCommand(
-                client, "msg %s %s".formatted(sender, reply.get()));
+                client, "msg %s %s".formatted(pending.sender(), pending.reply()));
+        pendingReply = null;
         if (dispatch == CommandDispatch.SENT) {
             lastReplyAtMillis = now;
-            lastReplyBySender.put(sender.toLowerCase(Locale.ROOT), now);
-            if (sendersWhileAway.stream().noneMatch(sender::equalsIgnoreCase)) {
-                sendersWhileAway.add(sender);
+            lastReplyBySender.put(pending.sender().toLowerCase(Locale.ROOT), now);
+            if (sendersWhileAway.stream().noneMatch(pending.sender()::equalsIgnoreCase)) {
+                sendersWhileAway.add(pending.sender());
             }
-            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.replied", sender);
+            ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.replied", pending.sender());
         }
     }
 
@@ -291,6 +319,7 @@ public final class AwayModule extends DMLSModule {
         lastReplyBySender.clear();
         sendersWhileAway.clear();
         lastReplyAtMillis = 0;
+        pendingReply = null;
     }
 
     private long now() {

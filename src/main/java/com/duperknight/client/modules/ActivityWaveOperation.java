@@ -150,7 +150,8 @@ final class ActivityWaveOperation implements ManagedOperation {
         }
         sequence = new PacedCommandSequence<>(List.of(username), 0, RESPONSE_TIMEOUT_TICKS,
                 ignored -> dispatcher.dispatch(handle, client, "activity " + username),
-                (ignored, line) -> parse(line));
+                (ignored, line) -> parse(line),
+                handle::canDispatchAutomatedCommand);
         sequence.start();
         evaluateSequence();
     }

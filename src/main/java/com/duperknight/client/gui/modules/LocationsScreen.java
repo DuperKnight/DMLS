@@ -1,6 +1,7 @@
 package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
+import com.duperknight.client.gui.widgets.RemoveButtonWidget;
 import com.duperknight.client.modules.LocationsModule;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -49,15 +50,16 @@ public final class LocationsScreen extends DMLSMenuScreen {
                                 }
                             })
                     .dimensions(formX, contentY(offset), formWidth - deleteWidth - scaled(4), STANDARD_BUTTON_HEIGHT).build(), offset));
-            addScrollableChild(ButtonWidget.builder(Text.literal("✕"), button -> {
+            addScrollableChild(new RemoveButtonWidget(
+                    formX + formWidth - deleteWidth, contentY(offset), deleteWidth, STANDARD_BUTTON_HEIGHT,
+                    button -> {
                         status = Text.empty();
                         if (module.delete(client, name) == LocationsModule.Outcome.DELETED) {
                             clearAndInit();
                         } else {
                             status = Text.translatable("dmls.validation.locations.action_blocked");
                         }
-                    })
-                    .dimensions(formX + formWidth - deleteWidth, contentY(offset), deleteWidth, STANDARD_BUTTON_HEIGHT).build(), offset);
+                    }), offset);
             row++;
         }
 

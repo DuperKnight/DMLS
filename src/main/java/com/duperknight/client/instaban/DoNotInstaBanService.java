@@ -3,6 +3,7 @@ package com.duperknight.client.instaban;
 import com.duperknight.client.accountlink.DiscordLinkTokenStore;
 import com.duperknight.client.accountlink.DiscordAccountProfileStore;
 import com.duperknight.client.accountlink.DiscordLinkRequestManager;
+import com.duperknight.client.utils.DMLSFunctionApi;
 import com.duperknight.client.utils.InputValidators;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -38,9 +39,6 @@ public final class DoNotInstaBanService {
     static final int MAX_BODY_BYTES = 2_048;
     private static final int MAX_RETRIES = 3;
     private static final Duration TIMEOUT = Duration.ofSeconds(35);
-    private static final URI EXECUTION_URI = URI.create(
-            "https://fra.cloud.appwrite.io/v1/functions/dmls-linking/executions");
-    private static final String APPWRITE_PROJECT = "68305f510028a84a7227";
     private static final DiscordLinkRequestManager REQUEST_MANAGER = DiscordLinkRequestManager.shared();
     private static final ExecutorService IO_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
         Thread thread = new Thread(runnable, "DMLS Do-Not-Insta-Ban");
@@ -148,13 +146,7 @@ public final class DoNotInstaBanService {
 
     private CompletableFuture<BatchOutcome> handleResponse(UUID minecraftUuid, String token, List<String> players,
                                                             int retry, TransportResponse executionResponse) {
-        final TransportResponse response;
-        try {
-            response = unwrapExecutionResponse(executionResponse);
-        } catch (RuntimeException error) {
-            return CompletableFuture.completedFuture(BatchOutcome.failure(
-                    InstaBanLookupOutcome.Type.MALFORMED_RESPONSE));
-        }
+        TransportResponse response = executionResponse;
         String errorCode = errorCode(response.body());
         if (response.statusCode() == 200) {
             try {
@@ -244,61 +236,12 @@ public final class DoNotInstaBanService {
             throw new IllegalArgumentException("Do-Not-Insta-Ban body exceeds the API limit");
         }
 
-        JsonObject executionBody = new JsonObject();
-        executionBody.addProperty("body", functionBody);
-        executionBody.addProperty("async", false);
-        executionBody.addProperty("path", "/v1/do-not-insta-ban/check");
-        executionBody.addProperty("method", "POST");
-        JsonObject forwardedHeaders = new JsonObject();
-        forwardedHeaders.addProperty("authorization", "Bearer " + token);
-        forwardedHeaders.addProperty("content-type", "application/json");
-        forwardedHeaders.addProperty("accept", "application/json");
-        forwardedHeaders.addProperty("cache-control", "no-store");
-        executionBody.add("headers", forwardedHeaders);
-
-        return HttpRequest.newBuilder(EXECUTION_URI)
-                .timeout(TIMEOUT)
+        return DMLSFunctionApi.request("/v1/do-not-insta-ban/check", TIMEOUT)
                 .header("Content-Type", "application/json")
-                .header("Accept", "application/json")
-                .header("X-Appwrite-Project", APPWRITE_PROJECT)
-                .header("User-Agent", "DuperKnight/DMLS")
-                .POST(HttpRequest.BodyPublishers.ofString(executionBody.toString()))
+                .header("Authorization", "Bearer " + token)
+                .header("Cache-Control", "no-store")
+                .POST(HttpRequest.BodyPublishers.ofString(functionBody))
                 .build();
-    }
-
-    static TransportResponse unwrapExecutionResponse(TransportResponse outer) {
-        if (outer.statusCode() < 200 || outer.statusCode() >= 300) return outer;
-        JsonObject execution = JsonParser.parseString(outer.body()).getAsJsonObject();
-        JsonElement statusElement = execution.get("responseStatusCode");
-        JsonElement bodyElement = execution.get("responseBody");
-        if (statusElement == null || !statusElement.isJsonPrimitive()
-                || bodyElement == null || !bodyElement.isJsonPrimitive()) {
-            throw new IllegalArgumentException("Malformed Appwrite execution response");
-        }
-        return new TransportResponse(statusElement.getAsInt(), bodyElement.getAsString(),
-                executionHeader(execution.get("responseHeaders"), "retry-after"));
-    }
-
-    private static String executionHeader(JsonElement headers, String requestedName) {
-        if (headers == null || headers.isJsonNull()) return "";
-        if (headers.isJsonArray()) {
-            for (JsonElement element : headers.getAsJsonArray()) {
-                if (!element.isJsonObject()) continue;
-                JsonObject header = element.getAsJsonObject();
-                JsonElement name = header.get("name");
-                JsonElement value = header.get("value");
-                if (name != null && value != null && requestedName.equalsIgnoreCase(name.getAsString())) {
-                    return value.getAsString();
-                }
-            }
-        } else if (headers.isJsonObject()) {
-            for (Map.Entry<String, JsonElement> entry : headers.getAsJsonObject().entrySet()) {
-                if (requestedName.equalsIgnoreCase(entry.getKey()) && entry.getValue().isJsonPrimitive()) {
-                    return entry.getValue().getAsString();
-                }
-            }
-        }
-        return "";
     }
 
     static InstaBanCheckResponse parseSuccess(String body, List<String> expectedPlayers) {

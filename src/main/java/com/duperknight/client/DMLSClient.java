@@ -72,328 +72,331 @@ public class DMLSClient implements ClientModInitializer {
 
     LiteralArgumentBuilder<FabricClientCommandSource> buildDmlsCommand() {
         return ClientCommandManager.literal("dmls")
-                .executes(context -> openHomeScreen(context.getSource().getClient()))
-                .then(staffLiteral("rank")
-                        .executes(context -> {
-                            ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
-                                    "dmls.chat.rank.current", DMLSConfig.staffRank().displayName());
-                            return 1;
-                        }))
-                .then(staffLiteral("help")
-                        .executes(context -> sendHelp(context.getSource().getClient())))
-                .then(staffLiteral("modview")
-                        .executes(context -> openModerationScreen(context.getSource().getClient())))
-                .then(staffLiteral("punish")
-                        .executes(context -> {
-                            MinecraftClient client = context.getSource().getClient();
-                            client.send(() -> client.setScreen(new RulebookScreen(null, null)));
-                            return 1;
-                        }))
-                .then(staffLiteral("cancel")
-                        .executes(context -> cancelActiveOperation(context.getSource().getClient())))
-                .then(moduleLiteral("lands", CheckLandsModule.class)
-                        .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
-                            return module(CheckLandsModule.class).submit(context.getSource().getClient(),
-                                    StringArgumentType.getString(context, "igns"))
-                                    == OperationStartResult.STARTED ? 1 : 0;
-                        })))
-                .then(moduleLiteral("members", CheckMembersModule.class)
-                        .then(ClientCommandManager.argument("land", StringArgumentType.greedyString()).executes(context -> {
-                            return module(CheckMembersModule.class).submit(context.getSource().getClient(),
-                                    StringArgumentType.getString(context, "land"))
-                                    == OperationStartResult.STARTED ? 1 : 0;
-                        })))
-                .then(moduleLiteral("alts", CheckAltsModule.class)
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
-                            return module(CheckAltsModule.class).submit(context.getSource().getClient(),
-                                    StringArgumentType.getString(context, "ign"))
-                                    == OperationStartResult.STARTED ? 1 : 0;
-                        })))
-                .then(moduleLiteral("uuid", UuidLookupModule.class)
-                        .then(ClientCommandManager.argument("usernames", StringArgumentType.greedyString()).executes(context -> {
-                            return module(UuidLookupModule.class).submit(context.getSource().getClient(),
-                                    StringArgumentType.getString(context, "usernames")) ? 1 : 0;
-                        })))
-                .then(moduleLiteral("xray", XrayRollbackModule.class)
-                        .then(ClientCommandManager.literal("confirm")
-                                .executes(context -> module(XrayRollbackModule.class).confirm(
-                                        context.getSource().getClient()) ? 1 : 0))
-                        .then(ClientCommandManager.literal("cancel").executes(context -> {
-                            return module(XrayRollbackModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
-                        }))
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
-                            return module(XrayRollbackModule.class).stage(context.getSource().getClient(),
-                                    StringArgumentType.getString(context, "ign")).staged() ? 1 : 0;
-                        })))
-                .then(moduleLiteral("prefix", PrefixCreateModule.class)
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("limit", StringArgumentType.word())
-                                        .then(ClientCommandManager.argument("prefixid", StringArgumentType.word())
-                                                .then(ClientCommandManager.argument("prefixtext", StringArgumentType.greedyString()).executes(context -> {
-                                                    return module(PrefixCreateModule.class).submit(context.getSource().getClient(),
-                                                            StringArgumentType.getString(context, "ign"), StringArgumentType.getString(context, "limit"),
-                                                            StringArgumentType.getString(context, "prefixid"),
-                                                            StringArgumentType.getString(context, "prefixtext")).valid() ? 1 : 0;
-                                                }))))))
-                .then(moduleLiteral("donorpet", DonorPetModule.class)
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("pet", StringArgumentType.word()).executes(context -> {
-                                    return module(DonorPetModule.class).submit(context.getSource().getClient(),
-                                            StringArgumentType.getString(context, "ign"),
-                                            StringArgumentType.getString(context, "pet"))
-                                            == DonorPetModule.SubmitStatus.STARTED ? 1 : 0;
-                                }))))
-                .then(moduleLiteral("promowave", PromoWaveModule.class)
-                        .then(ClientCommandManager.literal("confirm")
-                                .executes(context -> module(PromoWaveModule.class).confirm(
-                                        context.getSource().getClient()) ? 1 : 0))
-                        .then(ClientCommandManager.literal("cancel").executes(context -> {
-                            return module(PromoWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
-                        }))
-                        .then(ClientCommandManager.argument("rank", StringArgumentType.word())
+                        .executes(context -> openHomeScreen(context.getSource().getClient()))
+                        .then(staffLiteral("rank")
+                                .executes(context -> {
+                                    ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
+                                            "dmls.chat.rank.current", DMLSConfig.staffRank().displayName());
+                                    return 1;
+                                }))
+                        .then(staffLiteral("help")
+                                .executes(context -> sendHelp(context.getSource().getClient())))
+                        .then(staffLiteral("modview")
+                                .executes(context -> openModerationScreen(context.getSource().getClient())))
+                        .then(staffLiteral("punish")
+                                .executes(context -> {
+                                    MinecraftClient client = context.getSource().getClient();
+                                    client.send(() -> client.setScreen(new RulebookScreen(null, null)));
+                                    return 1;
+                                }))
+                        .then(staffLiteral("cancel")
+                                .executes(context -> cancelActiveOperation(context.getSource().getClient())))
+                        .then(moduleLiteral("lands", CheckLandsModule.class)
                                 .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
-                                    return module(PromoWaveModule.class).stage(context.getSource().getClient(),
-                                            StringArgumentType.getString(context, "rank"),
-                                            StringArgumentType.getString(context, "igns")).staged() ? 1 : 0;
-                                }))))
-                .then(moduleLiteral("demowave", DemoWaveModule.class)
-                        .then(ClientCommandManager.literal("confirm")
-                                .executes(context -> module(DemoWaveModule.class).confirm(
-                                        context.getSource().getClient()) ? 1 : 0))
-                        .then(ClientCommandManager.literal("cancel").executes(context -> {
-                            return module(DemoWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
-                        }))
-                        .then(ClientCommandManager.argument("rank", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
-                                    return module(DemoWaveModule.class).stage(context.getSource().getClient(),
-                                            StringArgumentType.getString(context, "rank"),
-                                            StringArgumentType.getString(context, "igns")).staged() ? 1 : 0;
-                                }))))
-                .then(moduleLiteral("activity", ActivityWaveModule.class)
-                        .then(ClientCommandManager.literal("cancel").executes(context -> {
-                            return module(ActivityWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
-                        }))
-                        .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
-                            return module(ActivityWaveModule.class).submit(context.getSource().getClient(),
-                                    StringArgumentType.getString(context, "igns"))
-                                    == ActivityWaveModule.SubmitStatus.STARTED ? 1 : 0;
-                        })))
-                .then(moduleLiteral("containers", ContainerScanModule.class)
-                        .then(ClientCommandManager.literal("cancel").executes(context -> {
-                            return module(ContainerScanModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
-                        }))
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("time", StringArgumentType.word())
-                                        .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
-                                            return module(ContainerScanModule.class).submit(context.getSource().getClient(),
-                                                    StringArgumentType.getString(context, "ign"),
-                                                    StringArgumentType.getString(context, "time"),
-                                                    StringArgumentType.getString(context, "radius")).accepted() ? 1 : 0;
-                                        })))))
-                .then(moduleLiteral("griefs", GriefScanModule.class)
-                        .then(ClientCommandManager.literal("cancel").executes(context -> {
-                            return module(GriefScanModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
-                        }))
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word())
-                                .then(ClientCommandManager.argument("time", StringArgumentType.word())
-                                        .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
-                                            return module(GriefScanModule.class).submit(context.getSource().getClient(),
-                                                    StringArgumentType.getString(context, "ign"),
-                                                    StringArgumentType.getString(context, "time"),
-                                                    StringArgumentType.getString(context, "radius")).accepted() ? 1 : 0;
-                                        })))))
-                .then(moduleLiteral("co", CoreProtectBuilderModule.class)
-                        .executes(context -> {
-                            module(CoreProtectBuilderModule.class).openScreenDeferred(context.getSource().getClient());
-                            return 1;
-                        }))
-                .then(moduleLiteral("greet", GreeterModule.class)
-                        .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
-                            CommandDispatch dispatch = module(GreeterModule.class).greet(
-                                    context.getSource().getClient(), StringArgumentType.getString(context, "ign").trim());
-                            return dispatch == CommandDispatch.BLOCKED ? 0 : 1;
-                        })))
-                .then(moduleLiteral("greeter", GreeterModule.class)
-                        .executes(context -> {
-                            GreeterModule greeter = module(GreeterModule.class);
-                            ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
-                                    greeter.enabled() ? "dmls.chat.greeter.enabled" : "dmls.chat.greeter.disabled");
-                            return 1;
-                        })
-                        .then(ClientCommandManager.literal("on").executes(context -> {
-                            return module(GreeterModule.class).setEnabled(context.getSource().getClient(), true) ? 1 : 0;
-                        }))
-                        .then(ClientCommandManager.literal("off").executes(context -> {
-                            return module(GreeterModule.class).setEnabled(context.getSource().getClient(), false) ? 1 : 0;
-                        })))
-                .then(moduleLiteral("loc", LocationsModule.class)
-                        .executes(context -> {
-                            module(LocationsModule.class).list(context.getSource().getClient()); return 1;
-                        })
-                        .then(ClientCommandManager.literal("list").executes(context -> {
-                            module(LocationsModule.class).list(context.getSource().getClient()); return 1;
-                        }))
-                        .then(ClientCommandManager.literal("save")
-                                .then(ClientCommandManager.argument("name", StringArgumentType.greedyString()).executes(context -> {
-                                    return locationOutcomeSucceeded(module(LocationsModule.class).save(
-                                            context.getSource().getClient(),
-                                            StringArgumentType.getString(context, "name"))) ? 1 : 0;
+                                    return module(CheckLandsModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "igns"))
+                                            == OperationStartResult.STARTED ? 1 : 0;
                                 })))
-                        .then(ClientCommandManager.literal("tp")
-                                .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
-                                        .suggests((context, builder) -> CommandSource.suggestMatching(module(LocationsModule.class).names(), builder))
-                                        .executes(context -> {
-                                            return locationOutcomeSucceeded(module(LocationsModule.class).teleport(
+                        .then(moduleLiteral("members", CheckMembersModule.class)
+                                .then(ClientCommandManager.argument("land", StringArgumentType.greedyString()).executes(context -> {
+                                    return module(CheckMembersModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "land"))
+                                            == OperationStartResult.STARTED ? 1 : 0;
+                                })))
+                        .then(moduleLiteral("alts", CheckAltsModule.class)
+                                .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
+                                    return module(CheckAltsModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "ign"))
+                                            == OperationStartResult.STARTED ? 1 : 0;
+                                })))
+                        .then(moduleLiteral("uuid", UuidLookupModule.class)
+                                .then(ClientCommandManager.argument("usernames", StringArgumentType.greedyString()).executes(context -> {
+                                    return module(UuidLookupModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "usernames")) ? 1 : 0;
+                                })))
+                        .then(moduleLiteral("xray", XrayRollbackModule.class)
+                                .then(ClientCommandManager.literal("confirm")
+                                        .executes(context -> module(XrayRollbackModule.class).confirm(
+                                                context.getSource().getClient()) ? 1 : 0))
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(XrayRollbackModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
+                                .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
+                                    return module(XrayRollbackModule.class).stage(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "ign")).staged() ? 1 : 0;
+                                })))
+                        .then(moduleLiteral("prefix", PrefixCreateModule.class)
+                                .then(ClientCommandManager.argument("ign", StringArgumentType.word())
+                                        .then(ClientCommandManager.argument("limit", StringArgumentType.word())
+                                                .then(ClientCommandManager.argument("prefixid", StringArgumentType.word())
+                                                        .then(ClientCommandManager.argument("prefixtext", StringArgumentType.greedyString()).executes(context -> {
+                                                            return module(PrefixCreateModule.class).submit(context.getSource().getClient(),
+                                                                    StringArgumentType.getString(context, "ign"), StringArgumentType.getString(context, "limit"),
+                                                                    StringArgumentType.getString(context, "prefixid"),
+                                                                    StringArgumentType.getString(context, "prefixtext")).valid() ? 1 : 0;
+                                                        }))))))
+                        .then(moduleLiteral("donorpet", DonorPetModule.class)
+                                .then(ClientCommandManager.argument("ign", StringArgumentType.word())
+                                        .then(ClientCommandManager.argument("pet", StringArgumentType.word()).executes(context -> {
+                                            return module(DonorPetModule.class).submit(context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "ign"),
+                                                    StringArgumentType.getString(context, "pet"))
+                                                    == DonorPetModule.SubmitStatus.STARTED ? 1 : 0;
+                                        }))))
+                        .then(moduleLiteral("promowave", PromoWaveModule.class)
+                                .then(ClientCommandManager.literal("confirm")
+                                        .executes(context -> module(PromoWaveModule.class).confirm(
+                                                context.getSource().getClient()) ? 1 : 0))
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(PromoWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
+                                .then(ClientCommandManager.argument("rank", StringArgumentType.word())
+                                        .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
+                                            return module(PromoWaveModule.class).stage(context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "rank"),
+                                                    StringArgumentType.getString(context, "igns")).staged() ? 1 : 0;
+                                        }))))
+                        .then(moduleLiteral("demowave", DemoWaveModule.class)
+                                .then(ClientCommandManager.literal("confirm")
+                                        .executes(context -> module(DemoWaveModule.class).confirm(
+                                                context.getSource().getClient()) ? 1 : 0))
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(DemoWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
+                                .then(ClientCommandManager.argument("rank", StringArgumentType.word())
+                                        .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
+                                            return module(DemoWaveModule.class).stage(context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "rank"),
+                                                    StringArgumentType.getString(context, "igns")).staged() ? 1 : 0;
+                                        }))))
+                        .then(moduleLiteral("activity", ActivityWaveModule.class)
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(ActivityWaveModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
+                                .then(ClientCommandManager.argument("igns", StringArgumentType.greedyString()).executes(context -> {
+                                    return module(ActivityWaveModule.class).submit(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "igns"))
+                                            == ActivityWaveModule.SubmitStatus.STARTED ? 1 : 0;
+                                })))
+                        .then(moduleLiteral("containers", ContainerScanModule.class)
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(ContainerScanModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
+                                .then(ClientCommandManager.argument("ign", StringArgumentType.word())
+                                        .then(ClientCommandManager.argument("time", StringArgumentType.word())
+                                                .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
+                                                    return module(ContainerScanModule.class).submit(context.getSource().getClient(),
+                                                            StringArgumentType.getString(context, "ign"),
+                                                            StringArgumentType.getString(context, "time"),
+                                                            StringArgumentType.getString(context, "radius")).accepted() ? 1 : 0;
+                                                })))))
+                        .then(moduleLiteral("griefs", GriefScanModule.class)
+                                .then(ClientCommandManager.literal("cancel").executes(context -> {
+                                    return module(GriefScanModule.class).cancel(context.getSource().getClient()) ? 1 : 0;
+                                }))
+                                .then(ClientCommandManager.argument("ign", StringArgumentType.word())
+                                        .then(ClientCommandManager.argument("time", StringArgumentType.word())
+                                                .then(ClientCommandManager.argument("radius", StringArgumentType.word()).executes(context -> {
+                                                    return module(GriefScanModule.class).submit(context.getSource().getClient(),
+                                                            StringArgumentType.getString(context, "ign"),
+                                                            StringArgumentType.getString(context, "time"),
+                                                            StringArgumentType.getString(context, "radius")).accepted() ? 1 : 0;
+                                                })))))
+                        .then(moduleLiteral("co", CoreProtectBuilderModule.class)
+                                .executes(context -> {
+                                    module(CoreProtectBuilderModule.class).openScreenDeferred(context.getSource().getClient());
+                                    return 1;
+                                }))
+                        .then(moduleLiteral("greet", GreeterModule.class)
+                                .then(ClientCommandManager.argument("ign", StringArgumentType.word()).executes(context -> {
+                                    CommandDispatch dispatch = module(GreeterModule.class).greet(
+                                            context.getSource().getClient(), StringArgumentType.getString(context, "ign").trim());
+                                    return dispatch == CommandDispatch.BLOCKED ? 0 : 1;
+                                })))
+                        .then(moduleLiteral("greeter", GreeterModule.class)
+                                .executes(context -> {
+                                    GreeterModule greeter = module(GreeterModule.class);
+                                    ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
+                                            greeter.enabled() ? "dmls.chat.greeter.enabled" : "dmls.chat.greeter.disabled");
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    return module(GreeterModule.class).setEnabled(context.getSource().getClient(), true) ? 1 : 0;
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    return module(GreeterModule.class).setEnabled(context.getSource().getClient(), false) ? 1 : 0;
+                                })))
+                        .then(moduleLiteral("loc", LocationsModule.class)
+                                .executes(context -> {
+                                    module(LocationsModule.class).list(context.getSource().getClient()); return 1;
+                                })
+                                .then(ClientCommandManager.literal("list").executes(context -> {
+                                    module(LocationsModule.class).list(context.getSource().getClient()); return 1;
+                                }))
+                                .then(ClientCommandManager.literal("save")
+                                        .then(ClientCommandManager.argument("name", StringArgumentType.greedyString()).executes(context -> {
+                                            return locationOutcomeSucceeded(module(LocationsModule.class).save(
                                                     context.getSource().getClient(),
                                                     StringArgumentType.getString(context, "name"))) ? 1 : 0;
                                         })))
-                        .then(ClientCommandManager.literal("del")
-                                .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
-                                        .suggests((context, builder) -> CommandSource.suggestMatching(module(LocationsModule.class).names(), builder))
-                                        .executes(context -> {
-                                            return locationOutcomeSucceeded(module(LocationsModule.class).delete(
-                                                    context.getSource().getClient(),
-                                                    StringArgumentType.getString(context, "name"))) ? 1 : 0;
-                                        }))))
-                .then(rankLiteral("dryrun", StaffRank.ADMIN)
-                        .executes(context -> {
-                            ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
-                                    DMLSConfig.dryRun() ? "dmls.chat.dry_run.status.on" : "dmls.chat.dry_run.status.off");
-                            return 1;
-                        })
-                        .then(ClientCommandManager.literal("on")
-                                .executes(context -> setDryRun(context.getSource().getClient(), true)))
-                        .then(ClientCommandManager.literal("off")
-                                .executes(context -> setDryRun(context.getSource().getClient(), false))))
-                .then(moduleLiteral("chatlog", ChatReplayModule.class)
-                        .executes(context -> {
-                            module(ChatReplayModule.class).openScreenWithFilter(context.getSource().getClient(), "");
-                            return 1;
-                        })
-                        .then(ClientCommandManager.argument("filter", StringArgumentType.greedyString()).executes(context -> {
-                            module(ChatReplayModule.class).openScreenWithFilter(context.getSource().getClient(),
-                                    StringArgumentType.getString(context, "filter")); return 1;
-                        })))
-                .then(moduleLiteral("brb", AwayModule.class)
-                        .executes(context -> {
-                            module(AwayModule.class).status(context.getSource().getClient());
-                            return 1;
-                        })
-                        .then(ClientCommandManager.literal("off").executes(context -> {
-                            module(AwayModule.class).disable(context.getSource().getClient());
-                            return 1;
-                        }))
-                        .then(ClientCommandManager.argument("duration", StringArgumentType.word())
-                                .suggests((context, builder) -> CommandSource.suggestMatching(List.of("5m", "15m", "30m", "1h"), builder))
-                                .executes(context -> {
-                                    return module(AwayModule.class).startBrb(
-                                            context.getSource().getClient(),
-                                            StringArgumentType.getString(context, "duration")) ? 1 : 0;
-                                })))
-                .then(moduleLiteral("dnd", AwayModule.class)
-                        .executes(context -> {
-                            module(AwayModule.class).status(context.getSource().getClient());
-                            return 1;
-                        })
-                        .then(ClientCommandManager.literal("on").executes(context -> {
-                            module(AwayModule.class).setDnd(context.getSource().getClient(), true);
-                            return 1;
-                        }))
-                        .then(ClientCommandManager.literal("off").executes(context -> {
-                            module(AwayModule.class).setDnd(context.getSource().getClient(), false);
-                            return 1;
-                        })))
-                .then(buildSayCommand())
-                .then(moduleLiteral("alerts", ChatAlertsModule.class)
-                        .executes(context -> {
-                            Text state = Text.translatable(DMLSConfig.alertsEnabled() ? "dmls.option.on" : "dmls.option.off")
-                                    .formatted(DMLSConfig.alertsEnabled() ? Formatting.GREEN : Formatting.RED);
-                            ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
-                                    "dmls.chat.alerts.status", state, ChatAlertsModule.wordCount());
-                            return 1;
-                        })
-                        .then(ClientCommandManager.literal("on")
-                                .executes(context -> setAlertsEnabled(context.getSource().getClient(), true)))
-                        .then(ClientCommandManager.literal("off")
-                                .executes(context -> setAlertsEnabled(context.getSource().getClient(), false)))
-                        .then(ClientCommandManager.literal("reload")
-                                .executes(context -> {
-                                    AlertWordlist.LoadResult result = ChatAlertsModule.reloadWordlistResult();
-                                    int count = result.wordCount();
-                                    if (!result.successful()) {
-                                        ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
-                                                "dmls.chat.alerts.reload_failed", count);
-                                        return 0;
-                                    }
-                                    ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
-                                            count == 1 ? "dmls.chat.alerts.reloaded.one" : "dmls.chat.alerts.reloaded.many", count);
-                                    return 1;
-                                })))
-                .then(moduleLiteral("event", EventProtectModule.class)
-                        .then(moduleLiteral("protect", EventProtectModule.class)
-                                .executes(context -> {
-                                    MinecraftClient client = context.getSource().getClient();
-                                    client.send(() -> module(EventProtectModule.class).openScreen(client, null));
-                                    return 1;
-                                })
-                                .then(ClientCommandManager.argument("eventName", StringArgumentType.string())
-                                        .then(ClientCommandManager.argument("landName", StringArgumentType.greedyString())
+                                .then(ClientCommandManager.literal("tp")
+                                        .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
+                                                .suggests((context, builder) -> CommandSource.suggestMatching(module(LocationsModule.class).names(), builder))
                                                 .executes(context -> {
-                                                    MinecraftClient client = context.getSource().getClient();
-                                                    EventProtectModule.BroadcastResult result = module(EventProtectModule.class)
-                                                            .broadcastProtection(client,
-                                                                    StringArgumentType.getString(context, "eventName"),
-                                                                    StringArgumentType.getString(context, "landName"));
-                                                    return reportProtectResult(client, result) ? 1 : 0;
+                                                    return locationOutcomeSucceeded(module(LocationsModule.class).teleport(
+                                                            context.getSource().getClient(),
+                                                            StringArgumentType.getString(context, "name"))) ? 1 : 0;
+                                                })))
+                                .then(ClientCommandManager.literal("del")
+                                        .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
+                                                .suggests((context, builder) -> CommandSource.suggestMatching(module(LocationsModule.class).names(), builder))
+                                                .executes(context -> {
+                                                    return locationOutcomeSucceeded(module(LocationsModule.class).delete(
+                                                            context.getSource().getClient(),
+                                                            StringArgumentType.getString(context, "name"))) ? 1 : 0;
                                                 }))))
-                        .then(moduleLiteral("randomtp", EventRandomTeleportModule.class)
+                        .then(rankLiteral("dryrun", StaffRank.ADMIN)
                                 .executes(context -> {
-                                    MinecraftClient client = context.getSource().getClient();
-                                    EventRandomTeleportModule.TeleportResult result =
-                                            module(EventRandomTeleportModule.class).teleport(client);
-                                    return reportRandomTeleportResult(client, result) ? 1 : 0;
-                                }))
-                        .then(moduleLiteral("powertool", EventPowerToolModule.class)
-                                .executes(context -> {
-                                    MinecraftClient client = context.getSource().getClient();
-                                    client.send(() -> module(EventPowerToolModule.class).openScreen(client, null));
-                                    return 1;
-                                }))
-
-                        .then(moduleLiteral("simultaneous", EventSimultaneousCommandModule.class)
-                                .executes(context -> {
-                                    MinecraftClient client = context.getSource().getClient();
-                                    client.send(() -> module(EventSimultaneousCommandModule.class).openScreen(client, null));
+                                    ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
+                                            DMLSConfig.dryRun() ? "dmls.chat.dry_run.status.on" : "dmls.chat.dry_run.status.off");
                                     return 1;
                                 })
-                                .then(ClientCommandManager.literal("command")
-                                        .then(ClientCommandManager.argument("slot",
-                                                        IntegerArgumentType.integer(1, EventSimultaneousCommandModule.MAX_COMMANDS))
-                                                .then(ClientCommandManager.argument("command", StringArgumentType.greedyString())
+                                .then(ClientCommandManager.literal("on")
+                                        .executes(context -> setDryRun(context.getSource().getClient(), true)))
+                                .then(ClientCommandManager.literal("off")
+                                        .executes(context -> setDryRun(context.getSource().getClient(), false))))
+                        .then(moduleLiteral("chatlog", ChatReplayModule.class)
+                                .executes(context -> {
+                                    module(ChatReplayModule.class).openScreenWithFilter(context.getSource().getClient(), "");
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.argument("filter", StringArgumentType.greedyString()).executes(context -> {
+                                    module(ChatReplayModule.class).openScreenWithFilter(context.getSource().getClient(),
+                                            StringArgumentType.getString(context, "filter")); return 1;
+                                })))
+                        .then(moduleLiteral("brb", AwayModule.class)
+                                .executes(context -> {
+                                    module(AwayModule.class).status(context.getSource().getClient());
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    module(AwayModule.class).disable(context.getSource().getClient());
+                                    return 1;
+                                }))
+                                .then(ClientCommandManager.argument("duration", StringArgumentType.word())
+                                        .suggests((context, builder) -> CommandSource.suggestMatching(List.of("5m", "15m", "30m", "1h"), builder))
+                                        .executes(context -> {
+                                            return module(AwayModule.class).startBrb(
+                                                    context.getSource().getClient(),
+                                                    StringArgumentType.getString(context, "duration")) ? 1 : 0;
+                                        })))
+                        .then(moduleLiteral("dnd", AwayModule.class)
+                                .executes(context -> {
+                                    module(AwayModule.class).status(context.getSource().getClient());
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.literal("on").executes(context -> {
+                                    module(AwayModule.class).setDnd(context.getSource().getClient(), true);
+                                    return 1;
+                                }))
+                                .then(ClientCommandManager.literal("off").executes(context -> {
+                                    module(AwayModule.class).setDnd(context.getSource().getClient(), false);
+                                    return 1;
+                                })))
+                        .then(buildSayCommand())
+                        .then(moduleLiteral("alerts", ChatAlertsModule.class)
+                                .executes(context -> {
+                                    Text state = Text.translatable(DMLSConfig.alertsEnabled() ? "dmls.option.on" : "dmls.option.off")
+                                            .formatted(DMLSConfig.alertsEnabled() ? Formatting.GREEN : Formatting.RED);
+                                    ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
+                                            "dmls.chat.alerts.status", state, ChatAlertsModule.wordCount());
+                                    return 1;
+                                })
+                                .then(ClientCommandManager.literal("on")
+                                        .executes(context -> setAlertsEnabled(context.getSource().getClient(), true)))
+                                .then(ClientCommandManager.literal("off")
+                                        .executes(context -> setAlertsEnabled(context.getSource().getClient(), false)))
+                                .then(ClientCommandManager.literal("reload")
+                                        .executes(context -> {
+                                            AlertWordlist.LoadResult result = ChatAlertsModule.reloadWordlistResult();
+                                            int count = result.wordCount();
+                                            if (!result.successful()) {
+                                                ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
+                                                        "dmls.chat.alerts.reload_failed", count);
+                                                return 0;
+                                            }
+                                            ChatUtils.sendTranslatedMessage(context.getSource().getClient(), PREFIX,
+                                                    count == 1 ? "dmls.chat.alerts.reloaded.one" : "dmls.chat.alerts.reloaded.many", count);
+                                            return 1;
+                                        })))
+                            .then(moduleLiteral("event", EventProtectModule.class)
+                                    .then(moduleLiteral("protect", EventProtectModule.class)
+                                            .executes(context -> {
+                                                MinecraftClient client = context.getSource().getClient();
+                                                client.send(() -> module(EventProtectModule.class).openScreen(client, null));
+                                                return 1;
+                                            })
+                                            .then(ClientCommandManager.argument("eventName", StringArgumentType.string())
+                                                    .then(ClientCommandManager.argument("landName", StringArgumentType.greedyString())
+                                                            .executes(context -> {
+                                                                MinecraftClient client = context.getSource().getClient();
+                                                                EventProtectModule.BroadcastResult result = module(EventProtectModule.class)
+                                                                        .broadcastProtection(client,
+                                                                                StringArgumentType.getString(context, "eventName"),
+                                                                                StringArgumentType.getString(context, "landName"));
+                                                                return reportProtectResult(client, result) ? 1 : 0;
+                                                            }))))
+                                    .then(moduleLiteral("randomtp", EventRandomTeleportModule.class)
+                                            .executes(context -> {
+                                                MinecraftClient client = context.getSource().getClient();
+                                                EventRandomTeleportModule.TeleportResult result =
+                                                        module(EventRandomTeleportModule.class).teleport(client);
+                                                return reportRandomTeleportResult(client, result) ? 1 : 0;
+                                            }))
+                                    .then(moduleLiteral("powertool", EventPowerToolModule.class)
+                                            .executes(context -> {
+                                                MinecraftClient client = context.getSource().getClient();
+                                                client.send(() -> module(EventPowerToolModule.class).openScreen(client, null));
+                                                return 1;
+                                            }))
+
+                                    .then(moduleLiteral("simultaneous", EventSimultaneousCommandModule.class)
                                                         .executes(context -> {
                                                             MinecraftClient client = context.getSource().getClient();
-                                                            int slot = IntegerArgumentType.getInteger(context, "slot");
-                                                            return module(EventSimultaneousCommandModule.class).setCommand(client, slot,
-                                                                    StringArgumentType.getString(context, "command")) ? 1 : 0;
-                                                        }))))
-                                .then(ClientCommandManager.literal("run")
-                                        .executes(context -> {
-                                            MinecraftClient client = context.getSource().getClient();
-                                            EventSimultaneousCommandModule.RunResult result =
-                                                    module(EventSimultaneousCommandModule.class).runStored(client);
-                                            return reportSimultaneousResult(client, result) ? 1 : 0;
-                                        })
-                                .then(ClientCommandManager.argument("count",
-                                                        IntegerArgumentType.integer(
-                                                                EventSimultaneousCommandModule.MIN_REPEAT_COUNT,
-                                                                EventSimultaneousCommandModule.MAX_REPEAT_COUNT))
-                                                .executes(context -> {
-                                                    MinecraftClient client = context.getSource().getClient();
-                                                    int count = IntegerArgumentType.getInteger(context, "count");
-                                                    EventSimultaneousCommandModule.RunResult result =
-                                                            module(EventSimultaneousCommandModule.class).runStored(client, count);
-                                                    return reportSimultaneousResult(client, result) ? 1 : 0;
-                                                })))));
+                                                            client.send(() -> module(EventSimultaneousCommandModule.class).openScreen(client, null));
+                                                            return 1;
+                                                        })
+                                                        .then(ClientCommandManager.literal("command1")
+                                                                .then(ClientCommandManager.argument("command", StringArgumentType.greedyString())
+                                                                        .executes(context -> {
+                                                                            MinecraftClient client = context.getSource().getClient();
+                                                                            return module(EventSimultaneousCommandModule.class).setCommandOne(client,
+                                                                                    StringArgumentType.getString(context, "command")) ? 1 : 0;
+                                                                        })))
+                                                        .then(ClientCommandManager.literal("command2")
+                                                                .then(ClientCommandManager.argument("command", StringArgumentType.greedyString())
+                                                                        .executes(context -> {
+                                                                            MinecraftClient client = context.getSource().getClient();
+                                                                            return module(EventSimultaneousCommandModule.class).setCommandTwo(client,
+                                                                                    StringArgumentType.getString(context, "command")) ? 1 : 0;
+                                                                        })))
+                                                        .then(ClientCommandManager.literal("set")
+                                                                .then(ClientCommandManager.argument("slot", IntegerArgumentType.integer(
+                                                                                1, EventSimultaneousCommandModule.MAX_COMMANDS))
+                                                                        .then(ClientCommandManager.argument("command", StringArgumentType.greedyString())
+                                                                                .executes(context -> {
+                                                                                    MinecraftClient client = context.getSource().getClient();
+                                                                                    return module(EventSimultaneousCommandModule.class).setCommand(client,
+                                                                                            IntegerArgumentType.getInteger(context, "slot"),
+                                                                                            StringArgumentType.getString(context, "command")) ? 1 : 0;
+                                                                                }))))
+                                                        .then(ClientCommandManager.literal("run")
+                                                                .executes(context -> {
+                                                                    MinecraftClient client = context.getSource().getClient();
+                                                                    EventSimultaneousCommandModule.RunResult result =
+                                                                            module(EventSimultaneousCommandModule.class).runStored(client);
+                                                                    return reportSimultaneousResult(client, result) ? 1 : 0;
+                                                                }))));
     }
 
     private static <T extends DMLSModule> T module(Class<T> type) {
@@ -547,7 +550,7 @@ public class DMLSClient implements ClientModInitializer {
         moduleHelpLine(client, EventPowerToolModule.class,
                 "/dmls event powertool", Text.translatable("dmls.help.eventpowertool"));
         moduleHelpLine(client, EventSimultaneousCommandModule.class,
-                "/dmls event simultaneous [set <1-5> <command>|run [count]]", Text.translatable("dmls.help.eventsimultaneous"));
+                "/dmls event simultaneous [set <1-5> <command>|run]", Text.translatable("dmls.help.eventsimultaneous"));
 
         helpLine(client, "/dmls", Text.translatable("dmls.help.menu"));
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
@@ -657,11 +660,6 @@ public class DMLSClient implements ClientModInitializer {
             }
             case INVALID_COMMAND -> {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.stored_gap");
-                yield false;
-            }
-            case INVALID_REPEAT_COUNT -> {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.repeat_count",
-                        EventSimultaneousCommandModule.MIN_REPEAT_COUNT, EventSimultaneousCommandModule.MAX_REPEAT_COUNT);
                 yield false;
             }
             case RANK_BLOCKED, SERVER_BLOCKED -> false; // module already sent that message

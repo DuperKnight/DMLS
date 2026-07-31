@@ -1,5 +1,7 @@
 package com.duperknight.client.session;
 
+import com.duperknight.client.modules.StaffRank;
+import com.duperknight.client.utils.DMLSConfig;
 import net.minecraft.client.MinecraftClient;
 
 import java.util.Objects;
@@ -30,6 +32,21 @@ public final class OperationHandle {
 
     public CommandDispatch dispatchChatMessage(MinecraftClient client, String message) {
         return coordinator.dispatchChatMessage(this, client, message);
+    }
+
+    /**
+     * Returns whether an automated command may be sent without exceeding the
+     * shared non-admin spam budget. Dry runs never wait because they do not
+     * produce an outbound packet.
+     */
+    public boolean canDispatchAutomatedCommand() {
+        return isActive() && (descriptor.dryRunCaptured()
+                || OutboundSpamSafety.canDispatch(DMLSConfig.staffRank() == StaffRank.ADMIN));
+    }
+
+    public int ticksUntilAutomatedCommandSafe() {
+        if (!isActive() || descriptor.dryRunCaptured()) return 0;
+        return OutboundSpamSafety.ticksUntilSafe(DMLSConfig.staffRank() == StaffRank.ADMIN);
     }
 
     public boolean complete() {

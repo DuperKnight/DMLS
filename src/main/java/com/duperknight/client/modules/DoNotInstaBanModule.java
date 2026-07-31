@@ -1,6 +1,7 @@
 package com.duperknight.client.modules;
 
 import com.duperknight.client.gui.modules.DoNotInstaBanScreen;
+import com.duperknight.client.accountlink.DiscordLinkSessionValidator;
 import com.duperknight.client.instaban.DoNotInstaBanService;
 import com.duperknight.client.instaban.InstaBanLookupOutcome;
 import com.duperknight.client.instaban.InstaBanChatHighlight;
@@ -121,9 +122,13 @@ public final class DoNotInstaBanModule extends DMLSModule {
             seenBlocks.clear();
             connectionIdentity = currentConnection;
         }
-        if (!enabled() || !isAvailableToDetectedRank() || !isEnabledForClient(client) || client.inGameHud == null
+        if (!enabled() || !isAvailableToDetectedRank() || client.inGameHud == null
                 || currentConnection == null || !ServerGuard.check(client).allowed()) {
             if (!pending.isEmpty()) restorePending(client);
+            return;
+        }
+        if (!isEnabledForClient(client)) {
+            restorePendingExceptAuthenticationRechecks(client);
             return;
         }
 
@@ -197,19 +202,54 @@ public final class DoNotInstaBanModule extends DMLSModule {
                 scanningHandle, statusesHandle, namesHandle, List.copyOf(players));
         pending.add(lookup);
         updateSpinner(client, lookup);
-        service.check(minecraftUuid, players).whenComplete((outcome, error) -> client.execute(() -> {
-            if (!pending.remove(lookup)) return;
+        executeLookup(client, minecraftUuid, lookup, true);
+    }
+
+    private void executeLookup(MinecraftClient client, UUID minecraftUuid, PendingLookup lookup,
+                               boolean allowAuthenticationRecheck) {
+        service.check(minecraftUuid, lookup.players).whenComplete((outcome, error) -> client.execute(() -> {
+            if (!pending.contains(lookup)) return;
             if (lookup.connectionIdentity != connectionIdentity || !enabled()) {
+                pending.remove(lookup);
                 restoreStatus(client, lookup);
                 return;
             }
             if (error != null || outcome == null) {
+                pending.remove(lookup);
                 restoreStatus(client, lookup);
                 showFailure(client, InstaBanLookupOutcome.Type.TEMPORARY_ERROR);
                 return;
             }
+            if (allowAuthenticationRecheck && isAuthenticationFailure(outcome.type())) {
+                lookup.authenticationRecheckInProgress = true;
+                DiscordLinkSessionValidator.validateSavedLink(client).whenComplete((linked, validationError) ->
+                        client.execute(() -> {
+                            if (!pending.contains(lookup)) return;
+                            if (lookup.connectionIdentity != connectionIdentity || !enabled()) {
+                                pending.remove(lookup);
+                                restoreStatus(client, lookup);
+                                return;
+                            }
+                            if (validationError == null && Boolean.TRUE.equals(linked)) {
+                                lookup.authenticationRecheckInProgress = false;
+                                executeLookup(client, minecraftUuid, lookup, false);
+                                return;
+                            }
+                            pending.remove(lookup);
+                            restoreStatus(client, lookup);
+                            showFailure(client, InstaBanLookupOutcome.Type.NOT_LINKED);
+                        }));
+                return;
+            }
+            pending.remove(lookup);
             applyOutcome(client, lookup, outcome);
         }));
+    }
+
+    static boolean isAuthenticationFailure(InstaBanLookupOutcome.Type type) {
+        return type == InstaBanLookupOutcome.Type.NOT_LINKED
+                || type == InstaBanLookupOutcome.Type.INVALID_TOKEN
+                || type == InstaBanLookupOutcome.Type.AUTHORIZATION_STALE;
     }
 
     private void applyOutcome(MinecraftClient client, PendingLookup lookup, InstaBanLookupOutcome outcome) {
@@ -330,6 +370,14 @@ public final class DoNotInstaBanModule extends DMLSModule {
     private void restorePending(MinecraftClient client) {
         for (PendingLookup lookup : List.copyOf(pending)) restoreStatus(client, lookup);
         pending.clear();
+    }
+
+    private void restorePendingExceptAuthenticationRechecks(MinecraftClient client) {
+        for (PendingLookup lookup : List.copyOf(pending)) {
+            if (lookup.authenticationRecheckInProgress) continue;
+            restoreStatus(client, lookup);
+            pending.remove(lookup);
+        }
     }
 
     private void restoreStatus(MinecraftClient client, PendingLookup lookup) {
@@ -477,6 +525,7 @@ public final class DoNotInstaBanModule extends DMLSModule {
         private final LineHandle statuses;
         private final LineHandle names;
         private final List<String> players;
+        private boolean authenticationRecheckInProgress;
 
         private PendingLookup(Object connectionIdentity, LineHandle scanning, LineHandle statuses,
                               LineHandle names, List<String> players) {

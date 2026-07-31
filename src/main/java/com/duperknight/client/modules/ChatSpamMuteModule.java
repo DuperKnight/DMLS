@@ -59,7 +59,7 @@ public final class ChatSpamMuteModule extends DMLSModule {
                 cleanMessage,
                 DMLSConfig.tradeChatMuted(),
                 DMLSConfig.serverMessagesMuted(),
-                DMLSConfig.serverSummonMessagesMuted());
+                DMLSConfig.staffCommandFeedbackMuted());
     }
 
     /** Moderation keeps trade chat visible while sharing the two server-message filters. */
@@ -68,7 +68,7 @@ public final class ChatSpamMuteModule extends DMLSModule {
                 cleanMessage,
                 false,
                 DMLSConfig.serverMessagesMuted(),
-                DMLSConfig.serverSummonMessagesMuted());
+                DMLSConfig.staffCommandFeedbackMuted());
     }
 
     /** Pure form of the event filter policy, shared by both chat origins and fixture tests. */
@@ -76,9 +76,9 @@ public final class ChatSpamMuteModule extends DMLSModule {
             String cleanMessage,
             boolean tradeChatMuted,
             boolean serverMessagesMuted,
-            boolean serverSummonMessagesMuted
+            boolean staffCommandFeedbackMuted
     ) {
         return ChatSpamFilterPolicy.shouldHide(
-                cleanMessage, tradeChatMuted, serverMessagesMuted, serverSummonMessagesMuted);
+                cleanMessage, tradeChatMuted, serverMessagesMuted, staffCommandFeedbackMuted);
     }
 }

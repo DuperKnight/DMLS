@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,7 +31,6 @@ import java.util.regex.Pattern;
 /** Detects first-join broadcasts and offers a click-to-send welcome message. */
 public final class GreeterModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - Greeter§8] §7";
-    private static final String GREETING = "Welcome to Stoneworks, %s! Enjoy your stay, and feel free to ask if you have any questions :)";
     private static final long PROMPT_COOLDOWN_MILLIS = 5 * 60 * 1000;
     private static final List<Pattern> FIRST_JOIN_PATTERNS = List.of(
             Pattern.compile("^welcome,?\\s+\\[?([A-Za-z0-9_]{3,16})]?,?\\s+to\\s+(?:abexilas|stoneworks|(?:the\\s+)?server)\\s*[!.]?$",
@@ -94,6 +94,19 @@ public final class GreeterModule extends DMLSModule {
         return true;
     }
 
+    /** Returns the custom welcome-message templates currently stored in the config. */
+    public List<String> customMessages() {
+        return DMLSConfig.greeterMessages();
+    }
+
+    /**
+     * Validates and saves all custom templates. An empty list restores built-in default behavior.
+     */
+    public boolean setCustomMessages(List<String> messages) {
+        Optional<List<String>> normalized = GreeterMessages.normalizeTemplates(messages);
+        return normalized.isPresent() && DMLSConfig.setGreeterMessages(normalized.get());
+    }
+
     /** Sends the public welcome message for the given player. */
     public CommandDispatch greet(MinecraftClient client, String ign) {
         if (!InputValidators.isUsername(ign)) {
@@ -105,7 +118,9 @@ public final class GreeterModule extends DMLSModule {
             return CommandDispatch.BLOCKED;
         }
 
-        CommandDispatch result = ClientUtils.dispatchChatMessage(client, GREETING.formatted(ign));
+        String greeting = GreeterMessages.choose(
+                DMLSConfig.greeterMessages(), ign, ThreadLocalRandom.current());
+        CommandDispatch result = ClientUtils.dispatchChatMessage(client, greeting);
         if (result == CommandDispatch.BLOCKED) {
             ServerGuard.GuardResult guard = ServerGuard.check(client);
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.server_guard.blocked",

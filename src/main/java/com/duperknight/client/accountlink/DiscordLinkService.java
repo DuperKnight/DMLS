@@ -1,11 +1,11 @@
 package com.duperknight.client.accountlink;
 
+import com.duperknight.client.utils.DMLSFunctionApi;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -16,11 +16,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.regex.Pattern;
 
-/** Creates Discord account-link requests through the public Appwrite Function execution API. */
+/** Creates Discord account-link requests through the public DMLS Appwrite Function domain. */
 public final class DiscordLinkService {
-    private static final URI EXECUTION_URI = URI.create(
-            "https://fra.cloud.appwrite.io/v1/functions/dmls-linking/executions");
-    private static final String APPWRITE_PROJECT = "68305f510028a84a7227";
     private static final Duration TIMEOUT = Duration.ofSeconds(12);
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
     private static final Pattern LINK_CODE = Pattern.compile("[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}");
@@ -45,22 +42,9 @@ public final class DiscordLinkService {
             functionBody.addProperty("minecraftUsername", normalizedUsername);
         }
 
-        JsonObject executionBody = new JsonObject();
-        executionBody.addProperty("body", functionBody.toString());
-        executionBody.addProperty("async", false);
-        executionBody.addProperty("path", "/v1/link-requests");
-        executionBody.addProperty("method", "POST");
-        JsonObject forwardedHeaders = new JsonObject();
-        forwardedHeaders.addProperty("content-type", "application/json");
-        executionBody.add("headers", forwardedHeaders);
-
-        HttpRequest request = HttpRequest.newBuilder(EXECUTION_URI)
-                .timeout(TIMEOUT)
-                .header("Accept", "application/json")
+        HttpRequest request = DMLSFunctionApi.request("/v1/link-requests", TIMEOUT)
                 .header("Content-Type", "application/json")
-                .header("X-Appwrite-Project", APPWRITE_PROJECT)
-                .header("User-Agent", "DuperKnight/DMLS")
-                .POST(HttpRequest.BodyPublishers.ofString(executionBody.toString()))
+                .POST(HttpRequest.BodyPublishers.ofString(functionBody.toString()))
                 .build();
 
         RequestKey key = new RequestKey(Operation.CREATE, minecraftUuid, "", normalizedUsername);
@@ -78,22 +62,9 @@ public final class DiscordLinkService {
             return CompletableFuture.completedFuture(LinkStatusResult.failure(LinkStatus.INVALID_TOKEN, ""));
         }
 
-        JsonObject executionBody = new JsonObject();
-        executionBody.addProperty("body", "");
-        executionBody.addProperty("async", false);
-        executionBody.addProperty("path", "/v1/link-status");
-        executionBody.addProperty("method", "GET");
-        JsonObject forwardedHeaders = new JsonObject();
-        forwardedHeaders.addProperty("authorization", "Bearer " + clientToken);
-        executionBody.add("headers", forwardedHeaders);
-
-        HttpRequest request = HttpRequest.newBuilder(EXECUTION_URI)
-                .timeout(TIMEOUT)
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
-                .header("X-Appwrite-Project", APPWRITE_PROJECT)
-                .header("User-Agent", "DuperKnight/DMLS")
-                .POST(HttpRequest.BodyPublishers.ofString(executionBody.toString()))
+        HttpRequest request = DMLSFunctionApi.request("/v1/link-status", TIMEOUT)
+                .header("Authorization", "Bearer " + clientToken)
+                .GET()
                 .build();
 
         RequestKey key = new RequestKey(Operation.STATUS, minecraftUuid, clientToken, "");
@@ -110,22 +81,9 @@ public final class DiscordLinkService {
             return CompletableFuture.completedFuture(UnlinkResult.unlinked());
         }
 
-        JsonObject executionBody = new JsonObject();
-        executionBody.addProperty("body", "");
-        executionBody.addProperty("async", false);
-        executionBody.addProperty("path", "/v1/link");
-        executionBody.addProperty("method", "DELETE");
-        JsonObject forwardedHeaders = new JsonObject();
-        forwardedHeaders.addProperty("authorization", "Bearer " + clientToken);
-        executionBody.add("headers", forwardedHeaders);
-
-        HttpRequest request = HttpRequest.newBuilder(EXECUTION_URI)
-                .timeout(TIMEOUT)
-                .header("Accept", "application/json")
-                .header("Content-Type", "application/json")
-                .header("X-Appwrite-Project", APPWRITE_PROJECT)
-                .header("User-Agent", "DuperKnight/DMLS")
-                .POST(HttpRequest.BodyPublishers.ofString(executionBody.toString()))
+        HttpRequest request = DMLSFunctionApi.request("/v1/link", TIMEOUT)
+                .header("Authorization", "Bearer " + clientToken)
+                .DELETE()
                 .build();
 
         RequestKey key = new RequestKey(Operation.UNLINK, null, clientToken, "");
@@ -143,23 +101,7 @@ public final class DiscordLinkService {
             return Result.failure(Status.SERVICE_ERROR, responseMessage(body));
         }
         try {
-            JsonObject outer = JsonParser.parseString(body).getAsJsonObject();
-            JsonElement responseStatusElement = outer.get("responseStatusCode");
-            JsonElement responseBodyElement = outer.get("responseBody");
-            if (responseStatusElement == null || !responseStatusElement.isJsonPrimitive()
-                    || responseBodyElement == null || !responseBodyElement.isJsonPrimitive()) {
-                return Result.failure(Status.MALFORMED_RESPONSE, "");
-            }
-
-            int responseStatus = responseStatusElement.getAsInt();
-            JsonObject functionResponse = JsonParser.parseString(responseBodyElement.getAsString()).getAsJsonObject();
-            if (responseStatus == 429) {
-                return Result.failure(Status.RATE_LIMITED, functionMessage(functionResponse));
-            }
-            if (responseStatus != 201) {
-                return Result.failure(Status.SERVICE_ERROR, functionMessage(functionResponse));
-            }
-
+            JsonObject functionResponse = JsonParser.parseString(body).getAsJsonObject();
             String code = requiredString(functionResponse, "code");
             String clientToken = requiredString(functionResponse, "clientToken");
             String expiresAt = requiredString(functionResponse, "expiresAt");
@@ -178,36 +120,20 @@ public final class DiscordLinkService {
         if (httpStatus == 429) {
             return LinkStatusResult.failure(LinkStatus.RATE_LIMITED, responseMessage(body));
         }
+        if (httpStatus == 401) {
+            return LinkStatusResult.failure(LinkStatus.INVALID_TOKEN, responseMessage(body));
+        }
+        if (httpStatus == 403) {
+            return LinkStatusResult.failure(LinkStatus.AUTHORIZATION_STALE, responseMessage(body));
+        }
+        if (httpStatus == 410) {
+            return LinkStatusResult.failure(LinkStatus.EXPIRED, responseMessage(body));
+        }
         if (httpStatus < 200 || httpStatus >= 300) {
             return LinkStatusResult.failure(LinkStatus.SERVICE_ERROR, responseMessage(body));
         }
         try {
-            JsonObject outer = JsonParser.parseString(body).getAsJsonObject();
-            JsonElement statusElement = outer.get("responseStatusCode");
-            JsonElement bodyElement = outer.get("responseBody");
-            if (statusElement == null || !statusElement.isJsonPrimitive()
-                    || bodyElement == null || !bodyElement.isJsonPrimitive()) {
-                return LinkStatusResult.failure(LinkStatus.MALFORMED_RESPONSE, "");
-            }
-
-            int responseStatus = statusElement.getAsInt();
-            JsonObject functionResponse = JsonParser.parseString(bodyElement.getAsString()).getAsJsonObject();
-            if (responseStatus == 401) {
-                return LinkStatusResult.failure(LinkStatus.INVALID_TOKEN, functionMessage(functionResponse));
-            }
-            if (responseStatus == 403) {
-                return LinkStatusResult.failure(LinkStatus.AUTHORIZATION_STALE, functionMessage(functionResponse));
-            }
-            if (responseStatus == 410) {
-                return LinkStatusResult.failure(LinkStatus.EXPIRED, functionMessage(functionResponse));
-            }
-            if (responseStatus == 429) {
-                return LinkStatusResult.failure(LinkStatus.RATE_LIMITED, functionMessage(functionResponse));
-            }
-            if (responseStatus != 200) {
-                return LinkStatusResult.failure(LinkStatus.SERVICE_ERROR, functionMessage(functionResponse));
-            }
-
+            JsonObject functionResponse = JsonParser.parseString(body).getAsJsonObject();
             String status = requiredString(functionResponse, "status");
             String minecraftUuid = requiredString(functionResponse, "minecraftUuid");
             if (!expectedUuid.toString().equalsIgnoreCase(minecraftUuid)) {
@@ -235,25 +161,14 @@ public final class DiscordLinkService {
         if (httpStatus == 429) {
             return UnlinkResult.failure(UnlinkStatus.RATE_LIMITED, responseMessage(body));
         }
+        if (httpStatus == 200 || httpStatus == 401 || httpStatus == 405) {
+            return UnlinkResult.unlinked();
+        }
         if (httpStatus < 200 || httpStatus >= 300) {
             return UnlinkResult.failure(UnlinkStatus.SERVICE_ERROR, responseMessage(body));
         }
         try {
-            JsonObject outer = JsonParser.parseString(body).getAsJsonObject();
-            JsonElement statusElement = outer.get("responseStatusCode");
-            JsonElement bodyElement = outer.get("responseBody");
-            if (statusElement == null || !statusElement.isJsonPrimitive()
-                    || bodyElement == null || !bodyElement.isJsonPrimitive()) {
-                return UnlinkResult.failure(UnlinkStatus.MALFORMED_RESPONSE, "");
-            }
-            int responseStatus = statusElement.getAsInt();
-            JsonObject functionResponse = JsonParser.parseString(bodyElement.getAsString()).getAsJsonObject();
-            if (responseStatus == 200 || responseStatus == 401 || responseStatus == 405) {
-                return UnlinkResult.unlinked();
-            }
-            if (responseStatus == 429) {
-                return UnlinkResult.failure(UnlinkStatus.RATE_LIMITED, functionMessage(functionResponse));
-            }
+            JsonObject functionResponse = JsonParser.parseString(body).getAsJsonObject();
             return UnlinkResult.failure(UnlinkStatus.SERVICE_ERROR, functionMessage(functionResponse));
         } catch (RuntimeException error) {
             return UnlinkResult.failure(UnlinkStatus.MALFORMED_RESPONSE, "");

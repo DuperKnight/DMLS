@@ -187,9 +187,6 @@
   "dmls.validation.event_simultaneous.incomplete": "Enter a command in every row.",
   "dmls.validation.event_simultaneous.stored_count": "Store at least two commands before running them.",
   "dmls.validation.event_simultaneous.stored_gap": "Stored command slots must be consecutive, starting at 1.",
-  "dmls.module.event_simultaneous.repeat_count_field": "Repeat count",
-  "dmls.module.event_simultaneous.repeat_count_placeholder": "Times to run (%s-%s)",
-  "dmls.validation.event_simultaneous.repeat_count": "Repeat count must be between %s and %s",
 
   "dmls.module.event_random_teleport.name": "Event Random Teleport",
   "dmls.module.event_random_teleport.description": "Teleport to a random online player.",
@@ -304,7 +301,7 @@
   ,"dmls.help.eventprotect": "Opens Event Protect, or broadcasts directly when a quoted event name and land are supplied."
   ,"dmls.help.eventrandomteleport": "Enables vanish only when tracked off, then teleports to a random online player."
   ,"dmls.help.eventpowertool": "Opens the saved PowerTool command library."
-  ,"dmls.help.eventsimultaneous": "Saves commands then runs them in sequence."
+  ,"dmls.help.eventsimultaneous": "Saves commands then runs theme in sequence."
   ,"dmls.validation.required_rank": "This module is hidden for the hub-detected staff rank; server permissions are authoritative."
   ,"dmls.validation.prefix.active": "A prefix creation is still running; wait for it to finish."
   ,"dmls.validation.prefix.ign": "Enter a valid player IGN."

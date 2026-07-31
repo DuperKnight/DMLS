@@ -237,13 +237,15 @@ public final class XrayRollbackModule extends DMLSModule {
         private RollbackSafetyGate safetyGate;
         private OperationOutcome balanceOutcome;
         private CommandDispatch initialDispatch = CommandDispatch.BLOCKED;
+        private boolean initialDispatchFailed;
+        private boolean waitingToDispatch;
 
         private RollbackSession(String ign) {
             this.ign = ign;
         }
 
         private boolean acceptedAtStart() {
-            return initialDispatch != CommandDispatch.BLOCKED;
+            return !initialDispatchFailed;
         }
 
         @Override
@@ -295,6 +297,10 @@ public final class XrayRollbackModule extends DMLSModule {
             if (stepIndex >= STEPS.size()) {
                 return;
             }
+            if (waitingToDispatch) {
+                tryDispatchCurrentStep(client);
+                return;
+            }
 
             Step step = STEPS.get(stepIndex);
             if (step.type() == StepType.ROLLBACK) {
@@ -323,7 +329,7 @@ public final class XrayRollbackModule extends DMLSModule {
         }
 
         private void handleServerMessage(String message) {
-            if (stepIndex < 0 || stepIndex >= STEPS.size()) {
+            if (waitingToDispatch || stepIndex < 0 || stepIndex >= STEPS.size()) {
                 return;
             }
 
@@ -364,12 +370,21 @@ public final class XrayRollbackModule extends DMLSModule {
             balanceOutcome = step.type() == StepType.BALANCE ? OperationOutcome.PENDING : null;
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.xray.step", stepIndex + 1, STEPS.size(),
                     Text.translatable(step.label()));
+            waitingToDispatch = true;
+            tryDispatchCurrentStep(client);
+        }
+
+        private void tryDispatchCurrentStep(MinecraftClient client) {
+            if (!waitingToDispatch || !handle.canDispatchAutomatedCommand()) return;
+            Step step = STEPS.get(stepIndex);
             CommandDispatch dispatch = handle.dispatchCommand(client, step.commandTemplate().formatted(ign));
             if (stepIndex == 0) initialDispatch = dispatch;
+            if (stepIndex == 0) initialDispatchFailed = dispatch == CommandDispatch.BLOCKED;
             if (dispatch == CommandDispatch.BLOCKED) {
                 handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
                 return;
             }
+            waitingToDispatch = false;
 
             if (dispatch == CommandDispatch.SIMULATED) {
                 if (safetyGate != null) safetyGate.confirm();

@@ -1,6 +1,7 @@
 package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
+import com.duperknight.client.gui.widgets.RemoveButtonWidget;
 import com.duperknight.client.modules.EventPowerToolModule;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -95,16 +96,17 @@ public final class EventPowerToolScreen extends DMLSMenuScreen {
                     })
                     .dimensions(formX, contentY(offset), formWidth - deleteWidth - gap,
                             STANDARD_BUTTON_HEIGHT).build(), offset));
-            addScrollableChild(ButtonWidget.builder(Text.literal("✕"), button -> {
+            addScrollableChild(new RemoveButtonWidget(
+                    formX + formWidth - deleteWidth, contentY(offset),
+                    deleteWidth, STANDARD_BUTTON_HEIGHT,
+                    button -> {
                         status = Text.empty();
                         if (module.delete(client, name)) {
                             clearAndInit();
                         } else {
                             status = Text.translatable("dmls.validation.config.save_failed");
                         }
-                    })
-                    .dimensions(formX + formWidth - deleteWidth, contentY(offset), deleteWidth,
-                            STANDARD_BUTTON_HEIGHT).build(), offset);
+                    }), offset);
             row++;
         }
 
