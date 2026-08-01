@@ -6,25 +6,6 @@
   "dmls.title.home": "Duper's Mod for Lazy Staff",
   "dmls.title.options": "Mod Options",
   "dmls.title.allowed_servers": "Allowed Servers",
-  "dmls.feedback.open": "Send Feedback...",
-  "dmls.feedback.screen.title": "Send Feedback",
-  "dmls.feedback.title": "Title",
-  "dmls.feedback.title.placeholder": "Short summary of your feedback",
-  "dmls.feedback.category": "Category",
-  "dmls.feedback.screenshot.select": "Select Screenshot...",
-  "dmls.feedback.screenshot.change": "Change Screenshot...",
-  "dmls.feedback.screenshot.optional": "Optional — PNG, JPEG, or WebP (max 5 MiB)",
-  "dmls.feedback.screenshot.dialog": "Select a DMLS screenshot",
-  "dmls.feedback.screenshot.picker_unavailable": "The operating system file picker is unavailable.",
-  "dmls.feedback.screenshot.too_large": "The screenshot must be 5 MiB or smaller.",
-  "dmls.feedback.screenshot.invalid": "Could not read that image. Select a PNG, JPEG, or WebP.",
-  "dmls.feedback.include_diagnostics": "Include logs and debug information",
-  "dmls.feedback.description": "Commentary",
-  "dmls.feedback.description.placeholder": "Describe the problem, idea, or feedback (max 2,000 characters)",
-  "dmls.feedback.submit": "Send Feedback",
-  "dmls.feedback.submitting": "Sending...",
-  "dmls.feedback.submitting_hint": "Submitting feedback...",
-  "dmls.feedback.success": "Feedback submitted successfully. Reference: %s",
   "dmls.button.options": "Mod Options...",
   "dmls.button.rulebook": "Rulebook...",
   "dmls.rulebook.find_hint": "Press Ctrl+F (Command+F on macOS) to search the rulebook.",
@@ -149,11 +130,6 @@
   "dmls.module.prefix.name": "Prefix Creation",
   "dmls.module.prefix.description.1": "Create a formatted prefix, set its player limit",
   "dmls.module.prefix.description.2": "and manager in one go.",
-  "dmls.module.reimbursement.name": "Reimbursement Helper",
-  "dmls.module.reimbursement.description.1": "Build item and money reimbursements with capacity checks,",
-  "dmls.module.reimbursement.description.2": "safe command pacing, routing, and a copyable staff log.",
-  "dmls.reimbursement.tab.entries": "Reimbursement",
-  "dmls.reimbursement.tab.config": "Log",
   "dmls.module.promo_wave.name": "Promo Wave",
   "dmls.module.promo_wave.description.1": "Promote a whole wave of staff to a rank in one command.",
   "dmls.module.promo_wave.description.2": "Separate names with commas or spaces.",
@@ -161,9 +137,9 @@
   "dmls.module.chat_spam.description": "Hide trade chat and server messages on this client.",
   "dmls.module.chat_spam.trade_chat_toggle": "Trade Chat Muted",
   "dmls.module.chat_spam.server_messages_toggle": "Server Messages Muted",
-  "dmls.module.chat_spam.staff_command_feedback_toggle": "Staff Command Feedback Muted",
+  "dmls.module.chat_spam.server_summon_messages_toggle": "Server Summon Messages Muted",
   "dmls.module.do_not_insta_ban.name": "Do Not Insta Ban",
-  "dmls.module.do_not_insta_ban.description.1": "Checks online IGNs from staff scan results against DNIB channel.",
+  "dmls.module.do_not_insta_ban.description.1": "Checks green online IGNs from staff scan results against DMLS.",
   "dmls.module.do_not_insta_ban.description.2": "Results link directly to indexed Discord evidence when available.",
   "dmls.module.do_not_insta_ban.toggle": "Do Not Insta Ban Checks",
   "dmls.chat.do_not_insta_ban.invalid_ign": "The scan contained an invalid IGN: %s. Nothing was sent.",
@@ -193,6 +169,23 @@
   "dmls.module.uuid.description.1": "Look up as many as 10 Minecraft UUIDs using Mojang's API.",
   "dmls.module.uuid.description.2": "Separate usernames with commas or spaces; results can be copied.",
 
+  "dmls.module.event_play_near_effect.name": "Event Play Near Effect",
+  "dmls.module.event_play_near_effect.description": "Apply a status effect to every player within a radius of you.",
+  "dmls.module.event_play_near_effect.effect_field": "Effect",
+  "dmls.module.event_play_near_effect.effect_placeholder": "e.g. speed",
+  "dmls.module.event_play_near_effect.duration_field": "Duration (seconds)",
+  "dmls.module.event_play_near_effect.duration_placeholder": "e.g. 30",
+  "dmls.module.event_play_near_effect.amplifier_field": "Amplifier (0 = level I)",
+  "dmls.module.event_play_near_effect.amplifier_placeholder": "e.g. 1",
+  "dmls.module.event_play_near_effect.radius_field": "Radius (blocks)",
+  "dmls.module.event_play_near_effect.radius_placeholder": "e.g. 50",
+  "dmls.module.event_play_near_effect.run": "Apply Effect",
+  "dmls.chat.event_play_near_effect.sent": "Effect applied to nearby players.",
+  "dmls.validation.event_play_near_effect.effect": "Enter a valid effect id (1-64 characters, no spaces).",
+  "dmls.validation.event_play_near_effect.duration": "Enter a duration in seconds (1-1000000).",
+  "dmls.validation.event_play_near_effect.amplifier": "Enter an amplifier from 0-255.",
+  "dmls.validation.event_play_near_effect.radius": "Enter a radius from 1-1000 blocks.",
+
   "dmls.module.event_simultaneous.name": "Event Simultaneous Commands",
   "dmls.module.event_simultaneous.description": "Build a list of 2 to 5 commands and run them one after another.",
   "dmls.module.event_simultaneous.command_field": "Command %s",
@@ -203,22 +196,23 @@
   "dmls.module.event_simultaneous.command_placeholder.5": "e.g. weather clear",
   "dmls.module.event_simultaneous.add": "+ Add Command",
   "dmls.module.event_simultaneous.run": "Run Commands",
-  "dmls.chat.event_simultaneous.sent": "%s commands were queued.",
-  "dmls.chat.event_simultaneous.sent_stored": "Stored commands were queued.",
+  "dmls.chat.event_simultaneous.sent": "%s commands were sent.",
+  "dmls.chat.event_simultaneous.sent_stored": "Stored commands were sent.",
   "dmls.chat.event_simultaneous.set": "Stored command %s: §6%s§7.",
   "dmls.validation.event_simultaneous.count": "Add between %s and %s commands.",
   "dmls.validation.event_simultaneous.command": "Each command must be 1-256 characters with no control characters.",
   "dmls.validation.event_simultaneous.incomplete": "Enter a command in every row.",
   "dmls.validation.event_simultaneous.stored_count": "Store at least two commands before running them.",
   "dmls.validation.event_simultaneous.stored_gap": "Stored command slots must be consecutive, starting at 1.",
-  "dmls.validation.event_simultaneous.busy": "A simultaneous command sequence is already running.",
+  "dmls.module.event_simultaneous.repeat_count_field": "Repeat count",
+  "dmls.module.event_simultaneous.repeat_count_placeholder": "Times to run (%s-%s)",
+  "dmls.validation.event_simultaneous.repeat_count": "Repeat count must be between %s and %s",
 
   "dmls.module.event_random_teleport.name": "Event Random Teleport",
   "dmls.module.event_random_teleport.description": "Teleport to a random online player.",
   "dmls.module.event_random_teleport.teleport": "Teleport to Random Player",
   "dmls.module.event_random_teleport.idle": "Click the button to teleport to a random online player.",
   "dmls.chat.event_random_teleport.teleported": "Teleporting to %s.",
-  "dmls.chat.event_random_teleport.queued": "Teleport to %s queued until it is safe to send.",
   "dmls.chat.event_random_teleport.simulated": "Dry run: would teleport to %s.",
   "dmls.chat.event_random_teleport.blocked": "Teleport was blocked; check chat for details.",
   "dmls.chat.event_random_teleport.no_players": "No other players online to teleport to.",
@@ -317,7 +311,6 @@
   ,"dmls.help.uuid": "Looks up one or more Minecraft usernames using Mojang's bulk profile API."
   ,"dmls.help.xray": "Stages an exact rollback preview, then requires a 30-second token confirmation. Requires %s§r."
   ,"dmls.help.prefix": "Creates a formatted prefix and sets its player limit and manager. Requires %s§r."
-  ,"dmls.help.reimbursement": "Builds and safely executes an item or money reimbursement. Requires %s§r."
   ,"dmls.help.donorpet": "Gives a donor permission for their elite mount pet. Requires %s§r."
   ,"dmls.help.promowave": "Stages a paced, response-confirmed promotion wave for review. Requires %s§r."
   ,"dmls.help.rank": "Shows the staff rank last detected from the Stoneworks hub scoreboard."
@@ -519,13 +512,6 @@
   ,"dmls.module.greeter.name": "New Player Greeter"
   ,"dmls.module.greeter.description": "Spot first-join broadcasts and welcome new players with one click."
   ,"dmls.module.greeter.toggle": "First-join prompts"
-  ,"dmls.module.greeter.variable_hint": "Variable: %s inserts the new player's name."
-  ,"dmls.module.greeter.default_hint": "Leave every message empty to use the built-in welcome."
-  ,"dmls.module.greeter.message_field": "Welcome message %s"
-  ,"dmls.module.greeter.message_placeholder": "Welcome to Stoneworks, {player}!"
-  ,"dmls.module.greeter.add_message": "Add another message"
-  ,"dmls.module.greeter.messages_saved": "Welcome messages saved."
-  ,"dmls.validation.greeter.message": "Messages must fit within 256 characters after substitution; only {player} is supported."
   ,"dmls.chat.greeter.button": "[Welcome them]"
   ,"dmls.chat.greeter.button.hover": "Sends a public welcome message for %s."
   ,"dmls.chat.greeter.enabled": "First-join prompts enabled."
@@ -807,61 +793,4 @@
   ,"dmls.moderation.copied_ign": "IGN copied."
   ,"dmls.moderation.copied_uuid": "UUID copied."
   ,"dmls.moderation.copied_message": "Message copied."
-  ,"dmls.module.war_manager.name": "War Manager"
-  ,"dmls.module.war_manager.description.1": "Schedules one-hour wars and shared purge windows."
-  ,"dmls.module.war_manager.description.2": "Restores Lands nation membership when each war ends."
-  ,"dmls.help.war_manager": "Opens the Senior War Staff war scheduler and recovery dashboard."
-  ,"dmls.field.war.attacker": "Attacking claim"
-  ,"dmls.field.war.attacker.label": "Attacking claim:"
-  ,"dmls.field.war.attacker.placeholder": "Attacker"
-  ,"dmls.field.war.defender": "Defending claim"
-  ,"dmls.field.war.defender.label": "Defending claim:"
-  ,"dmls.field.war.defender.placeholder": "Defender"
-  ,"dmls.field.war.timestamp": "War Start Timestamp"
-  ,"dmls.field.war.timestamp.label": "War Start Timestamp:"
-  ,"dmls.field.war.timestamp.placeholder": "Blank for now, or paste <t:1785006000:F>"
-  ,"dmls.war.timestamp.hint": "Discord timestamp (any style) or raw Unix seconds"
-  ,"dmls.field.war.time.label": "Server command time-to-start argument:"
-  ,"dmls.slider.war.time": "Command time to start: %s"
-  ,"dmls.button.war.set_home": "Set home at current coordinates"
-  ,"dmls.button.war.home_set": "Home: %s (click to replace)"
-  ,"dmls.button.war.schedule": "Schedule War"
-  ,"dmls.button.war.update": "Update Scheduled War"
-  ,"dmls.button.war.confirm": "Schedule War"
-  ,"dmls.button.war.retry": "Retry"
-  ,"dmls.button.war.cancel_paused": "Cancel"
-  ,"dmls.button.war.cancel_early": "End Early"
-  ,"dmls.button.war.cancel_scheduled": "Cancel"
-  ,"dmls.button.war.cancel_confirm": "End War Early"
-  ,"dmls.war.active.title": "War activity"
-  ,"dmls.war.active.none": "No scheduled or completed wars."
-  ,"dmls.review.war.title": "Review War Schedule"
-  ,"dmls.review.war.edit_title": "Review War Schedule Update"
-  ,"dmls.review.war.queued": "Confirmation only queues this war; no commands run until its authoritative start."
-  ,"dmls.review.war.immediate": "No timestamp supplied: setup begins as soon as this confirmation is accepted."
-  ,"dmls.review.war.claims": "Claims: %s attacks %s"
-  ,"dmls.review.war.countdown": "Server command time-to-start argument: %s"
-  ,"dmls.review.war.timestamp": "Setup dispatch: <t:%s:F> (%s)"
-  ,"dmls.review.war.actual_start": "Expected server war start: <t:%s:F> (%s)"
-  ,"dmls.review.war.window": "War/purge %s window: %s–%s"
-  ,"dmls.review.war.home": "Purge home: %s"
-  ,"dmls.review.war.cancel_title": "Review Early War End"
-  ,"dmls.review.war.cancel_claims": "End %s vs %s immediately"
-  ,"dmls.review.war.cancel_timer": "The persisted war interval ends only after the admin command is dispatched."
-  ,"dmls.review.war.cancel_purge": "Purge cleanup runs only if no other scheduled war keeps the merged window active."
-  ,"dmls.review.war.cancel_restore": "Both claims are restored through their saved nation checkpoints."
-  ,"dmls.validation.war.claims": "Enter two different claim identifiers using letters, numbers, _, . or -."
-  ,"dmls.validation.war.timestamp": "Paste a valid Discord timestamp or raw Unix-seconds value."
-  ,"dmls.validation.war.timestamp_future": "The authoritative war timestamp must be in the future."
-  ,"dmls.validation.war.home": "Set the War Manager home before scheduling."
-  ,"dmls.validation.war.home_server": "The saved home belongs to a different server."
-  ,"dmls.validation.war.reserved": "One of these claims already belongs to an unfinished war."
-  ,"dmls.validation.war.edit_unavailable": "That schedule can no longer be edited because setup has begun."
-  ,"dmls.validation.war.busy": "Another response-tracked operation is currently running."
-  ,"dmls.validation.war.storage": "War Manager state could not be saved; nothing changed."
-  ,"dmls.validation.war.retry": "This paused war could not be resumed on the current server."
-  ,"dmls.validation.war.cancel_paused": "This paused war could not be cancelled or recovered on the current server."
-  ,"dmls.validation.war.cancel_unavailable": "This war can no longer be ended early."
-  ,"dmls.validation.war.cancel_scheduled": "This scheduled war could not be cancelled."
-  ,"dmls.validation.war.dismiss": "This completed war could not be removed."
 }
