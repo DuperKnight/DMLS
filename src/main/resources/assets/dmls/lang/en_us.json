@@ -204,6 +204,9 @@
   "dmls.validation.event_simultaneous.incomplete": "Enter a command in every row.",
   "dmls.validation.event_simultaneous.stored_count": "Store at least two commands before running them.",
   "dmls.validation.event_simultaneous.stored_gap": "Stored command slots must be consecutive, starting at 1.",
+  "dmls.module.event_simultaneous.repeat_count_field": "Repeat count",
+  "dmls.module.event_simultaneous.repeat_count_placeholder": "Times to run (%s-%s)",
+  "dmls.validation.event_simultaneous.repeat_count": "Repeat count must be between %s and %s",
 
   "dmls.module.event_random_teleport.name": "Event Random Teleport",
   "dmls.module.event_random_teleport.description": "Teleport to a random online player.",

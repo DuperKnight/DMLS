@@ -381,13 +381,13 @@ public class DMLSClient implements ClientModInitializer {
                                     return 1;
                                 })
                                 .then(ClientCommandManager.literal("command")
-                                        .then(ClientCommandManager.argument("slot", IntegerArgumentType.integer(
-                                                        1, EventSimultaneousCommandModule.MAX_COMMANDS))
+                                        .then(ClientCommandManager.argument("slot",
+                                                        IntegerArgumentType.integer(1, EventSimultaneousCommandModule.MAX_COMMANDS))
                                                 .then(ClientCommandManager.argument("command", StringArgumentType.greedyString())
                                                         .executes(context -> {
                                                             MinecraftClient client = context.getSource().getClient();
-                                                            return module(EventSimultaneousCommandModule.class).setCommand(client,
-                                                                    IntegerArgumentType.getInteger(context, "slot"),
+                                                            int slot = IntegerArgumentType.getInteger(context, "slot");
+                                                            return module(EventSimultaneousCommandModule.class).setCommand(client, slot,
                                                                     StringArgumentType.getString(context, "command")) ? 1 : 0;
                                                         }))))
                                 .then(ClientCommandManager.literal("run")
@@ -396,9 +396,20 @@ public class DMLSClient implements ClientModInitializer {
                                             EventSimultaneousCommandModule.RunResult result =
                                                     module(EventSimultaneousCommandModule.class).runStored(client);
                                             return reportSimultaneousResult(client, result) ? 1 : 0;
-                                        })))
+                                        })
+                                        .then(ClientCommandManager.argument("count",
+                                                        IntegerArgumentType.integer(
+                                                                EventSimultaneousCommandModule.MIN_REPEAT_COUNT,
+                                                                EventSimultaneousCommandModule.MAX_REPEAT_COUNT))
+                                                .executes(context -> {
+                                                    MinecraftClient client = context.getSource().getClient();
+                                                    int count = IntegerArgumentType.getInteger(context, "count");
+                                                    EventSimultaneousCommandModule.RunResult result =
+                                                            module(EventSimultaneousCommandModule.class).runStored(client, count);
+                                                    return reportSimultaneousResult(client, result) ? 1 : 0;
+                                                }))))
 
-                                .then(moduleLiteral("playnearby", EventPlayNearEffectModule.class)
+                        .then(moduleLiteral("playnearby", EventPlayNearEffectModule.class)
                                         .executes(context -> {
                                             MinecraftClient client = context.getSource().getClient();
                                             client.send(() -> module(EventPlayNearEffectModule.class).openScreen(client, null));
@@ -692,8 +703,9 @@ public class DMLSClient implements ClientModInitializer {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.stored_gap");
                 yield false;
             }
-            case BUSY -> {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.busy");
+            case INVALID_REPEAT_COUNT -> {
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.repeat_count",
+                        EventSimultaneousCommandModule.MIN_REPEAT_COUNT, EventSimultaneousCommandModule.MAX_REPEAT_COUNT);
                 yield false;
             }
             case RANK_BLOCKED, SERVER_BLOCKED -> false; // module already sent that message
