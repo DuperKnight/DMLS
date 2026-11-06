@@ -15,12 +15,15 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.EnumMap;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Handles durable DMLS preferences, stored in config/dmls.properties.
@@ -60,6 +63,7 @@ public final class DMLSConfig {
     private static final String MINI_ME_CONFY_HUD_KEY = "miniMe.confyHud";
     private static final String MINI_ME_CHAOS_MODE_KEY = "miniMe.chaosMode";
     private static final String MINI_ME_SNOWBALL_FIGHTS_KEY = "miniMe.snowballFights";
+    private static final String MINI_ME_CUSTOM_ENABLED_KEY = "miniMe.customEnabled";
     private static final String NODE_NETWORK_BACKGROUND_KEY = "backgrounds.nodeNetwork";
     private static final StaffRank DEFAULT_RANK = StaffRank.NONE;
 
@@ -498,7 +502,8 @@ public final class DMLSConfig {
                 Boolean.parseBoolean(properties.getProperty(
                         MINI_ME_CHAOS_MODE_KEY, Boolean.toString(miniMeDefaults.chaosMode()))),
                 Boolean.parseBoolean(properties.getProperty(
-                        MINI_ME_SNOWBALL_FIGHTS_KEY, Boolean.toString(miniMeDefaults.snowballFights())))
+                        MINI_ME_SNOWBALL_FIGHTS_KEY, Boolean.toString(miniMeDefaults.snowballFights()))),
+                parseIdSet(properties.getProperty(MINI_ME_CUSTOM_ENABLED_KEY))
         );
 
         nodeNetworkBackground = Boolean.parseBoolean(
@@ -582,6 +587,8 @@ public final class DMLSConfig {
                 Boolean.toString(miniMeHudPreferences.chaosMode()));
         properties.setProperty(MINI_ME_SNOWBALL_FIGHTS_KEY,
                 Boolean.toString(miniMeHudPreferences.snowballFights()));
+        properties.setProperty(MINI_ME_CUSTOM_ENABLED_KEY,
+                String.join(",", new TreeSet<>(miniMeHudPreferences.customEnabled())));
 
         properties.setProperty(NODE_NETWORK_BACKGROUND_KEY, Boolean.toString(nodeNetworkBackground));
 
@@ -629,6 +636,21 @@ public final class DMLSConfig {
         } catch (NumberFormatException ignored) {
             return -1;
         }
+    }
+
+    /** Parses a comma-separated id list; a missing or blank value yields an empty set. */
+    private static Set<String> parseIdSet(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Set.of();
+        }
+        Set<String> ids = new LinkedHashSet<>();
+        for (String part : raw.split(",")) {
+            String id = part.trim();
+            if (!id.isEmpty()) {
+                ids.add(id);
+            }
+        }
+        return ids;
     }
 
     private static List<String> withMandatoryAllowedServers(List<String> servers) {
