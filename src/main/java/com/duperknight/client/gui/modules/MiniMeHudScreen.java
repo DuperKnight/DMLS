@@ -523,13 +523,13 @@ public final class MiniMeHudScreen extends DMLSMenuScreen {
         int boxX = x + (CARD_WIDTH - spriteBox()) / 2;
         int boxY = y + 8;
 
-        // Scale comes from the idle sprite so the mini doesn't resize between frames.
-        int[] base = spriteSize(card.idle());
+        // Every frame is resized to fit the box using its own dimensions, so a frame drawn on a
+        // smaller (or larger) canvas than the idle sprite still fills the box instead of looking tiny.
         Identifier current = currentTexture(card, elapsed);
         int[] size = spriteSize(current);
 
-        if (base[0] > 0 && base[1] > 0 && size[0] > 0 && size[1] > 0) {
-            float scale = Math.min(spriteBox() / (float) base[0], spriteBox() / (float) base[1]);
+        if (size[0] > 0 && size[1] > 0) {
+            float scale = Math.min(spriteBox() / (float) size[0], spriteBox() / (float) size[1]);
             int w = Math.max(1, Math.round(size[0] * scale));
             int h = Math.max(1, Math.round(size[1] * scale));
             int left = boxX + (spriteBox() - w) / 2;

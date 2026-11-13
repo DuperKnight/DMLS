@@ -8,8 +8,6 @@ import com.google.gson.JsonParser;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.Version;
-import net.fabricmc.loader.api.VersionParsingException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
@@ -20,6 +18,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Checks Modrinth for a newer DMLS release whenever the client joins a world. */
@@ -93,10 +92,10 @@ public final class UpdateChecker {
                     if (response.statusCode() != 200) {
                         throw new IllegalStateException("Modrinth returned HTTP " + response.statusCode());
                     }
-                    return newestVersion(response.body());
+                    return newerVersionThan(response.body(), currentVersion);
                 })
                 .thenAccept(latestVersion -> {
-                    if (latestVersion != null && isNewer(latestVersion, currentVersion)) {
+                    if (latestVersion != null) {
                         client.execute(() -> showNotice(client, generation, latestVersion));
                     }
                 })
@@ -106,34 +105,43 @@ public final class UpdateChecker {
                 });
     }
 
-    private static String newestVersion(String responseBody) {
+    /**
+     * Returns the version_number of the most recently published release if it was
+     * published after the currently installed version, otherwise null.
+     * Ordering uses Modrinth's publish date, so version-number style doesn't matter.
+     */
+    private static String newerVersionThan(String responseBody, String currentVersion) {
         JsonArray versions = JsonParser.parseString(responseBody).getAsJsonArray();
+
         String newest = null;
-        Version newestParsed = null;
+        Instant newestDate = null;
+        Instant currentDate = null;
 
         for (JsonElement element : versions) {
             JsonObject versionObject = element.getAsJsonObject();
-            String candidate = versionObject.get("version_number").getAsString();
+            String number = versionObject.get("version_number").getAsString();
+            Instant published;
             try {
-                Version parsed = Version.parse(candidate);
-                if (newestParsed == null || parsed.compareTo(newestParsed) > 0) {
-                    newest = candidate;
-                    newestParsed = parsed;
-                }
-            } catch (VersionParsingException error) {
-                DMLS.LOGGER.debug("Ignoring non-semantic Modrinth version '{}'", candidate);
+                published = Instant.parse(versionObject.get("date_published").getAsString());
+            } catch (RuntimeException error) {
+                DMLS.LOGGER.debug("Ignoring Modrinth version '{}' with unreadable date", number);
+                continue;
+            }
+
+            if (number.equals(currentVersion)) {
+                currentDate = published;
+            }
+            if (newestDate == null || published.isAfter(newestDate)) {
+                newest = number;
+                newestDate = published;
             }
         }
-        return newest;
-    }
 
-    private static boolean isNewer(String candidate, String current) {
-        try {
-            return Version.parse(candidate).compareTo(Version.parse(current)) > 0;
-        } catch (VersionParsingException error) {
-            DMLS.LOGGER.warn("Could not compare DMLS versions '{}' and '{}'", candidate, current);
-            return false;
+        if (newest == null || currentDate == null) {
+            // Nothing found, or the running version isn't on Modrinth (e.g. a dev build).
+            return null;
         }
+        return newestDate.isAfter(currentDate) ? newest : null;
     }
 
     private static String minecraftVersionFrom(String version) {
