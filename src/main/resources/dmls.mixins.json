@@ -1,10 +1,9 @@
 {
   "required": true,
   "package": "com.duperknight.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
   "client": [
     "ChatHudAccessor",
-    "ChatHudBackgroundMixin",
     "MinecraftClientScreenMixin"
   ],
   "injectors": {

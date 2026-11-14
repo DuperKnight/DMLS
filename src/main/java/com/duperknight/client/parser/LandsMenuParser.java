@@ -8,37 +8,53 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Pure parser for the Lands player and land-list menu tooltip fixtures. */
 public final class LandsMenuParser {
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
     private static final int MAX_LAND_NAME_LENGTH = 64;
+    private static final Set<String> HINT_FIRST_WORDS = Set.of(
+            "press", "click", "left-click", "right-click", "shift-click", "hover");
 
     private LandsMenuParser() {
     }
 
+    private static boolean isHintLine(String stripped) {
+        String lower = stripped.toLowerCase(Locale.ROOT).trim();
+        if (lower.isEmpty()) return false;
+        String firstWord = lower.split("\\s+", 2)[0];
+        return HINT_FIRST_WORDS.contains(firstWord);
+    }
+
     public static LandList parseLands(List<TooltipLine> tooltip) {
-        List<String> lands = new ArrayList<>();
+        List<String> marked = new ArrayList<>();   // lines written as "- Name"
+        List<String> unmarked = new ArrayList<>(); // fallback if the tooltip has no list markers
         boolean inLands = false;
         for (TooltipLine line : List.copyOf(tooltip)) {
-            String stripped = TooltipUtils.stripListMarker(line.text());
+            String raw = line.text().trim();
+            String stripped = TooltipUtils.stripListMarker(raw);
             if (!inLands) {
                 inLands = stripped.toLowerCase(Locale.ROOT).startsWith("lands");
                 continue;
             }
             if (TooltipUtils.isTooltipFooter(stripped)) continue;
             if (stripped.equalsIgnoreCase("none")) return new LandList(ParseStatus.PARSED, List.of());
-            if (!stripped.isEmpty()) {
-                if (!InputValidators.isSafeCommandArgument(stripped, MAX_LAND_NAME_LENGTH)) {
-                    return new LandList(ParseStatus.MALFORMED, List.of());
-                }
-                lands.add(stripped);
+            if (stripped.isEmpty() || isHintLine(stripped)) continue;
+
+            if (raw.startsWith("-")) marked.add(stripped);
+            else unmarked.add(stripped);
+        }
+
+        List<String> chosen = marked.isEmpty() ? unmarked : marked;
+        if (!inLands || chosen.isEmpty()) return new LandList(ParseStatus.MALFORMED, List.of());
+        for (String land : chosen) {
+            if (!InputValidators.isSafeCommandArgument(land, MAX_LAND_NAME_LENGTH)) {
+                return new LandList(ParseStatus.MALFORMED, List.of());
             }
         }
-        return inLands && !lands.isEmpty()
-                ? new LandList(ParseStatus.PARSED, lands)
-                : new LandList(ParseStatus.MALFORMED, List.of());
+        return new LandList(ParseStatus.PARSED, chosen);
     }
 
     public static RankScan parsePlayerRank(List<TooltipLine> tooltip, String targetUsername) {

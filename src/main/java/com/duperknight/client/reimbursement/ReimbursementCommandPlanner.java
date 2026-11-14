@@ -1,12 +1,11 @@
 package com.duperknight.client.reimbursement;
 
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.ToIntFunction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 /** Builds exact bounded server commands before a live operation starts. */
 public final class ReimbursementCommandPlanner {
@@ -17,7 +16,7 @@ public final class ReimbursementCommandPlanner {
 
     public static BuildResult build(ReimbursementPlan plan) {
         return build(plan, id -> Math.max(1,
-                Registries.ITEM.get(id).getDefaultStack().getMaxCount()));
+                BuiltInRegistries.ITEM.getValue(id).getDefaultInstance().getMaxStackSize()));
     }
 
     static BuildResult build(ReimbursementPlan plan, ToIntFunction<Identifier> maxStackSize) {

@@ -4,14 +4,13 @@ import com.duperknight.client.accountlink.DiscordLinkAvailability;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ServerGuard;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
-
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Represents a module in the DMLS client. Use this class to create new modules for the DMLS.
@@ -81,13 +80,13 @@ public abstract class DMLSModule {
     }
 
     /** The name displayed on the DMLS home menu. */
-    public abstract Text displayName();
+    public abstract Component displayName();
 
     /** The icon displayed on the DMLS home menu. */
     public abstract ItemStack icon();
 
     /** The description displayed at the top of this module's screen. */
-    public abstract List<Text> description();
+    public abstract List<Component> description();
 
     /** The collapsible home-screen section containing this module. */
     public ModuleCategory category() {
@@ -100,28 +99,28 @@ public abstract class DMLSModule {
     }
 
     /** Fast, non-blocking integration check suitable for rendering and Brigadier predicates. */
-    public final boolean isEnabledForClient(MinecraftClient client) {
+    public final boolean isEnabledForClient(Minecraft client) {
         return !requiresDiscordLink() || DiscordLinkAvailability.isLinked(client);
     }
 
     /** Reason shown by shared module pickers when a visible module cannot currently be opened. */
-    public final Optional<Text> disabledReason(MinecraftClient client) {
+    public final Optional<Component> disabledReason(Minecraft client) {
         if (requiresDiscordLink() && !DiscordLinkAvailability.isLinked(client)) {
-            return Optional.of(Text.translatable("dmls.tooltip.link_discord_for_module"));
+            return Optional.of(Component.translatable("dmls.tooltip.link_discord_for_module"));
         }
         return Optional.empty();
     }
 
     /** Shared command predicate: rank/department visibility plus required integrations. */
-    public final boolean isCommandAvailable(MinecraftClient client) {
+    public final boolean isCommandAvailable(Minecraft client) {
         return isAvailableToDetectedRank() && isEnabledForClient(client);
     }
 
     /** Opens this module's screen, returning to the supplied DMLS home screen. */
-    public abstract void openScreen(MinecraftClient client, Screen parent);
+    public abstract void openScreen(Minecraft client, Screen parent);
 
     /** Shared guarded entry point for module pickers outside the module itself. */
-    public final boolean tryOpenScreen(MinecraftClient client, Screen parent) {
+    public final boolean tryOpenScreen(Minecraft client, Screen parent) {
         if (!isEnabledForClient(client)) return false;
         openScreen(client, parent);
         return true;
@@ -134,7 +133,7 @@ public abstract class DMLSModule {
      * @param client the Minecraft client
      * @return true if the detected rank is high enough
      */
-    protected boolean hasRequiredRank(MinecraftClient client) {
+    protected boolean hasRequiredRank(Minecraft client) {
         StaffRank currentRank = DMLSConfig.staffRank();
         if (!currentRank.isStaff()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.staff.required");
@@ -163,7 +162,7 @@ public abstract class DMLSModule {
     }
 
     /** The detected rank controls visibility only; the server remains authoritative. */
-    protected boolean canRunPrivilegedOperation(MinecraftClient client) {
+    protected boolean canRunPrivilegedOperation(Minecraft client) {
         if (!hasRequiredRank(client)) return false;
         if (!hasRequiredIntegrations(client)) return false;
         // A captured dry-run can safely validate and preview commands without a live connection.
@@ -176,7 +175,7 @@ public abstract class DMLSModule {
     }
 
     /** Sends the relevant local guidance when a declared integration is unavailable. */
-    protected final boolean hasRequiredIntegrations(MinecraftClient client) {
+    protected final boolean hasRequiredIntegrations(Minecraft client) {
         if (!requiresDiscordLink() || DiscordLinkAvailability.isLinked(client)) return true;
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.discord_link.required");
         return false;

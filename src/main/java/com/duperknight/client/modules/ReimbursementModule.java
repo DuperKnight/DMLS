@@ -11,14 +11,13 @@ import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.ChatUtils;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.minecraft.block.EnderChestBlock;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.EnderChestBlock;
 import java.util.List;
 
 /** Entry point and connection-scoped state owner for Reimbursement Helper. */
@@ -33,8 +32,8 @@ public final class ReimbursementModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.reimbursement.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.reimbursement.name");
     }
 
     @Override
@@ -43,10 +42,10 @@ public final class ReimbursementModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
+    public List<Component> description() {
         return List.of(
-                Text.translatable("dmls.module.reimbursement.description.1"),
-                Text.translatable("dmls.module.reimbursement.description.2")
+                Component.translatable("dmls.module.reimbursement.description.1"),
+                Component.translatable("dmls.module.reimbursement.description.2")
         );
     }
 
@@ -56,28 +55,28 @@ public final class ReimbursementModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new ReimbursementScreen(parent, this, draft, null));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new ReimbursementScreen(parent, this, draft, null));
     }
 
     @Override
     public void register() {
         ContainerSelectionController.register();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.world == null) return;
-            String dimension = client.world.getRegistryKey().getValue().toString();
+            if (client.level == null) return;
+            String dimension = client.level.dimension().identifier().toString();
             draft.removeContainersIf(target ->
                     dimension.equals(target.dimension())
-                            && client.world.isChunkLoaded(target.position())
-                            && (!(client.world.getBlockEntity(target.position()) instanceof Inventory)
-                            || client.world.getBlockState(target.position()).getBlock()
+                            && client.level.hasChunkAt(target.position())
+                            && (!(client.level.getBlockEntity(target.position()) instanceof Container)
+                            || client.level.getBlockState(target.position()).getBlock()
                             instanceof EnderChestBlock));
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> draft.clear());
     }
 
     public OperationStartResult start(
-            MinecraftClient client,
+            Minecraft client,
             ReimbursementPlan plan,
             ReimbursementScreen source
     ) {
@@ -87,7 +86,7 @@ public final class ReimbursementModule extends DMLSModule {
         ReimbursementOperation operation = new ReimbursementOperation(plan, new ReimbursementOperation.Listener() {
             @Override
             public void progress(int completedSteps, int totalSteps, int estimatedSecondsRemaining, String status) {
-                client.inGameHud.setOverlayMessage(Text.literal(
+                client.gui.hud.setOverlayMessage(Component.literal(
                         status + " · About " + formatTime(estimatedSecondsRemaining) + " remaining"), false);
             }
 
@@ -96,7 +95,7 @@ public final class ReimbursementModule extends DMLSModule {
                 if (result.kind() == ReimbursementResult.Kind.PARTIAL_FAILURE) {
                     draft.clear();
                 }
-                client.send(() -> client.setScreen(
+                client.schedule(() -> client.gui.setScreen(
                         new ReimbursementScreen(returnParent, ReimbursementModule.this, draft, result)));
             }
         });

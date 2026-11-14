@@ -1,6 +1,6 @@
 package com.duperknight.client.modules;
 
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 /** Stable display groups for modules on the DMLS home screen. */
 public enum ModuleCategory {
@@ -17,7 +17,7 @@ public enum ModuleCategory {
         this.translationKey = translationKey;
     }
 
-    public Text displayName() {
-        return Text.translatable(translationKey);
+    public Component displayName() {
+        return Component.translatable(translationKey);
     }
 }

@@ -1,5 +1,7 @@
 package com.duperknight.client.modules;
 
+import com.mojang.blaze3d.platform.InputConstants;
+
 import com.duperknight.client.gui.modules.WarManagerScreen;
 import com.duperknight.client.message.MessageOrigin;
 import com.duperknight.client.message.ServerMessage;
@@ -30,22 +32,21 @@ import com.duperknight.client.war.WarManagerStore;
 import com.duperknight.client.war.WarTimestampParser;
 import com.duperknight.client.war.WarTimeline;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.gui.ParentElement;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.dialog.DialogScreen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.ContainerEventHandler;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.dialog.DialogScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -86,8 +87,8 @@ public final class WarManagerModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.war_manager.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.war_manager.name");
     }
 
     @Override
@@ -96,10 +97,10 @@ public final class WarManagerModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
+    public List<Component> description() {
         return List.of(
-                Text.translatable("dmls.module.war_manager.description.1"),
-                Text.translatable("dmls.module.war_manager.description.2")
+                Component.translatable("dmls.module.war_manager.description.1"),
+                Component.translatable("dmls.module.war_manager.description.2")
         );
     }
 
@@ -109,8 +110,8 @@ public final class WarManagerModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new WarManagerScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new WarManagerScreen(parent, this));
     }
 
     @Override
@@ -157,12 +158,12 @@ public final class WarManagerModule extends DMLSModule {
                 .toList();
     }
 
-    public SaveHomeResult saveHome(MinecraftClient client) {
+    public SaveHomeResult saveHome(Minecraft client) {
         if (storageLocked()) return SaveHomeResult.IO_ERROR;
         if (!hasRequiredRank(client)) return SaveHomeResult.RANK_BLOCKED;
         ServerGuard.GuardResult guard = ServerGuard.check(client);
         if (!guard.allowed() || client.player == null) return SaveHomeResult.SERVER_BLOCKED;
-        BlockPos pos = client.player.getBlockPos();
+        BlockPos pos = client.player.blockPosition();
         WarManagerState.Home previous = state.home;
         state.home = new WarManagerState.Home(guard.address(), pos.getX(), pos.getY(), pos.getZ());
         if (!store.save(state)) {
@@ -172,12 +173,12 @@ public final class WarManagerModule extends DMLSModule {
         return SaveHomeResult.SAVED;
     }
 
-    public StageResult stage(MinecraftClient client, String attacker, String defender,
+    public StageResult stage(Minecraft client, String attacker, String defender,
                              int countdownMinutes, String timestampInput) {
         return stage(client, attacker, defender, countdownMinutes, timestampInput, "");
     }
 
-    public StageResult stage(MinecraftClient client, String attacker, String defender,
+    public StageResult stage(Minecraft client, String attacker, String defender,
                              int countdownMinutes, String timestampInput, String editingWarId) {
         invalidatePending();
         WarDraft draft = prepare(attacker, defender, countdownMinutes, timestampInput,
@@ -210,7 +211,7 @@ public final class WarManagerModule extends DMLSModule {
         return new StageResult(StageStatus.STAGED, pending.token(), draft);
     }
 
-    public boolean confirm(MinecraftClient client, String token) {
+    public boolean confirm(Minecraft client, String token) {
         PendingConfirmation<WarDraft> current = pending;
         if (current == null) return false;
         PendingConfirmation.ConsumeResult<WarDraft> consumed = current.consume(token);
@@ -295,7 +296,7 @@ public final class WarManagerModule extends DMLSModule {
         if (pending != null && pending.token().equals(token)) invalidatePending();
     }
 
-    public boolean retry(MinecraftClient client, String warId) {
+    public boolean retry(Minecraft client, String warId) {
         Optional<War> found = findWar(warId);
         if (found.isEmpty() || found.get().status != Status.PAUSED || coordinator.isBusy()) return false;
         War war = found.get();
@@ -318,7 +319,7 @@ public final class WarManagerModule extends DMLSModule {
                 == OperationStartResult.STARTED;
     }
 
-    public boolean cancelPaused(MinecraftClient client, String warId) {
+    public boolean cancelPaused(Minecraft client, String warId) {
         Optional<War> found = findWar(warId);
         if (found.isEmpty() || found.get().status != Status.PAUSED || coordinator.isBusy()
                 || storageLocked() || !canRunPrivilegedOperation(client)) return false;
@@ -382,7 +383,7 @@ public final class WarManagerModule extends DMLSModule {
         war.cancelledAtMillis = cancelledAtMillis;
     }
 
-    public boolean cancelScheduled(MinecraftClient client, String warId) {
+    public boolean cancelScheduled(Minecraft client, String warId) {
         Optional<War> found = findWar(warId);
         if (found.isEmpty() || storageLocked() || !canRunPrivilegedOperation(client)) return false;
         War war = found.get();
@@ -392,7 +393,7 @@ public final class WarManagerModule extends DMLSModule {
         return removeWar(war);
     }
 
-    public boolean dismissCompleted(MinecraftClient client, String warId) {
+    public boolean dismissCompleted(Minecraft client, String warId) {
         Optional<War> found = findWar(warId);
         if (found.isEmpty() || storageLocked() || !canRunPrivilegedOperation(client)) return false;
         War war = found.get();
@@ -420,7 +421,7 @@ public final class WarManagerModule extends DMLSModule {
         return false;
     }
 
-    public CancelStageResult stageCancel(MinecraftClient client, String warId) {
+    public CancelStageResult stageCancel(Minecraft client, String warId) {
         invalidatePending();
         Optional<War> found = findWar(warId);
         if (found.isEmpty()) return new CancelStageResult(CancelStageStatus.NOT_CANCELLABLE, "", null);
@@ -437,7 +438,7 @@ public final class WarManagerModule extends DMLSModule {
         return new CancelStageResult(CancelStageStatus.STAGED, pendingCancel.token(), warView(war));
     }
 
-    public boolean confirmCancel(MinecraftClient client, String token) {
+    public boolean confirmCancel(Minecraft client, String token) {
         PendingConfirmation<String> current = pendingCancel;
         if (current == null) return false;
         PendingConfirmation.ConsumeResult<String> consumed = current.consume(token);
@@ -523,7 +524,7 @@ public final class WarManagerModule extends DMLSModule {
                 || phase == Phase.START_WAR;
     }
 
-    private void tick(MinecraftClient client) {
+    private void tick(Minecraft client) {
         if (pending != null) pending.tick();
         if (pendingCancel != null) pendingCancel.tick();
         long now = System.currentTimeMillis();
@@ -565,7 +566,7 @@ public final class WarManagerModule extends DMLSModule {
                 });
     }
 
-    private boolean startDueSetup(MinecraftClient client, long now) {
+    private boolean startDueSetup(Minecraft client, long now) {
         Optional<War> due = state.wars.stream()
                 .filter(war -> isWaitingForAuthoritativeStart(war)
                         && now >= war.scheduledStartMillis)
@@ -605,7 +606,7 @@ public final class WarManagerModule extends DMLSModule {
         return false;
     }
 
-    private void startMaintenance(MinecraftClient client, ManagedOperation operation) {
+    private void startMaintenance(Minecraft client, ManagedOperation operation) {
         coordinator.start(client, OPERATION_ID, displayName().getString(), operation);
     }
 
@@ -649,7 +650,7 @@ public final class WarManagerModule extends DMLSModule {
                 .anyMatch(war -> war.attacker.equalsIgnoreCase(claim) || war.defender.equalsIgnoreCase(claim));
     }
 
-    private boolean sameCurrentServer(MinecraftClient client, String server) {
+    private boolean sameCurrentServer(Minecraft client, String server) {
         return !server.isBlank() && sameServer(server, ServerGuard.check(client).address())
                 && ServerGuard.check(client).allowed();
     }
@@ -665,7 +666,7 @@ public final class WarManagerModule extends DMLSModule {
         pendingCancel = null;
     }
 
-    private void pause(War war, OperationHandle handle, MinecraftClient client, String error) {
+    private void pause(War war, OperationHandle handle, Minecraft client, String error) {
         war.status = Status.PAUSED;
         war.error = error;
         store.save(state);
@@ -678,11 +679,11 @@ public final class WarManagerModule extends DMLSModule {
         protected OperationHandle handle;
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             this.handle = handle;
         }
 
-        protected boolean dispatch(MinecraftClient client, String command) {
+        protected boolean dispatch(Minecraft client, String command) {
             if (!handle.canDispatchAutomatedCommand()) return false;
             CommandDispatch result = handle.dispatchCommand(client, command);
             return result != CommandDispatch.BLOCKED;
@@ -709,13 +710,13 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             super.onStarted(handle, client);
             drive(client);
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             if (awaitingLeave && ++waitTicks > RESPONSE_TIMEOUT_TICKS) {
                 pause(war, handle, client, "Timed out waiting for the Lands leave response.");
                 return;
@@ -737,7 +738,7 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+        public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
             if (!awaitingLeave || message.origin() != MessageOrigin.SERVER_SYSTEM) return;
             Claim claim = war.claim(side);
             WarLeaveResponseParser.parse(message.cleanText(), claim.name).ifPresent(result -> {
@@ -764,7 +765,7 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+        public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
             if (war.status == Status.PAUSED || war.status == Status.COMPLETED
                     || war.phase == Phase.SETUP_COMPLETE) return;
             war.status = Status.PAUSED;
@@ -773,7 +774,7 @@ public final class WarManagerModule extends DMLSModule {
             store.save(state);
         }
 
-        private void drive(MinecraftClient client) {
+        private void drive(Minecraft client) {
             boolean again = true;
             while (again && handle.isActive() && !awaitingLeave && !awaitingNationMenu) {
                 again = false;
@@ -804,13 +805,13 @@ public final class WarManagerModule extends DMLSModule {
                     case TRANSFER_CAPITAL -> {
                         Claim claim = war.claim(side);
                         again = sendAdvance(client,
-                                "n setcapital " + claim.transferredCapital + " confirm", Phase.RETRY_LEAVE);
+                                "nations member setcapital " + claim.transferredCapital + " confirm", Phase.RETRY_LEAVE);
                     }
                     case RETRY_LEAVE -> sendLeave(client);
                     case DELETE_NATION -> {
                         Claim claim = war.claim(side);
                         claim.membership = Membership.DELETED;
-                        again = sendAdvance(client, "n delete confirm",
+                        again = sendAdvance(client, "nations delete confirm",
                                 side == Side.ATTACKER ? Phase.EDIT_DEFENDER : Phase.START_WAR);
                     }
                     case START_WAR -> startWar(client);
@@ -819,7 +820,7 @@ public final class WarManagerModule extends DMLSModule {
             }
         }
 
-        private boolean sendAdvance(MinecraftClient client, String command, Phase next) {
+        private boolean sendAdvance(Minecraft client, String command, Phase next) {
             if (!handle.canDispatchAutomatedCommand()) return false;
             if (war.pendingCommand.isBlank()) {
                 war.pendingCommand = command;
@@ -846,10 +847,10 @@ public final class WarManagerModule extends DMLSModule {
             return com.duperknight.client.utils.DMLSConfig.staffRank() == StaffRank.ADMIN;
         }
 
-        private void sendLeave(MinecraftClient client) {
+        private void sendLeave(Minecraft client) {
             if (!handle.canDispatchAutomatedCommand()) return;
-            if (!dispatch(client, "n leave confirm")) {
-                pause(war, handle, client, "Could not send /n leave confirm.");
+            if (!dispatch(client, "lands nation leave confirm")) {
+                pause(war, handle, client, "Could not send /lands nation leave confirm.");
                 return;
             }
             awaitingLeave = true;
@@ -859,13 +860,13 @@ public final class WarManagerModule extends DMLSModule {
         private void advanceAfterClaim() {
             war.phase = side == Side.ATTACKER ? Phase.EDIT_DEFENDER : Phase.START_WAR;
             if (!store.save(state)) {
-                pause(war, handle, MinecraftClient.getInstance(), "Could not persist the Lands response.");
+                pause(war, handle, Minecraft.getInstance(), "Could not persist the Lands response.");
                 return;
             }
-            drive(MinecraftClient.getInstance());
+            drive(Minecraft.getInstance());
         }
 
-        private void startNationInfo(MinecraftClient client) {
+        private void startNationInfo(Minecraft client) {
             if (!handle.canDispatchAutomatedCommand()) return;
             previousSyncId = ScreenUtils.currentSyncId(client);
             if (!dispatch(client, "n info " + war.claim(side).originalNation)) {
@@ -876,7 +877,7 @@ public final class WarManagerModule extends DMLSModule {
             waitTicks = 0;
         }
 
-        private void applyNationSnapshot(MinecraftClient client, NationSnapshot snapshot) {
+        private void applyNationSnapshot(Minecraft client, NationSnapshot snapshot) {
             Claim claim = war.claim(side);
             NationMenuParser.Result parsed = snapshot.result();
             if (!parsed.parsed()) {
@@ -902,7 +903,7 @@ public final class WarManagerModule extends DMLSModule {
             drive(client);
         }
 
-        private void startWar(MinecraftClient client) {
+        private void startWar(Minecraft client) {
             if (!handle.canDispatchAutomatedCommand()) return;
             String command = "war admin start " + war.attacker + " " + war.defender
                     + " 0 " + CompactDurationFormatter.formatMinutes(war.countdownMinutes);
@@ -940,7 +941,7 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             super.onStarted(handle, client);
             war.status = Status.CANCELLING;
             war.phase = Phase.CANCEL_WAR;
@@ -953,12 +954,12 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             drive(client);
         }
 
         @Override
-        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+        public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
             if (war.status == Status.PAUSED || war.phase != Phase.CANCEL_WAR) return;
             war.status = Status.PAUSED;
             war.error = "War ending was interrupted (" + reason.name().toLowerCase(Locale.ROOT)
@@ -966,7 +967,7 @@ public final class WarManagerModule extends DMLSModule {
             store.save(state);
         }
 
-        private void drive(MinecraftClient client) {
+        private void drive(Minecraft client) {
             if (!handle.canDispatchAutomatedCommand()) return;
             String command = cancelCommand(war.attacker);
             if (war.pendingCommand.isBlank()) {
@@ -1026,7 +1027,7 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             super.onStarted(handle, client);
             if (state.purgeTransition == PurgeTransition.NONE) {
                 state.purgeTransition = starting ? PurgeTransition.STARTING : PurgeTransition.ENDING;
@@ -1044,11 +1045,11 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             drive(client);
         }
 
-        private void drive(MinecraftClient client) {
+        private void drive(Minecraft client) {
             while (index < commands.size() && handle.isActive()) {
                 if (!handle.canDispatchAutomatedCommand()) return;
                 String command = commands.get(index);
@@ -1093,13 +1094,13 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             super.onStarted(handle, client);
             resumeSide(client);
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             if (awaitingMenu) {
                 if (++waitTicks > RESPONSE_TIMEOUT_TICKS) {
                     pause(war, handle, client, "Timed out waiting for the nation restoration menu.");
@@ -1152,7 +1153,7 @@ public final class WarManagerModule extends DMLSModule {
         }
 
         @Override
-        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+        public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
             if (war.status == Status.PAUSED || war.status == Status.COMPLETED) return;
             war.status = Status.PAUSED;
             war.error = "Restoration was interrupted (" + reason.name().toLowerCase(Locale.ROOT)
@@ -1160,7 +1161,7 @@ public final class WarManagerModule extends DMLSModule {
             store.save(state);
         }
 
-        private void resumeSide(MinecraftClient client) {
+        private void resumeSide(Minecraft client) {
             Claim claim = war.claim(side);
             if (claim.restored || claim.membership == Membership.NONE
                     || claim.membership == Membership.UNKNOWN) {
@@ -1169,7 +1170,7 @@ public final class WarManagerModule extends DMLSModule {
                 return;
             }
             if (claim.membership == Membership.DELETED && !nationAlreadyRecreated(claim.originalNation)) {
-                commands = List.of("la edit " + claim.name, "n create");
+                commands = List.of("nations create " + claim.name);
                 commandIndex = 0;
                 creatingNation = true;
                 driveCreateCommands(client);
@@ -1178,7 +1179,7 @@ public final class WarManagerModule extends DMLSModule {
             startRestorationInfo(client);
         }
 
-        private void startRestorationInfo(MinecraftClient client) {
+        private void startRestorationInfo(Minecraft client) {
             if (!handle.canDispatchAutomatedCommand()) return;
             previousSyncId = ScreenUtils.currentSyncId(client);
             String command = "n info " + war.claim(side).originalNation;
@@ -1192,12 +1193,12 @@ public final class WarManagerModule extends DMLSModule {
 
         private void prepareJoinCommands(String capital) {
             Claim claim = war.claim(side);
-            commands = List.of("la edit " + capital, "n trust " + claim.name,
-                    "la edit " + claim.name, "n accept");
+            commands = List.of("lands edit " + capital, "nations trust " + claim.name,
+                    "lands edit " + claim.name, "lands nation accept " + claim.originalNation);
             commandIndex = 0;
         }
 
-        private void driveCommands(MinecraftClient client) {
+        private void driveCommands(Minecraft client) {
             while (commandIndex < commands.size() && handle.isActive()) {
                 if (!handle.canDispatchAutomatedCommand()) return;
                 if (!dispatch(client, commands.get(commandIndex))) {
@@ -1210,7 +1211,7 @@ public final class WarManagerModule extends DMLSModule {
             if (!commands.isEmpty() && commandIndex >= commands.size()) markSideRestored(client);
         }
 
-        private void driveCreateCommands(MinecraftClient client) {
+        private void driveCreateCommands(Minecraft client) {
             while (commandIndex < commands.size() && handle.isActive()) {
                 if (!handle.canDispatchAutomatedCommand()) return;
                 String command = commands.get(commandIndex++);
@@ -1218,7 +1219,7 @@ public final class WarManagerModule extends DMLSModule {
                     pause(war, handle, client, "Nation recreation command dispatch was blocked.");
                     return;
                 }
-                if (command.equals("n create")) {
+                if (command.startsWith("nations create")) {
                     awaitingDialog = true;
                     waitTicks = 0;
                     return;
@@ -1227,7 +1228,7 @@ public final class WarManagerModule extends DMLSModule {
             }
         }
 
-        private void markSideRestored(MinecraftClient client) {
+        private void markSideRestored(Minecraft client) {
             war.claim(side).restored = true;
             if (side == Side.ATTACKER) {
                 side = Side.DEFENDER;
@@ -1253,25 +1254,25 @@ public final class WarManagerModule extends DMLSModule {
                 .anyMatch(claim -> claim.restored && claim.originalNation.equalsIgnoreCase(nation));
     }
 
-    private Optional<NationSnapshot> readNationMenu(MinecraftClient client, String nation, int previousSyncId) {
-        if (!(client.currentScreen instanceof HandledScreen<?> handled)) return Optional.empty();
-        ScreenHandler handler = handled.getScreenHandler();
-        if (handler.syncId == previousSyncId || handler.slots.size() <= NATION_SLOT) return Optional.empty();
-        String title = client.currentScreen.getTitle().getString();
+    private Optional<NationSnapshot> readNationMenu(Minecraft client, String nation, int previousSyncId) {
+        if (!(client.gui.screen() instanceof AbstractContainerScreen<?> handled)) return Optional.empty();
+        AbstractContainerMenu handler = handled.getMenu();
+        if (handler.containerId == previousSyncId || handler.slots.size() <= NATION_SLOT) return Optional.empty();
+        String title = client.gui.screen().getTitle().getString();
         String normalizedTitle = title.replace("_", "").replace(" ", "").toLowerCase(Locale.ROOT);
         String normalizedNation = nation.replace("_", "").replace(" ", "").toLowerCase(Locale.ROOT);
         if (!normalizedTitle.contains(normalizedNation)) return Optional.empty();
         Slot slot = handler.getSlot(NATION_SLOT);
-        if (!slot.hasStack() || slot.getStack().isEmpty()) return Optional.empty();
-        List<TooltipUtils.TooltipLine> tooltip = Screen.getTooltipFromItem(client, slot.getStack())
+        if (!slot.hasItem() || slot.getItem().isEmpty()) return Optional.empty();
+        List<TooltipUtils.TooltipLine> tooltip = Screen.getTooltipFromItem(client, slot.getItem())
                 .stream().map(TooltipUtils::toTooltipLine).toList();
-        return Optional.of(new NationSnapshot(client.currentScreen.getTitle(), NationMenuParser.parse(tooltip)));
+        return Optional.of(new NationSnapshot(client.gui.screen().getTitle(), NationMenuParser.parse(tooltip)));
     }
 
-    private DialogFillResult fillNationDialog(MinecraftClient client, Claim claim) {
-        if (!(client.currentScreen instanceof DialogScreen<?> dialog)) {
-            String screen = client.currentScreen == null
-                    ? "no screen" : client.currentScreen.getClass().getSimpleName();
+    private DialogFillResult fillNationDialog(Minecraft client, Claim claim) {
+        if (!(client.gui.screen() instanceof DialogScreen<?> dialog)) {
+            String screen = client.gui.screen() == null
+                    ? "no screen" : client.gui.screen().getClass().getSimpleName();
             return new DialogFillResult(false, screen);
         }
         String title = dialog.getTitle().getString();
@@ -1279,15 +1280,15 @@ public final class WarManagerModule extends DMLSModule {
             return new DialogFillResult(false, "dialog title=\"" + title + "\"");
         }
 
-        List<Element> elements = dialogElements(dialog);
-        List<TextFieldWidget> fields = elements.stream()
-                .filter(TextFieldWidget.class::isInstance).map(TextFieldWidget.class::cast)
-                .sorted(Comparator.comparingInt(TextFieldWidget::getY)
-                        .thenComparingInt(TextFieldWidget::getX)).toList();
-        List<ButtonWidget> buttons = elements.stream()
-                .filter(ButtonWidget.class::isInstance).map(ButtonWidget.class::cast)
+        List<GuiEventListener> elements = dialogElements(dialog);
+        List<EditBox> fields = elements.stream()
+                .filter(EditBox.class::isInstance).map(EditBox.class::cast)
+                .sorted(Comparator.comparingInt(EditBox::getY)
+                        .thenComparingInt(EditBox::getX)).toList();
+        List<Button> buttons = elements.stream()
+                .filter(Button.class::isInstance).map(Button.class::cast)
                 .toList();
-        Optional<ButtonWidget> create = buttons.stream()
+        Optional<Button> create = buttons.stream()
                 .filter(button -> button.getMessage().getString().trim().equalsIgnoreCase("Create"))
                 .findFirst();
         String diagnostics = "title=\"" + title + "\", textFields=" + fields.size()
@@ -1295,38 +1296,38 @@ public final class WarManagerModule extends DMLSModule {
                 .filter(label -> !label.isBlank()).toList();
         if (fields.size() < 2 || create.isEmpty()) return new DialogFillResult(false, diagnostics);
 
-        TextFieldWidget nameField = findLabeledField(fields, "name").orElse(fields.get(0));
-        TextFieldWidget tagField = findLabeledField(fields, "tag")
+        EditBox nameField = findLabeledField(fields, "name").orElse(fields.get(0));
+        EditBox tagField = findLabeledField(fields, "tag")
                 .filter(field -> field != nameField)
                 .orElseGet(() -> fields.stream().filter(field -> field != nameField).findFirst().orElseThrow());
         String coloredName = claim.coloredNationName.isBlank() ? claim.originalNation : claim.coloredNationName;
         String tag = tagFor(claim.originalNation);
-        nameField.setText(coloredName);
-        tagField.setText(tag);
-        if (!nameField.getText().equals(coloredName) || !tagField.getText().equals(tag)) {
+        nameField.setValue(coloredName);
+        tagField.setValue(tag);
+        if (!nameField.getValue().equals(coloredName) || !tagField.getValue().equals(tag)) {
             return new DialogFillResult(false, diagnostics + ", input rejected");
         }
-        create.get().onPress(new KeyInput(GLFW.GLFW_KEY_ENTER, 0, 0));
+        create.get().onPress(new KeyEvent(InputConstants.KEY_RETURN, 0, 0));
         return new DialogFillResult(true, diagnostics);
     }
 
-    private static Optional<TextFieldWidget> findLabeledField(List<TextFieldWidget> fields, String label) {
+    private static Optional<EditBox> findLabeledField(List<EditBox> fields, String label) {
         return fields.stream().filter(field -> field.getMessage().getString()
                 .toLowerCase(Locale.ROOT).contains(label)).findFirst();
     }
 
-    private static List<Element> dialogElements(DialogScreen<?> dialog) {
-        List<Element> elements = new ArrayList<>();
-        Set<Element> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (Element child : dialog.children()) collectDialogElement(child, elements, visited);
+    private static List<GuiEventListener> dialogElements(DialogScreen<?> dialog) {
+        List<GuiEventListener> elements = new ArrayList<>();
+        Set<GuiEventListener> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (GuiEventListener child : dialog.children()) collectDialogElement(child, elements, visited);
         return elements;
     }
 
-    private static void collectDialogElement(Element element, List<Element> elements, Set<Element> visited) {
+    private static void collectDialogElement(GuiEventListener element, List<GuiEventListener> elements, Set<GuiEventListener> visited) {
         if (!visited.add(element)) return;
         elements.add(element);
-        if (element instanceof ParentElement parent) {
-            for (Element child : parent.children()) collectDialogElement(child, elements, visited);
+        if (element instanceof ContainerEventHandler parent) {
+            for (GuiEventListener child : parent.children()) collectDialogElement(child, elements, visited);
         }
     }
 
@@ -1345,7 +1346,7 @@ public final class WarManagerModule extends DMLSModule {
         return "war admin end " + attacker;
     }
 
-    private record NationSnapshot(Text title, NationMenuParser.Result result) {
+    private record NationSnapshot(Component title, NationMenuParser.Result result) {
     }
 
     private record DialogFillResult(boolean filled, String diagnostics) {

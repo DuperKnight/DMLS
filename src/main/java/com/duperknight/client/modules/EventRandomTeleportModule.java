@@ -12,12 +12,11 @@ import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -50,8 +49,8 @@ public final class EventRandomTeleportModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.random_teleport.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.random_teleport.name");
     }
 
     @Override
@@ -60,8 +59,8 @@ public final class EventRandomTeleportModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.random_teleport.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.random_teleport.description"));
     }
 
     @Override
@@ -70,8 +69,8 @@ public final class EventRandomTeleportModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new EventRandomTeleportScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new EventRandomTeleportScreen(parent, this));
     }
 
     @Override
@@ -84,13 +83,13 @@ public final class EventRandomTeleportModule extends DMLSModule {
     }
 
     /** Compatibility helper for callers that only need the accepted target. */
-    public String teleportToRandomPlayer(MinecraftClient client) {
+    public String teleportToRandomPlayer(Minecraft client) {
         TeleportResult result = teleport(client);
         return result.accepted() ? result.target() : null;
     }
 
     /** Enables vanish only when this session has observed it off, then queues one safe teleport. */
-    public TeleportResult teleport(MinecraftClient client) {
+    public TeleportResult teleport(Minecraft client) {
         if (!canRunPrivilegedOperation(client)) {
             return new TeleportResult(TeleportStatus.BLOCKED, "", false);
         }
@@ -100,7 +99,7 @@ public final class EventRandomTeleportModule extends DMLSModule {
         }
 
         List<String> players = new ArrayList<>(ClientUtils.getOnlinePlayerNames(client));
-        String selfName = client.getSession().getUsername();
+        String selfName = client.getUser().getName();
         players.removeIf(player -> player.equalsIgnoreCase(selfName));
 
         if (players.isEmpty()) {
@@ -135,24 +134,24 @@ public final class EventRandomTeleportModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             tryDispatch(handle, client);
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             tryDispatch(handle, client);
         }
 
         @Override
-        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+        public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
             if (step != Step.COMPLETE) {
                 result = new TeleportResult(TeleportStatus.BLOCKED, target, needsVanish);
                 step = Step.COMPLETE;
             }
         }
 
-        private void tryDispatch(OperationHandle handle, MinecraftClient client) {
+        private void tryDispatch(OperationHandle handle, Minecraft client) {
             if (step == Step.COMPLETE || !handle.canDispatchAutomatedCommand()) return;
             if (step == Step.VANISH) {
                 CommandDispatch dispatch = handle.dispatchCommand(client, "vanish");
@@ -185,7 +184,7 @@ public final class EventRandomTeleportModule extends DMLSModule {
             }
         }
 
-        private void fail(OperationHandle handle, MinecraftClient client) {
+        private void fail(OperationHandle handle, Minecraft client) {
             result = new TeleportResult(TeleportStatus.BLOCKED, target, needsVanish);
             step = Step.COMPLETE;
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.command.not_sent");

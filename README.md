@@ -1,6 +1,6 @@
 # DMLS — Duper's Mod for Lazy Staff
 
-DMLS is a client-only Fabric mod for Stoneworks staff workflows on Minecraft 1.21.11. It validates and coordinates staff commands, while the server remains authoritative.
+DMLS is a client-only Fabric mod for Stoneworks staff workflows on Minecraft 26.3. It validates and coordinates staff commands, while the server remains authoritative.
 
 ## Install and configure
 
@@ -58,7 +58,7 @@ The supported command namespace is `/dmls`:
 
 ## Development
 
-Java 21 is required.
+Java 25 is required.
 
 ```text
 ./gradlew test --rerun-tasks

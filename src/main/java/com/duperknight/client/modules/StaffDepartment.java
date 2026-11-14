@@ -1,6 +1,6 @@
 package com.duperknight.client.modules;
 
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 /** Staff departments whose internal rank is configured independently. */
 public enum StaffDepartment {
@@ -14,7 +14,7 @@ public enum StaffDepartment {
         this.translationKey = translationKey;
     }
 
-    public Text displayName() {
-        return Text.translatable(translationKey);
+    public Component displayName() {
+        return Component.translatable(translationKey);
     }
 }

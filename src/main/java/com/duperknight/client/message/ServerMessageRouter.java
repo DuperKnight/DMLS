@@ -3,8 +3,7 @@ package com.duperknight.client.message;
 import com.duperknight.DMLS;
 import com.duperknight.client.utils.ChatUtils;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.minecraft.text.Text;
-
+import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -55,7 +54,7 @@ public final class ServerMessageRouter {
         previousAt = 0;
     }
 
-    private static void route(Text text, MessageOrigin origin, boolean overlay) {
+    private static void route(Component text, MessageOrigin origin, boolean overlay) {
         String clean = ChatUtils.cleanLine(text.getString());
         long now = System.nanoTime();
         if (isCrossEventDuplicate(clean, origin, now)) return;

@@ -5,21 +5,20 @@ import com.duperknight.client.gui.modules.UuidLookupScreen;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.InputValidators;
 import com.duperknight.client.utils.MojangProfileLookup;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** Local Mojang API lookup; it does not send a server command. */
 public final class UuidLookupModule extends DMLSModule {
@@ -37,8 +36,8 @@ public final class UuidLookupModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.uuid.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.uuid.name");
     }
 
     @Override
@@ -47,15 +46,15 @@ public final class UuidLookupModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
+    public List<Component> description() {
         return List.of(
-                Text.translatable("dmls.module.uuid.description.1"),
-                Text.translatable("dmls.module.uuid.description.2"));
+                Component.translatable("dmls.module.uuid.description.1"),
+                Component.translatable("dmls.module.uuid.description.2"));
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new UuidLookupScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new UuidLookupScreen(parent, this));
     }
 
     @Override
@@ -64,7 +63,7 @@ public final class UuidLookupModule extends DMLSModule {
     }
 
     /** Starts a lookup whose result is printed as one compact chat report. */
-    public boolean submit(MinecraftClient client, String input) {
+    public boolean submit(Minecraft client, String input) {
         ParsedInput parsed = parseInput(input);
         if (!reportInputError(client, parsed)) return false;
         if (lookupActive.get()) {
@@ -79,7 +78,7 @@ public final class UuidLookupModule extends DMLSModule {
     }
 
     /** Starts a lookup whose result stays in the calling screen instead of chat. */
-    public StartResult submitToScreen(MinecraftClient client, String input, Consumer<MojangProfileLookup.BatchResult> consumer) {
+    public StartResult submitToScreen(Minecraft client, String input, Consumer<MojangProfileLookup.BatchResult> consumer) {
         ParsedInput parsed = parseInput(input);
         if (parsed.status() != InputStatus.VALID) return new StartResult(parsed.status(), parsed.invalidNames());
         if (!beginLookup(client, parsed.usernames(), consumer)) return new StartResult(InputStatus.ACTIVE, List.of());
@@ -101,7 +100,7 @@ public final class UuidLookupModule extends DMLSModule {
         return new ParsedInput(InputStatus.VALID, List.copyOf(usernames), List.of());
     }
 
-    private boolean beginLookup(MinecraftClient client, List<String> usernames,
+    private boolean beginLookup(Minecraft client, List<String> usernames,
                                 Consumer<MojangProfileLookup.BatchResult> consumer) {
         Objects.requireNonNull(consumer, "consumer");
         if (!lookupActive.compareAndSet(false, true)) return false;
@@ -132,7 +131,7 @@ public final class UuidLookupModule extends DMLSModule {
         return true;
     }
 
-    private static void deliver(MinecraftClient client, Consumer<MojangProfileLookup.BatchResult> consumer,
+    private static void deliver(Minecraft client, Consumer<MojangProfileLookup.BatchResult> consumer,
                                 MojangProfileLookup.BatchResult result) {
         Runnable callback = () -> {
             try {
@@ -152,7 +151,7 @@ public final class UuidLookupModule extends DMLSModule {
         }
     }
 
-    private boolean reportInputError(MinecraftClient client, ParsedInput parsed) {
+    private boolean reportInputError(Minecraft client, ParsedInput parsed) {
         switch (parsed.status()) {
             case VALID -> { return true; }
             case EMPTY -> ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_igns");
@@ -165,7 +164,7 @@ public final class UuidLookupModule extends DMLSModule {
         return false;
     }
 
-    private void sendChatReport(MinecraftClient client, MojangProfileLookup.BatchResult result) {
+    private void sendChatReport(Minecraft client, MojangProfileLookup.BatchResult result) {
         if (result.status() == MojangProfileLookup.Status.RATE_LIMITED) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.uuid.rate_limited");
             return;
@@ -175,22 +174,22 @@ public final class UuidLookupModule extends DMLSModule {
             return;
         }
 
-        String header = PREFIX + Text.translatable("dmls.chat.uuid.header").getString() + " ";
+        String header = PREFIX + Component.translatable("dmls.chat.uuid.header").getString() + " ";
         ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
         for (MojangProfileLookup.Entry entry : result.entries()) {
-            MutableText line = Text.literal("§8• §6" + entry.username() + "§7: ");
+            MutableComponent line = Component.literal("§8• §6" + entry.username() + "§7: ");
             if (entry.found()) line.append(clickableUuid(entry.uuid()));
-            else line.append(Text.translatable("dmls.chat.uuid.not_found_short").formatted(net.minecraft.util.Formatting.RED));
+            else line.append(Component.translatable("dmls.chat.uuid.not_found_short").withStyle(net.minecraft.ChatFormatting.RED));
             ChatUtils.sendClientMessage(client, line);
         }
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
     }
 
-    private static Text clickableUuid(String uuid) {
-        return Text.literal(uuid).styled(style -> style
+    private static Component clickableUuid(String uuid) {
+        return Component.literal(uuid).withStyle(style -> style
                 .withColor(0xFFAA00)
                 .withClickEvent(new ClickEvent.CopyToClipboard(uuid))
-                .withHoverEvent(new HoverEvent.ShowText(Text.translatable("dmls.chat.uuid.copy"))));
+                .withHoverEvent(new HoverEvent.ShowText(Component.translatable("dmls.chat.uuid.copy"))));
     }
 
     public static String errorTranslationKey(MojangProfileLookup.Status status) {

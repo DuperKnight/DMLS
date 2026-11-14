@@ -1,14 +1,13 @@
 package com.duperknight.client.utils;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-
 import java.util.List;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Utility methods for interacting with the Minecraft screen and inventory.
@@ -28,25 +27,25 @@ public final class ScreenUtils {
     }
 
     /**
-     * Closes the current screen if it's a {@link HandledScreen}.
+     * Closes the current screen if it's a {@link AbstractContainerScreen}.
      *
      * @param client the Minecraft client
      */
-    public static void closeHandledScreen(MinecraftClient client) {
-        if (client != null && client.player != null && client.currentScreen instanceof HandledScreen<?>) {
-            client.player.closeHandledScreen();
+    public static void closeHandledScreen(Minecraft client) {
+        if (client != null && client.player != null && client.gui.screen() instanceof AbstractContainerScreen<?>) {
+            client.player.closeContainer();
         }
     }
 
     /**
-     * Gets the sync ID of the current screen if it's a {@link HandledScreen}.
+     * Gets the sync ID of the current screen if it's a {@link AbstractContainerScreen}.
      *
      * @param client the Minecraft client
      * @return the sync ID, or -1 if not applicable
      */
-    public static int currentSyncId(MinecraftClient client) {
-        if (client != null && client.currentScreen instanceof HandledScreen<?> handledScreen) {
-            return handledScreen.getScreenHandler().syncId;
+    public static int currentSyncId(Minecraft client) {
+        if (client != null && client.gui.screen() instanceof AbstractContainerScreen<?> handledScreen) {
+            return handledScreen.getMenu().containerId;
         }
         return -1;
     }
@@ -61,33 +60,33 @@ public final class ScreenUtils {
      * @param waitTicks the number of ticks since the last sync
      * @return the slot contents, if available
      */
-    public static Optional<ScreenSnapshot> readSlot(MinecraftClient client, int slotIndex, String expectedTitle, int previousSyncId, int waitTicks) {
-        if (client == null || !(client.currentScreen instanceof HandledScreen<?> handledScreen)) {
+    public static Optional<ScreenSnapshot> readSlot(Minecraft client, int slotIndex, String expectedTitle, int previousSyncId, int waitTicks) {
+        if (client == null || !(client.gui.screen() instanceof AbstractContainerScreen<?> handledScreen)) {
             return Optional.empty();
         }
 
-        ScreenHandler handler = handledScreen.getScreenHandler();
+        AbstractContainerMenu handler = handledScreen.getMenu();
         if (handler.slots.size() <= slotIndex) {
             return Optional.empty();
         }
 
-        String title = ChatUtils.cleanLine(client.currentScreen.getTitle().getString());
+        String title = ChatUtils.cleanLine(client.gui.screen().getTitle().getString());
         if (!title.equalsIgnoreCase(expectedTitle)) {
             return Optional.empty();
         }
 
         // Never read a same-title menu that was already open before dispatch. If the
         // server does not replace it, the query times out instead of trusting stale data.
-        if (!isReplacementSyncId(previousSyncId, handler.syncId)) {
+        if (!isReplacementSyncId(previousSyncId, handler.containerId)) {
             return Optional.empty();
         }
 
         Slot slot = handler.getSlot(slotIndex);
-        if (!slot.hasStack()) {
+        if (!slot.hasItem()) {
             return Optional.empty();
         }
 
-        ItemStack stack = slot.getStack();
+        ItemStack stack = slot.getItem();
         if (stack.isEmpty()) {
             return Optional.empty();
         }

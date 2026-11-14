@@ -1,5 +1,7 @@
 package com.duperknight.client.gui.modules;
 
+import com.mojang.blaze3d.platform.InputConstants;
+
 import com.mojang.brigadier.ParseResults;
 import com.mojang.brigadier.suggestion.Suggestion;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -12,25 +14,24 @@ import com.duperknight.client.modules.WarManagerModule.StageResult;
 import com.duperknight.client.modules.WarManagerModule.WarView;
 import com.duperknight.client.war.CompactDurationFormatter;
 import com.duperknight.client.war.WarTimestampParser;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.SliderWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.network.ClientCommandSource;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.multiplayer.ClientSuggestionProvider;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 /** Configuration and durable-status screen for War Manager. */
 public final class WarManagerScreen extends DMLSMenuScreen {
@@ -42,21 +43,21 @@ public final class WarManagerScreen extends DMLSMenuScreen {
     private static final int WAR_ROW_STRIDE = 46;
     private static final int WAR_ROW_TEXT_INSET = 8;
     private static final int WAR_ROW_ACTION_INSET = 7;
-    private static final Identifier REMOVE_TEXTURE = Identifier.ofVanilla("pending_invite/reject");
+    private static final Identifier REMOVE_TEXTURE = Identifier.withDefaultNamespace("pending_invite/reject");
     private static final Identifier REMOVE_HIGHLIGHTED_TEXTURE =
-            Identifier.ofVanilla("pending_invite/reject_highlighted");
+            Identifier.withDefaultNamespace("pending_invite/reject_highlighted");
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm")
             .withZone(ZoneId.systemDefault());
     private static final DateTimeFormatter FULL_TIME =
             DateTimeFormatter.ofPattern("EEE, d MMM yyyy HH:mm:ss z")
                     .withZone(ZoneId.systemDefault());
     private final WarManagerModule module;
-    private TextFieldWidget attackerField;
-    private TextFieldWidget defenderField;
-    private TextFieldWidget timestampField;
+    private EditBox attackerField;
+    private EditBox defenderField;
+    private EditBox timestampField;
     private TimeSlider timeSlider;
-    private ButtonWidget setHomeButton;
-    private ButtonWidget scheduleButton;
+    private Button setHomeButton;
+    private Button scheduleButton;
     private String selectedWarId = "";
     private List<String> attackerSuggestions = List.of();
     private List<String> defenderSuggestions = List.of();
@@ -64,10 +65,10 @@ public final class WarManagerScreen extends DMLSMenuScreen {
     private int defenderSuggestionIndex;
     private long attackerSuggestionRequest;
     private long defenderSuggestionRequest;
-    private Text validation = Text.empty();
+    private Component validation = Component.empty();
 
     public WarManagerScreen(Screen parent, WarManagerModule module) {
-        super(Text.translatable("dmls.module.war_manager.name"), parent);
+        super(Component.translatable("dmls.module.war_manager.name"), parent);
         this.module = module;
     }
 
@@ -86,43 +87,43 @@ public final class WarManagerScreen extends DMLSMenuScreen {
         int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = width / 2 - formWidth / 2;
 
-        attackerField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(14)),
-                formWidth, STANDARD_BUTTON_HEIGHT, Text.translatable("dmls.field.war.attacker")), scaled(14));
+        attackerField = addScrollableChild(new EditBox(font, formX, contentY(scaled(14)),
+                formWidth, STANDARD_BUTTON_HEIGHT, Component.translatable("dmls.field.war.attacker")), scaled(14));
         attackerField.setMaxLength(64);
-        attackerField.setPlaceholder(Text.translatable("dmls.field.war.attacker.placeholder"));
-        attackerField.setChangedListener(value -> {
-            validation = Text.empty();
+        attackerField.setHint(Component.translatable("dmls.field.war.attacker.placeholder"));
+        attackerField.setResponder(value -> {
+            validation = Component.empty();
             requestClaimSuggestions(true, value);
         });
         setInitialFocus(attackerField);
 
-        defenderField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(60)),
-                formWidth, STANDARD_BUTTON_HEIGHT, Text.translatable("dmls.field.war.defender")), scaled(60));
+        defenderField = addScrollableChild(new EditBox(font, formX, contentY(scaled(60)),
+                formWidth, STANDARD_BUTTON_HEIGHT, Component.translatable("dmls.field.war.defender")), scaled(60));
         defenderField.setMaxLength(64);
-        defenderField.setPlaceholder(Text.translatable("dmls.field.war.defender.placeholder"));
-        defenderField.setChangedListener(value -> {
-            validation = Text.empty();
+        defenderField.setHint(Component.translatable("dmls.field.war.defender.placeholder"));
+        defenderField.setResponder(value -> {
+            validation = Component.empty();
             requestClaimSuggestions(false, value);
         });
 
-        timestampField = addScrollableChild(new TextFieldWidget(textRenderer, formX,
+        timestampField = addScrollableChild(new EditBox(font, formX,
                 contentY(scaled(106)), formWidth, STANDARD_BUTTON_HEIGHT,
-                Text.translatable("dmls.field.war.timestamp")), scaled(106));
+                Component.translatable("dmls.field.war.timestamp")), scaled(106));
         timestampField.setMaxLength(256);
-        timestampField.setPlaceholder(Text.translatable("dmls.field.war.timestamp.placeholder"));
-        timestampField.setChangedListener(value -> validation = Text.empty());
+        timestampField.setHint(Component.translatable("dmls.field.war.timestamp.placeholder"));
+        timestampField.setResponder(value -> validation = Component.empty());
 
         timeSlider = addScrollableChild(new TimeSlider(formX, contentY(scaled(162)), formWidth,
                 STANDARD_BUTTON_HEIGHT), scaled(162));
         if (selectedWar != null) {
-            attackerField.setText(selectedWar.attacker());
-            defenderField.setText(selectedWar.defender());
-            timestampField.setText("<t:" + selectedWar.setupMillis() / 1000L + ":F>");
+            attackerField.setValue(selectedWar.attacker());
+            defenderField.setValue(selectedWar.defender());
+            timestampField.setValue("<t:" + selectedWar.setupMillis() / 1000L + ":F>");
             timeSlider.setMinutes(selectedWar.countdownMinutes());
         }
 
-        setHomeButton = addScrollableChild(ButtonWidget.builder(homeLabel(), button -> setHome())
-                .dimensions(formX, contentY(scaled(200)), formWidth, STANDARD_BUTTON_HEIGHT).build(), scaled(200));
+        setHomeButton = addScrollableChild(Button.builder(homeLabel(), button -> setHome())
+                .bounds(formX, contentY(scaled(200)), formWidth, STANDARD_BUTTON_HEIGHT).build(), scaled(200));
 
         int rowIndex = 0;
         for (WarView war : wars) {
@@ -133,94 +134,94 @@ public final class WarManagerScreen extends DMLSMenuScreen {
                 int cancelWidth = scaled(62);
                 int actionGap = scaled(4);
                 int cancelX = formX + formWidth - cancelWidth - scaled(WAR_ROW_ACTION_INSET);
-                addScrollableChild(registerCommandControl(ButtonWidget.builder(
-                                Text.translatable("dmls.button.war.retry"),
+                addScrollableChild(registerCommandControl(Button.builder(
+                                Component.translatable("dmls.button.war.retry"),
                                 button -> {
-                                    if (module.retry(client, war.id())) {
-                                        validation = Text.empty();
+                                    if (module.retry(minecraft, war.id())) {
+                                        validation = Component.empty();
                                         button.active = false;
                                     } else {
-                                        validation = Text.translatable("dmls.validation.war.retry");
+                                        validation = Component.translatable("dmls.validation.war.retry");
                                     }
                                 })
-                        .dimensions(cancelX - actionGap - retryWidth,
+                        .bounds(cancelX - actionGap - retryWidth,
                                 contentY(rowButtonOffset),
                                 retryWidth, STANDARD_BUTTON_HEIGHT).build()), rowButtonOffset);
-                addScrollableChild(registerCommandControl(ButtonWidget.builder(
-                                Text.translatable("dmls.button.war.cancel_paused"),
+                addScrollableChild(registerCommandControl(Button.builder(
+                                Component.translatable("dmls.button.war.cancel_paused"),
                                 button -> {
-                                    if (module.cancelPaused(client, war.id())) {
-                                        validation = Text.empty();
-                                        clearAndInit();
+                                    if (module.cancelPaused(minecraft, war.id())) {
+                                        validation = Component.empty();
+                                        rebuildWidgets();
                                     } else {
-                                        validation = Text.translatable(
+                                        validation = Component.translatable(
                                                 "dmls.validation.war.cancel_paused");
                                     }
                                 })
-                        .dimensions(cancelX, contentY(rowButtonOffset),
+                        .bounds(cancelX, contentY(rowButtonOffset),
                                 cancelWidth, STANDARD_BUTTON_HEIGHT).build()), rowButtonOffset);
             } else if (war.scheduledCancelable(now)) {
                 int cancelWidth = scaled(76);
-                addScrollableChild(ButtonWidget.builder(
-                                Text.translatable("dmls.button.war.cancel_scheduled"),
+                addScrollableChild(Button.builder(
+                                Component.translatable("dmls.button.war.cancel_scheduled"),
                                 button -> {
-                                    if (module.cancelScheduled(client, war.id())) {
-                                        validation = Text.empty();
-                                        clearAndInit();
+                                    if (module.cancelScheduled(minecraft, war.id())) {
+                                        validation = Component.empty();
+                                        rebuildWidgets();
                                     } else {
-                                        validation = Text.translatable("dmls.validation.war.cancel_scheduled");
+                                        validation = Component.translatable("dmls.validation.war.cancel_scheduled");
                                     }
                                 })
-                        .dimensions(formX + formWidth - cancelWidth - scaled(WAR_ROW_ACTION_INSET),
+                        .bounds(formX + formWidth - cancelWidth - scaled(WAR_ROW_ACTION_INSET),
                                 contentY(rowButtonOffset),
                                 cancelWidth, STANDARD_BUTTON_HEIGHT).build(), rowButtonOffset);
             } else if (war.endEarlyAvailable()) {
                 int cancelWidth = scaled(76);
-                addScrollableChild(registerCommandControl(ButtonWidget.builder(
-                                Text.translatable("dmls.button.war.cancel_early"),
+                addScrollableChild(registerCommandControl(Button.builder(
+                                Component.translatable("dmls.button.war.cancel_early"),
                                 button -> cancelEarly(war.id()))
-                        .dimensions(formX + formWidth - cancelWidth - scaled(WAR_ROW_ACTION_INSET),
+                        .bounds(formX + formWidth - cancelWidth - scaled(WAR_ROW_ACTION_INSET),
                                 contentY(rowButtonOffset),
                                 cancelWidth, STANDARD_BUTTON_HEIGHT).build()), rowButtonOffset);
             }
             rowIndex++;
         }
 
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        scheduleButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
+        addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, button -> onClose())
+                .bounds(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        scheduleButton = registerCommandControl(addRenderableWidget(Button.builder(
                         scheduleLabel(), button -> schedule())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(),
+                .bounds(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(),
                         STANDARD_BUTTON_HEIGHT).build()));
     }
 
-    private Text homeLabel() {
+    private Component homeLabel() {
         return module.home()
-                .<Text>map(home -> Text.translatable("dmls.button.war.home_set", home.coordinates()))
-                .orElseGet(() -> Text.translatable("dmls.button.war.set_home"));
+                .<Component>map(home -> Component.translatable("dmls.button.war.home_set", home.coordinates()))
+                .orElseGet(() -> Component.translatable("dmls.button.war.set_home"));
     }
 
-    private Text scheduleLabel() {
-        return Text.translatable(selectedWarId.isBlank()
+    private Component scheduleLabel() {
+        return Component.translatable(selectedWarId.isBlank()
                 ? "dmls.button.war.schedule" : "dmls.button.war.update");
     }
 
     private void setHome() {
-        WarManagerModule.SaveHomeResult result = module.saveHome(client);
+        WarManagerModule.SaveHomeResult result = module.saveHome(minecraft);
         validation = switch (result) {
-            case SAVED -> Text.empty();
-            case RANK_BLOCKED -> Text.translatable("dmls.validation.required_rank");
-            case SERVER_BLOCKED -> Text.translatable("dmls.validation.server_blocked");
-            case IO_ERROR -> Text.translatable("dmls.validation.war.storage");
+            case SAVED -> Component.empty();
+            case RANK_BLOCKED -> Component.translatable("dmls.validation.required_rank");
+            case SERVER_BLOCKED -> Component.translatable("dmls.validation.server_blocked");
+            case IO_ERROR -> Component.translatable("dmls.validation.war.storage");
         };
         if (result == WarManagerModule.SaveHomeResult.SAVED) setHomeButton.setMessage(homeLabel());
     }
 
     private void schedule() {
-        StageResult result = module.stage(client, attackerField.getText(), defenderField.getText(),
-                timeSlider.minutes(), timestampField.getText(), selectedWarId);
+        StageResult result = module.stage(minecraft, attackerField.getValue(), defenderField.getValue(),
+                timeSlider.minutes(), timestampField.getValue(), selectedWarId);
         if (!result.staged()) {
-            validation = Text.translatable(switch (result.status()) {
+            validation = Component.translatable(switch (result.status()) {
                 case INVALID -> "dmls.validation.war.claims";
                 case INVALID_TIMESTAMP -> "dmls.validation.war.timestamp";
                 case TIMESTAMP_NOT_FUTURE -> "dmls.validation.war.timestamp_future";
@@ -242,43 +243,43 @@ public final class WarManagerScreen extends DMLSMenuScreen {
                 projectedSetup, draft.countdownMinutes());
         long projectedEnd = projectedStart + WarManagerModule.warDurationMillis();
         HomeView home = module.home().orElseThrow();
-        List<Text> preview = new ArrayList<>();
-        preview.add(Text.translatable(draft.immediate()
+        List<Component> preview = new ArrayList<>();
+        preview.add(Component.translatable(draft.immediate()
                 ? "dmls.review.war.immediate" : "dmls.review.war.queued"));
-        preview.add(Text.translatable("dmls.review.war.claims", draft.attacker(), draft.defender()));
-        preview.add(Text.translatable("dmls.review.war.countdown",
+        preview.add(Component.translatable("dmls.review.war.claims", draft.attacker(), draft.defender()));
+        preview.add(Component.translatable("dmls.review.war.countdown",
                 CompactDurationFormatter.formatMinutes(draft.countdownMinutes())));
-        preview.add(Text.translatable("dmls.review.war.timestamp",
+        preview.add(Component.translatable("dmls.review.war.timestamp",
                 projectedSetup / 1000L, FULL_TIME.format(Instant.ofEpochMilli(projectedSetup))));
-        preview.add(Text.translatable("dmls.review.war.actual_start",
+        preview.add(Component.translatable("dmls.review.war.actual_start",
                 projectedStart / 1000L, FULL_TIME.format(Instant.ofEpochMilli(projectedStart))));
-        preview.add(Text.translatable("dmls.review.war.window",
+        preview.add(Component.translatable("dmls.review.war.window",
                 CompactDurationFormatter.formatRemaining(WarManagerModule.warDurationMillis()),
                 CLOCK.format(Instant.ofEpochMilli(projectedStart)),
                 CLOCK.format(Instant.ofEpochMilli(projectedEnd))));
-        preview.add(Text.translatable("dmls.review.war.home", home.coordinates()));
-        preview.add(Text.literal("/la admin land " + draft.attacker() + " setflag peaceful false false"));
-        preview.add(Text.literal("/la admin land " + draft.defender() + " setflag peaceful false false"));
-        preview.add(Text.literal("/la edit … → /n leave confirm (both claims)"));
-        preview.add(Text.literal("/war admin start " + draft.attacker() + " " + draft.defender()
+        preview.add(Component.translatable("dmls.review.war.home", home.coordinates()));
+        preview.add(Component.literal("/lands admin land " + draft.attacker() + " setflag peaceful false false"));
+        preview.add(Component.literal("/lands admin land " + draft.defender() + " setflag peaceful false false"));
+        preview.add(Component.literal("/la edit … → /lands nation leave confirm (both claims)"));
+        preview.add(Component.literal("/war admin start " + draft.attacker() + " " + draft.defender()
                 + " 0 " + CompactDurationFormatter.formatMinutes(draft.countdownMinutes())));
-        preview.add(Text.literal("At war start: /gamerule, /broadcastraw, /tp, /mm spawn, /back"));
-        preview.add(Text.literal("At war end: purge cleanup and nation restoration"));
+        preview.add(Component.literal("At war start: /gamerule, /broadcastraw, /tp, /mm spawn, /back"));
+        preview.add(Component.literal("At war end: purge cleanup and nation restoration"));
 
-        client.setScreen(new DangerReviewScreen(this,
-                Text.translatable(draft.editingWarId().isBlank()
+        minecraft.gui.setScreen(new DangerReviewScreen(this,
+                Component.translatable(draft.editingWarId().isBlank()
                         ? "dmls.review.war.title" : "dmls.review.war.edit_title"), preview,
-                Text.translatable(draft.editingWarId().isBlank()
+                Component.translatable(draft.editingWarId().isBlank()
                         ? "dmls.button.war.confirm" : "dmls.button.war.update"),
                 () -> module.isPending(result.token()),
-                () -> module.confirm(client, result.token()),
+                () -> module.confirm(minecraft, result.token()),
                 () -> module.invalidatePending(result.token())));
     }
 
     private void cancelEarly(String warId) {
-        CancelStageResult result = module.stageCancel(client, warId);
+        CancelStageResult result = module.stageCancel(minecraft, warId);
         if (!result.staged()) {
-            validation = Text.translatable(switch (result.status()) {
+            validation = Component.translatable(switch (result.status()) {
                 case NOT_CANCELLABLE -> "dmls.validation.war.cancel_unavailable";
                 case BLOCKED -> "dmls.validation.server_blocked";
                 case BUSY -> "dmls.validation.war.busy";
@@ -289,22 +290,22 @@ public final class WarManagerScreen extends DMLSMenuScreen {
         }
 
         WarView war = result.war();
-        List<Text> preview = new ArrayList<>();
-        preview.add(Text.translatable("dmls.review.war.cancel_claims", war.attacker(), war.defender()));
-        preview.add(Text.literal("/war admin end " + war.attacker()));
-        preview.add(Text.translatable("dmls.review.war.cancel_timer"));
-        preview.add(Text.translatable("dmls.review.war.cancel_purge"));
-        preview.add(Text.translatable("dmls.review.war.cancel_restore"));
-        client.setScreen(new DangerReviewScreen(this,
-                Text.translatable("dmls.review.war.cancel_title"), preview,
-                Text.translatable("dmls.button.war.cancel_confirm"),
+        List<Component> preview = new ArrayList<>();
+        preview.add(Component.translatable("dmls.review.war.cancel_claims", war.attacker(), war.defender()));
+        preview.add(Component.literal("/lands admin war end " + war.attacker()));
+        preview.add(Component.translatable("dmls.review.war.cancel_timer"));
+        preview.add(Component.translatable("dmls.review.war.cancel_purge"));
+        preview.add(Component.translatable("dmls.review.war.cancel_restore"));
+        minecraft.gui.setScreen(new DangerReviewScreen(this,
+                Component.translatable("dmls.review.war.cancel_title"), preview,
+                Component.translatable("dmls.button.war.cancel_confirm"),
                 () -> module.isCancelPending(result.token()),
-                () -> module.confirmCancel(client, result.token()),
+                () -> module.confirmCancel(minecraft, result.token()),
                 () -> module.invalidateCancelPending(result.token())));
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
         beginContentScissor(context);
@@ -315,11 +316,11 @@ public final class WarManagerScreen extends DMLSMenuScreen {
         drawTimestampPreview(context);
 
         int y = scaled(WAR_TITLE_TOP);
-        context.drawTextWithShadow(textRenderer, Text.translatable("dmls.war.active.title"),
+        context.text(font, Component.translatable("dmls.war.active.title"),
                 attackerField.getX(), contentY(y), 0xFFFFAA00);
         List<WarView> wars = module.wars();
         if (wars.isEmpty()) {
-            context.drawTextWithShadow(textRenderer, Text.translatable("dmls.war.active.none"),
+            context.text(font, Component.translatable("dmls.war.active.none"),
                     attackerField.getX(), contentY(y + scaled(18)), 0xFFAAAAAA);
         } else {
             long now = System.currentTimeMillis();
@@ -355,18 +356,18 @@ public final class WarManagerScreen extends DMLSMenuScreen {
                         };
                 int lineStep = scaled(11);
                 int lineCount = war.error().isBlank() ? 2 : 3;
-                int textBlockHeight = (lineCount - 1) * lineStep + textRenderer.fontHeight;
+                int textBlockHeight = (lineCount - 1) * lineStep + font.lineHeight;
                 int textY = screenRowY + (rowHeight - textBlockHeight) / 2;
-                context.drawTextWithShadow(textRenderer,
-                        Text.literal(war.attacker() + " vs " + war.defender()),
+                context.text(font,
+                        Component.literal(war.attacker() + " vs " + war.defender()),
                         attackerField.getX() + scaled(WAR_ROW_TEXT_INSET),
                         textY, 0xFFFFFFFF);
-                context.drawTextWithShadow(textRenderer,
-                        Text.literal(war.status().name().toLowerCase().replace('_', ' ') + timer),
+                context.text(font,
+                        Component.literal(war.status().name().toLowerCase().replace('_', ' ') + timer),
                         attackerField.getX() + scaled(WAR_ROW_TEXT_INSET),
                         textY + lineStep, statusColor(war));
                 if (!war.error().isBlank()) {
-                    context.drawTextWithShadow(textRenderer, Text.literal(war.error()),
+                    context.text(font, Component.literal(war.error()),
                             attackerField.getX() + scaled(WAR_ROW_TEXT_INSET),
                             textY + lineStep * 2, 0xFFFF5555);
                 }
@@ -376,37 +377,37 @@ public final class WarManagerScreen extends DMLSMenuScreen {
                     int removeY = screenRowY + (rowHeight - 18) / 2;
                     boolean removeHovered = mouseX >= removeX && mouseX < removeX + 18
                             && mouseY >= removeY && mouseY < removeY + 18;
-                    context.drawGuiTexture(RenderPipelines.GUI_TEXTURED,
+                    context.blitSprite(RenderPipelines.GUI_TEXTURED,
                             removeHovered ? REMOVE_HIGHLIGHTED_TEXTURE : REMOVE_TEXTURE,
                             removeX, removeY, 18, 18);
                 }
             }
         }
         if (!validation.getString().isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, validation, width / 2,
+            context.centeredText(font, validation, width / 2,
                     contentY(scaled(230)), 0xFFFF5555);
         }
         endContentScissor(context);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
         renderClaimSuggestions(context, mouseX, mouseY);
     }
 
-    private void drawLabel(DrawContext context, String key, int x, int offset) {
+    private void drawLabel(GuiGraphicsExtractor context, String key, int x, int offset) {
         int y = contentY(offset);
-        if (isContentVisible(y, textRenderer.fontHeight)) {
-            context.drawTextWithShadow(textRenderer, Text.translatable(key), x, y, 0xFFCCCCCC);
+        if (isContentVisible(y, font.lineHeight)) {
+            context.text(font, Component.translatable(key), x, y, 0xFFCCCCCC);
         }
     }
 
-    private void drawTimestampPreview(DrawContext context) {
+    private void drawTimestampPreview(GuiGraphicsExtractor context) {
         int y = contentY(scaled(132));
-        if (!isContentVisible(y, textRenderer.fontHeight)) return;
-        if (timestampField.getText().isBlank()) return;
-        var parsed = WarTimestampParser.parseEpochMillis(timestampField.getText());
+        if (!isContentVisible(y, font.lineHeight)) return;
+        if (timestampField.getValue().isBlank()) return;
+        var parsed = WarTimestampParser.parseEpochMillis(timestampField.getValue());
         int centerX = timestampField.getX() + timestampField.getWidth() / 2;
         if (parsed.isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer,
-                    Text.translatable("dmls.war.timestamp.hint"), centerX, y, 0xFFAAAAAA);
+            context.centeredText(font,
+                    Component.translatable("dmls.war.timestamp.hint"), centerX, y, 0xFFAAAAAA);
             return;
         }
         long millis = parsed.getAsLong();
@@ -414,28 +415,28 @@ public final class WarManagerScreen extends DMLSMenuScreen {
         String relative = millis > now
                 ? CompactDurationFormatter.formatRemaining(millis - now) + " from now"
                 : CompactDurationFormatter.formatRemaining(now - millis) + " ago";
-        context.drawCenteredTextWithShadow(textRenderer,
-                Text.literal(FULL_TIME.format(Instant.ofEpochMilli(millis)) + " · " + relative),
+        context.centeredText(font,
+                Component.literal(FULL_TIME.format(Instant.ofEpochMilli(millis)) + " · " + relative),
                 centerX, y, millis > now ? 0xFF55FF55 : 0xFFFF5555);
     }
 
     private void requestClaimSuggestions(boolean attacker, String value) {
         long request = attacker ? ++attackerSuggestionRequest : ++defenderSuggestionRequest;
         String input = value == null ? "" : value.trim();
-        if (input.isEmpty() || client == null || client.getNetworkHandler() == null
-                || !client.getNetworkHandler().isConnectionOpen()) {
+        if (input.isEmpty() || minecraft == null || minecraft.getConnection() == null
+                || !minecraft.getConnection().isAcceptingMessages()) {
             setClaimSuggestions(attacker, request, List.of());
             return;
         }
-        String command = "la info " + input;
-        ClientCommandSource source = client.getNetworkHandler().getCommandSource();
-        ParseResults<ClientCommandSource> parse =
-                client.getNetworkHandler().getCommandDispatcher().parse(command, source);
-        client.getNetworkHandler().getCommandDispatcher()
+        String command = "lands info land " + input;
+        ClientSuggestionProvider source = minecraft.getConnection().getSuggestionsProvider();
+        ParseResults<ClientSuggestionProvider> parse =
+                minecraft.getConnection().getCommands().parse(command, source);
+        minecraft.getConnection().getCommands()
                 .getCompletionSuggestions(parse, command.length())
-                .thenAccept(result -> client.execute(() -> {
-                    TextFieldWidget field = attacker ? attackerField : defenderField;
-                    if (field == null || !field.getText().trim().equals(input)) return;
+                .thenAccept(result -> minecraft.execute(() -> {
+                    EditBox field = attacker ? attackerField : defenderField;
+                    if (field == null || !field.getValue().trim().equals(input)) return;
                     List<String> values = result.getList().stream()
                             .map(Suggestion::getText)
                             .filter(suggestion -> !suggestion.isBlank())
@@ -458,7 +459,7 @@ public final class WarManagerScreen extends DMLSMenuScreen {
         }
     }
 
-    private void renderClaimSuggestions(DrawContext context, int mouseX, int mouseY) {
+    private void renderClaimSuggestions(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         SuggestionPopup popup = activeSuggestionPopup();
         if (popup == null) return;
         int rows = popup.values().size();
@@ -473,8 +474,8 @@ public final class WarManagerScreen extends DMLSMenuScreen {
                 context.fill(popup.x(), rowY, popup.x() + popup.width(),
                         rowY + SUGGESTION_ROW_HEIGHT, 0xFF2F2F2F);
             }
-            context.drawTextWithShadow(textRenderer,
-                    Text.literal(textRenderer.trimToWidth(popup.values().get(i),
+            context.text(font,
+                    Component.literal(font.plainSubstrByWidth(popup.values().get(i),
                             popup.width() - 6)),
                     popup.x() + 3, rowY + 2, i == popup.selected() ? 0xFFFFFF55 : 0xFFAAAAAA);
         }
@@ -495,7 +496,7 @@ public final class WarManagerScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         SuggestionPopup popup = activeSuggestionPopup();
         if (popup != null && click.x() >= popup.x() && click.x() < popup.x() + popup.width()
                 && click.y() >= popup.y()
@@ -504,9 +505,9 @@ public final class WarManagerScreen extends DMLSMenuScreen {
             acceptClaimSuggestion(popup.attacker(), index);
             return true;
         }
-        if (click.button() == 0 && dismissCompletedAt(click.x(), click.y())) return true;
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT && dismissCompletedAt(click.x(), click.y())) return true;
         if (super.mouseClicked(click, doubled)) return true;
-        if (click.button() == 0) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             WarView war = scheduledWarAt(click.x(), click.y());
             if (war != null) {
                 selectWar(war);
@@ -521,20 +522,20 @@ public final class WarManagerScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
+    public boolean keyPressed(KeyEvent input) {
         SuggestionPopup popup = activeSuggestionPopup();
         if (popup != null) {
-            if (input.isTab() || input.key() == GLFW.GLFW_KEY_ENTER
-                    || input.key() == GLFW.GLFW_KEY_KP_ENTER) {
+            if (input.isCycleFocus() || input.key() == InputConstants.KEY_RETURN
+                    || input.key() == InputConstants.KEY_NUMPADENTER) {
                 acceptClaimSuggestion(popup.attacker(), popup.selected());
                 return true;
             }
-            if (input.key() == GLFW.GLFW_KEY_DOWN) {
+            if (input.key() == InputConstants.KEY_DOWN) {
                 setSuggestionIndex(popup.attacker(),
                         Math.min(popup.values().size() - 1, popup.selected() + 1));
                 return true;
             }
-            if (input.key() == GLFW.GLFW_KEY_UP) {
+            if (input.key() == InputConstants.KEY_UP) {
                 setSuggestionIndex(popup.attacker(), Math.max(0, popup.selected() - 1));
                 return true;
             }
@@ -550,9 +551,9 @@ public final class WarManagerScreen extends DMLSMenuScreen {
     private void acceptClaimSuggestion(boolean attacker, int index) {
         List<String> values = attacker ? attackerSuggestions : defenderSuggestions;
         if (index < 0 || index >= values.size()) return;
-        TextFieldWidget field = attacker ? attackerField : defenderField;
-        field.setText(values.get(index));
-        field.setCursorToEnd(false);
+        EditBox field = attacker ? attackerField : defenderField;
+        field.setValue(values.get(index));
+        field.moveCursorToEnd(false);
         if (attacker) attackerSuggestions = List.of();
         else defenderSuggestions = List.of();
     }
@@ -569,12 +570,12 @@ public final class WarManagerScreen extends DMLSMenuScreen {
             int removeY = screenRowY + (rowHeight - 18) / 2;
             if (mouseX >= removeX && mouseX < removeX + 18
                     && mouseY >= removeY && mouseY < removeY + 18) {
-                if (module.dismissCompleted(client, war.id())) {
-                    validation = Text.empty();
+                if (module.dismissCompleted(minecraft, war.id())) {
+                    validation = Component.empty();
                     if (selectedWarId.equals(war.id())) selectedWarId = "";
-                    clearAndInit();
+                    rebuildWidgets();
                 } else {
-                    validation = Text.translatable("dmls.validation.war.dismiss");
+                    validation = Component.translatable("dmls.validation.war.dismiss");
                 }
                 return true;
             }
@@ -598,22 +599,22 @@ public final class WarManagerScreen extends DMLSMenuScreen {
 
     private void selectWar(WarView war) {
         selectedWarId = war.id();
-        attackerField.setText(war.attacker());
-        defenderField.setText(war.defender());
-        timestampField.setText("<t:" + war.setupMillis() / 1000L + ":F>");
+        attackerField.setValue(war.attacker());
+        defenderField.setValue(war.defender());
+        timestampField.setValue("<t:" + war.setupMillis() / 1000L + ":F>");
         timeSlider.setMinutes(war.countdownMinutes());
         scheduleButton.setMessage(scheduleLabel());
-        validation = Text.empty();
+        validation = Component.empty();
     }
 
     private void deselectWar() {
         selectedWarId = "";
-        attackerField.setText("");
-        defenderField.setText("");
-        timestampField.setText("");
+        attackerField.setValue("");
+        defenderField.setValue("");
+        timestampField.setValue("");
         timeSlider.setMinutes(0);
         scheduleButton.setMessage(scheduleLabel());
-        validation = Text.empty();
+        validation = Component.empty();
     }
 
     private static int statusColor(WarView war) {
@@ -627,11 +628,11 @@ public final class WarManagerScreen extends DMLSMenuScreen {
         };
     }
 
-    private static final class TimeSlider extends SliderWidget {
+    private static final class TimeSlider extends AbstractSliderButton {
         private int minutes;
 
         private TimeSlider(int x, int y, int width, int height) {
-            super(x, y, width, height, Text.empty(), 0.0);
+            super(x, y, width, height, Component.empty(), 0.0);
             updateMessage();
         }
 
@@ -647,7 +648,7 @@ public final class WarManagerScreen extends DMLSMenuScreen {
 
         @Override
         protected void updateMessage() {
-            setMessage(Text.translatable("dmls.slider.war.time",
+            setMessage(Component.translatable("dmls.slider.war.time",
                     CompactDurationFormatter.formatMinutes(minutes)));
         }
 

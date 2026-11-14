@@ -8,19 +8,17 @@ import com.google.gson.JsonParser;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.Version;
-import net.fabricmc.loader.api.VersionParsingException;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvents;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Checks Modrinth for a newer DMLS release whenever the client joins a world. */
@@ -35,7 +33,7 @@ public final class UpdateChecker {
             .build();
     private static final AtomicLong JOIN_GENERATION = new AtomicLong();
 
-    private static volatile Text notice;
+    private static volatile Component notice;
     private static volatile long noticeUntilMillis;
 
     private UpdateChecker() {
@@ -49,20 +47,20 @@ public final class UpdateChecker {
             noticeUntilMillis = 0L;
         });
 
-        HudElementRegistry.addLast(Identifier.of("dmls", "update_notice"), (context, tickCounter) -> {
-            Text currentNotice = notice;
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("dmls", "update_notice"), (context, tickCounter) -> {
+            Component currentNotice = notice;
             if (currentNotice == null || System.currentTimeMillis() >= noticeUntilMillis) {
                 return;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client.world != null && !client.options.hudHidden) {
-                context.drawTextWithShadow(client.textRenderer, currentNotice, 6, 6, NOTICE_COLOR);
+            Minecraft client = Minecraft.getInstance();
+            if (client.level != null && !client.gui.hud.isHidden()) {
+                context.text(client.font, currentNotice, 6, 6, NOTICE_COLOR);
             }
         });
     }
 
-    private static void checkForUpdate(MinecraftClient client) {
+    private static void checkForUpdate(Minecraft client) {
         long generation = JOIN_GENERATION.incrementAndGet();
         notice = null;
         noticeUntilMillis = 0L;
@@ -94,10 +92,10 @@ public final class UpdateChecker {
                     if (response.statusCode() != 200) {
                         throw new IllegalStateException("Modrinth returned HTTP " + response.statusCode());
                     }
-                    return newestVersion(response.body());
+                    return newerVersionThan(response.body(), currentVersion);
                 })
                 .thenAccept(latestVersion -> {
-                    if (latestVersion != null && isNewer(latestVersion, currentVersion)) {
+                    if (latestVersion != null) {
                         client.execute(() -> showNotice(client, generation, latestVersion));
                     }
                 })
@@ -107,34 +105,43 @@ public final class UpdateChecker {
                 });
     }
 
-    private static String newestVersion(String responseBody) {
+    /**
+     * Returns the version_number of the most recently published release if it was
+     * published after the currently installed version, otherwise null.
+     * Ordering uses Modrinth's publish date, so version-number style doesn't matter.
+     */
+    private static String newerVersionThan(String responseBody, String currentVersion) {
         JsonArray versions = JsonParser.parseString(responseBody).getAsJsonArray();
+
         String newest = null;
-        Version newestParsed = null;
+        Instant newestDate = null;
+        Instant currentDate = null;
 
         for (JsonElement element : versions) {
             JsonObject versionObject = element.getAsJsonObject();
-            String candidate = versionObject.get("version_number").getAsString();
+            String number = versionObject.get("version_number").getAsString();
+            Instant published;
             try {
-                Version parsed = Version.parse(candidate);
-                if (newestParsed == null || parsed.compareTo(newestParsed) > 0) {
-                    newest = candidate;
-                    newestParsed = parsed;
-                }
-            } catch (VersionParsingException error) {
-                DMLS.LOGGER.debug("Ignoring non-semantic Modrinth version '{}'", candidate);
+                published = Instant.parse(versionObject.get("date_published").getAsString());
+            } catch (RuntimeException error) {
+                DMLS.LOGGER.debug("Ignoring Modrinth version '{}' with unreadable date", number);
+                continue;
+            }
+
+            if (number.equals(currentVersion)) {
+                currentDate = published;
+            }
+            if (newestDate == null || published.isAfter(newestDate)) {
+                newest = number;
+                newestDate = published;
             }
         }
-        return newest;
-    }
 
-    private static boolean isNewer(String candidate, String current) {
-        try {
-            return Version.parse(candidate).compareTo(Version.parse(current)) > 0;
-        } catch (VersionParsingException error) {
-            DMLS.LOGGER.warn("Could not compare DMLS versions '{}' and '{}'", candidate, current);
-            return false;
+        if (newest == null || currentDate == null) {
+            // Nothing found, or the running version isn't on Modrinth (e.g. a dev build).
+            return null;
         }
+        return newestDate.isAfter(currentDate) ? newest : null;
     }
 
     private static String minecraftVersionFrom(String version) {
@@ -142,13 +149,13 @@ public final class UpdateChecker {
         return separator >= 0 && separator < version.length() - 1 ? version.substring(separator + 1) : null;
     }
 
-    private static void showNotice(MinecraftClient client, long generation, String latestVersion) {
-        if (generation != JOIN_GENERATION.get() || client.world == null) {
+    private static void showNotice(Minecraft client, long generation, String latestVersion) {
+        if (generation != JOIN_GENERATION.get() || client.level == null) {
             return;
         }
 
-        notice = Text.translatable("dmls.update.available", latestVersion);
+        notice = Component.translatable("dmls.update.available", latestVersion);
         noticeUntilMillis = System.currentTimeMillis() + NOTICE_DURATION_MILLIS;
-        client.getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.BLOCK_NOTE_BLOCK_CHIME, 1.0F));
+        client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_CHIME, 1.0F));
     }
 }

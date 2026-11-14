@@ -9,16 +9,15 @@ import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ServerGuard;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.math.BlockPos;
-
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -89,8 +88,8 @@ public final class LocationsModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.locations.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.locations.name");
     }
 
     @Override
@@ -99,13 +98,13 @@ public final class LocationsModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.locations.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.locations.description"));
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new LocationsScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new LocationsScreen(parent, this));
     }
 
     @Override
@@ -124,7 +123,7 @@ public final class LocationsModule extends DMLSModule {
     }
 
     /** Saves the player's current position under the given name. */
-    public Outcome save(MinecraftClient client, String name) {
+    public Outcome save(Minecraft client, String name) {
         if (!hasRequiredRank(client)) {
             return Outcome.RANK_BLOCKED;
         }
@@ -142,8 +141,8 @@ public final class LocationsModule extends DMLSModule {
             return Outcome.SERVER_BLOCKED;
         }
 
-        BlockPos pos = client.player.getBlockPos();
-        String world = client.world.getRegistryKey().getValue().toString();
+        BlockPos pos = client.player.blockPosition();
+        String world = client.level.dimension().identifier().toString();
         Outcome outcome = storeLocation(trimmed,
                 new SavedLocation(guard.address(), world, pos.getX(), pos.getY(), pos.getZ()));
         if (outcome == Outcome.IO_ERROR) {
@@ -158,7 +157,7 @@ public final class LocationsModule extends DMLSModule {
     }
 
     /** Teleports to the given saved location when its server and dimension match. */
-    public Outcome teleport(MinecraftClient client, String name) {
+    public Outcome teleport(Minecraft client, String name) {
         if (!hasRequiredRank(client)) {
             return Outcome.RANK_BLOCKED;
         }
@@ -186,7 +185,7 @@ public final class LocationsModule extends DMLSModule {
             return Outcome.SERVER_BLOCKED;
         }
 
-        String currentWorld = client.world.getRegistryKey().getValue().toString();
+        String currentWorld = client.level.dimension().identifier().toString();
         TeleportCompatibility compatibility = compatibility(location, guard.address(), currentWorld);
         switch (compatibility) {
             case UNBOUND -> {
@@ -224,7 +223,7 @@ public final class LocationsModule extends DMLSModule {
     }
 
     /** Deletes the given saved location. The previous list remains in memory if persistence fails. */
-    public Outcome delete(MinecraftClient client, String name) {
+    public Outcome delete(Minecraft client, String name) {
         if (!hasRequiredRank(client)) {
             return Outcome.RANK_BLOCKED;
         }
@@ -242,7 +241,7 @@ public final class LocationsModule extends DMLSModule {
     }
 
     /** Lists all saved locations as clickable chat lines. */
-    public void list(MinecraftClient client) {
+    public void list(Minecraft client) {
         if (!hasRequiredRank(client)) {
             return;
         }
@@ -253,15 +252,15 @@ public final class LocationsModule extends DMLSModule {
 
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.locations.header", locations.size());
         locations.forEach((name, location) -> {
-            Text nameText = Text.literal(name).formatted(Formatting.GOLD).styled(style -> style
+            Component nameText = Component.literal(name).withStyle(ChatFormatting.GOLD).withStyle(style -> style
                     .withClickEvent(new ClickEvent.RunCommand("/dmls loc tp " + name))
-                    .withHoverEvent(new HoverEvent.ShowText(Text.translatable("dmls.chat.locations.tp_hover", name))));
-            Text deleteText = Text.translatable("dmls.chat.locations.delete_button").formatted(Formatting.RED).styled(style -> style
+                    .withHoverEvent(new HoverEvent.ShowText(Component.translatable("dmls.chat.locations.tp_hover", name))));
+            Component deleteText = Component.translatable("dmls.chat.locations.delete_button").withStyle(ChatFormatting.RED).withStyle(style -> style
                     .withClickEvent(new ClickEvent.RunCommand("/dmls loc del " + name))
-                    .withHoverEvent(new HoverEvent.ShowText(Text.translatable("dmls.chat.locations.delete_hover", name))));
+                    .withHoverEvent(new HoverEvent.ShowText(Component.translatable("dmls.chat.locations.delete_hover", name))));
             String server = location.isBound() ? location.server() : "unbound";
-            ChatUtils.sendClientMessage(client, Text.literal("§8• ").append(nameText)
-                    .append(Text.literal(" §8(" + location.x() + ", " + location.y() + ", " + location.z()
+            ChatUtils.sendClientMessage(client, Component.literal("§8• ").append(nameText)
+                    .append(Component.literal(" §8(" + location.x() + ", " + location.y() + ", " + location.z()
                             + " in " + location.world() + " @ " + server + ") "))
                     .append(deleteText));
         });

@@ -1,20 +1,18 @@
 package com.duperknight.client.reimbursement;
 
 import com.duperknight.client.utils.PrefixTextFormatter;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.world.World;
-
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.level.Level;
 
 /** Produces the forced-copy Stoneworks reimbursement log. */
 public final class ReimbursementLogFormatter {
@@ -23,7 +21,7 @@ public final class ReimbursementLogFormatter {
     private ReimbursementLogFormatter() {
     }
 
-    public static String format(ReimbursementPlan plan, World world) {
+    public static String format(ReimbursementPlan plan, Level world) {
         ReimbursementDraft.Snapshot draft = plan.draft();
         String discord = draft.discordUsername()
                 + (draft.discordId().isBlank() ? "" : " / " + draft.discordId());
@@ -55,16 +53,16 @@ public final class ReimbursementLogFormatter {
             PrefixTextFormatter.PlainResult parsed = PrefixTextFormatter.plainText(entry.customName());
             if (parsed.valid()) return parsed.text();
         }
-        Item item = Registries.ITEM.get(entry.itemId());
-        return item.getDefaultStack().getName().getString();
+        Item item = BuiltInRegistries.ITEM.getValue(entry.itemId());
+        return item.getDefaultInstance().getHoverName().getString();
     }
 
-    private static String enchantmentName(World world, Identifier id) {
+    private static String enchantmentName(Level world, Identifier id) {
         if (world != null) {
-            var registry = world.getRegistryManager().getOptional(RegistryKeys.ENCHANTMENT);
+            var registry = world.registryAccess().lookup(Registries.ENCHANTMENT);
             if (registry.isPresent()) {
-                RegistryEntry.Reference<Enchantment> entry = registry.get().getEntry(id).orElse(null);
-                if (entry != null) return Enchantment.getName(entry, 1).getString()
+                Holder.Reference<Enchantment> entry = registry.get().get(id).orElse(null);
+                if (entry != null) return Enchantment.getFullname(entry, 1).getString()
                         .replaceAll("\\s+[IVXLCDM]+$", "");
             }
         }

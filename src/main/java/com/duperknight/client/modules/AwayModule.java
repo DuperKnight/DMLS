@@ -13,12 +13,11 @@ import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ServerGuard;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -75,8 +74,8 @@ public final class AwayModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.away.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.away.name");
     }
 
     @Override
@@ -85,13 +84,13 @@ public final class AwayModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.away.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.away.description"));
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new AwayScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new AwayScreen(parent, this));
     }
 
     @Override
@@ -107,7 +106,7 @@ public final class AwayModule extends DMLSModule {
     }
 
     /** Enables BRB mode for the given duration, like 5m, 30s, 1h or 1h30m. */
-    public boolean startBrb(MinecraftClient client, String durationInput) {
+    public boolean startBrb(Minecraft client, String durationInput) {
         OptionalLong duration = parseDurationMillis(durationInput);
         if (duration.isEmpty()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.brb.invalid");
@@ -122,7 +121,7 @@ public final class AwayModule extends DMLSModule {
     }
 
     /** Enables or disables DND mode. */
-    public void setDnd(MinecraftClient client, boolean enabled) {
+    public void setDnd(Minecraft client, boolean enabled) {
         if (!enabled) {
             disable(client);
             return;
@@ -135,7 +134,7 @@ public final class AwayModule extends DMLSModule {
     }
 
     /** Disables any away mode and reports who messaged meanwhile. */
-    public void disable(MinecraftClient client) {
+    public void disable(Minecraft client) {
         if (mode == Mode.OFF) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.already_off");
             return;
@@ -153,7 +152,7 @@ public final class AwayModule extends DMLSModule {
     }
 
     /** Reports the current away status in chat. */
-    public void status(MinecraftClient client) {
+    public void status(Minecraft client) {
         switch (mode) {
             case OFF -> ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.status.off");
             case BRB -> ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.away.status.brb",
@@ -226,7 +225,7 @@ public final class AwayModule extends DMLSModule {
         return result.isEmpty() ? "0s" : result.toString();
     }
 
-    private void tick(MinecraftClient client) {
+    private void tick(Minecraft client) {
         if (mode == Mode.BRB && now() >= brbExpiresAtMillis) {
             disable(client);
         }
@@ -238,7 +237,7 @@ public final class AwayModule extends DMLSModule {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (ClientUtils.isNotConnected(client)) {
             return;
         }
@@ -280,7 +279,7 @@ public final class AwayModule extends DMLSModule {
         tryDispatchPendingReply(client);
     }
 
-    private void tryDispatchPendingReply(MinecraftClient client) {
+    private void tryDispatchPendingReply(Minecraft client) {
         if (pendingReply == null || mode == Mode.OFF || ClientUtils.isNotConnected(client)) return;
         long now = now();
         if (now - lastReplyAtMillis < GLOBAL_REPLY_GAP_MILLIS) return;

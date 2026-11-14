@@ -14,15 +14,14 @@ import com.duperknight.client.session.PendingConfirmation;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ServerGuard;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** Composes CoreProtect lookup, rollback and restore commands from a form instead of memorized syntax. */
 public final class CoreProtectBuilderModule extends DMLSModule {
@@ -86,8 +85,8 @@ public final class CoreProtectBuilderModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.co_builder.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.co_builder.name");
     }
 
     @Override
@@ -96,10 +95,10 @@ public final class CoreProtectBuilderModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
+    public List<Component> description() {
         return List.of(
-                Text.translatable("dmls.module.co_builder.description.1"),
-                Text.translatable("dmls.module.co_builder.description.2")
+                Component.translatable("dmls.module.co_builder.description.1"),
+                Component.translatable("dmls.module.co_builder.description.2")
         );
     }
 
@@ -109,8 +108,8 @@ public final class CoreProtectBuilderModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new CoreProtectBuilderScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new CoreProtectBuilderScreen(parent, this));
     }
 
     @Override
@@ -119,9 +118,9 @@ public final class CoreProtectBuilderModule extends DMLSModule {
     }
 
     /** Opens the builder screen. */
-    public void openScreenDeferred(MinecraftClient client) {
+    public void openScreenDeferred(Minecraft client) {
         // next tick, otherwise the closing chat screen overrides it
-        client.send(() -> client.setScreen(new CoreProtectBuilderScreen(null, this)));
+        client.schedule(() -> client.gui.setScreen(new CoreProtectBuilderScreen(null, this)));
     }
 
     /** Validates the form values and composes the CoreProtect command. */
@@ -206,7 +205,7 @@ public final class CoreProtectBuilderModule extends DMLSModule {
     }
 
     /** Validates a lookup immediately or stages rollback/restore for bounded confirmation. */
-    public SubmissionResult submit(MinecraftClient client, String mode, String user, String time, String radius,
+    public SubmissionResult submit(Minecraft client, String mode, String user, String time, String radius,
                                    String action, String include, String exclude) {
         invalidatePending();
         CommandRequest request = prepare(mode, user, time, radius, action, include, exclude);
@@ -232,7 +231,7 @@ public final class CoreProtectBuilderModule extends DMLSModule {
         return start(client, request);
     }
 
-    public SubmissionResult confirm(MinecraftClient client, String token) {
+    public SubmissionResult confirm(Minecraft client, String token) {
         PendingConfirmation<CommandRequest> pending = pendingConfirmation;
         if (pending == null) {
             return result(SubmissionOutcome.INVALID, invalidRequest(), "", "dmls.screen.confirmation.expired");
@@ -259,7 +258,7 @@ public final class CoreProtectBuilderModule extends DMLSModule {
         if (pendingConfirmation != null && pendingConfirmation.token().equals(token)) invalidatePending();
     }
 
-    public void cancel(MinecraftClient client) {
+    public void cancel(Minecraft client) {
         if (pendingConfirmation != null && pendingConfirmation.isActive()) {
             invalidatePending();
             return;
@@ -267,14 +266,14 @@ public final class CoreProtectBuilderModule extends DMLSModule {
         OperationCoordinator.global().cancel(OPERATION_ID, client);
     }
 
-    public List<Text> previewLines(CommandRequest request) {
+    public List<Component> previewLines(CommandRequest request) {
         return List.of(
-                Text.translatable("dmls.screen.co.review_warning", request.mode()),
-                Text.literal("/" + request.command())
+                Component.translatable("dmls.screen.co.review_warning", request.mode()),
+                Component.literal("/" + request.command())
         );
     }
 
-    private SubmissionResult validateExecution(MinecraftClient client, CommandRequest request) {
+    private SubmissionResult validateExecution(Minecraft client, CommandRequest request) {
         if (!hasRequiredRank(client)) {
             return result(SubmissionOutcome.RANK_BLOCKED, request, "", "dmls.validation.operation.rank_blocked");
         }
@@ -286,7 +285,7 @@ public final class CoreProtectBuilderModule extends DMLSModule {
         return result(SubmissionOutcome.SERVER_BLOCKED, request, "", "dmls.validation.server_blocked");
     }
 
-    private SubmissionResult start(MinecraftClient client, CommandRequest request) {
+    private SubmissionResult start(Minecraft client, CommandRequest request) {
         CoreProtectCommandOperation operation = new CoreProtectCommandOperation(request);
         OperationStartResult started = OperationCoordinator.global().start(
                 client, OPERATION_ID, displayName().getString(), operation);
@@ -326,7 +325,7 @@ public final class CoreProtectBuilderModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             dispatch = handle.dispatchCommand(client, request.command());
             if (dispatch == CommandDispatch.BLOCKED) {
                 handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
@@ -340,7 +339,7 @@ public final class CoreProtectBuilderModule extends DMLSModule {
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             if (dispatch != CommandDispatch.SENT || !request.destructive()) return;
             if (++waitTicks >= RESPONSE_TIMEOUT_TICKS) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.co.unverified", request.mode());
@@ -349,7 +348,7 @@ public final class CoreProtectBuilderModule extends DMLSModule {
         }
 
         @Override
-        public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+        public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
             if (message.origin() != MessageOrigin.SERVER_SYSTEM) return;
             if (dispatch != CommandDispatch.SENT || !request.destructive()) return;
             switch (CoreProtectResponseParser.parse(request.mode(), message.cleanText())) {
@@ -366,7 +365,7 @@ public final class CoreProtectBuilderModule extends DMLSModule {
         }
 
         @Override
-        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+        public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
             if (dispatch == CommandDispatch.BLOCKED) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.command.not_sent");
             } else {

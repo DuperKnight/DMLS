@@ -4,17 +4,16 @@ import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.gui.widgets.RemoveButtonWidget;
 import com.duperknight.client.modules.GreeterMessages;
 import com.duperknight.client.modules.GreeterModule;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.CyclingButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
 
 /** Settings screen for the new player greeter. */
 public final class GreeterScreen extends DMLSMenuScreen {
@@ -25,12 +24,12 @@ public final class GreeterScreen extends DMLSMenuScreen {
 
     private final GreeterModule module;
     private final List<String> messages;
-    private final List<TextFieldWidget> messageFields = new ArrayList<>();
-    private Text saveStatus = Text.empty();
+    private final List<EditBox> messageFields = new ArrayList<>();
+    private Component saveStatus = Component.empty();
     private int saveStatusColor = 0xFFFF5555;
 
     public GreeterScreen(Screen parent, GreeterModule module) {
-        super(Text.translatable("dmls.module.greeter.name"), parent);
+        super(Component.translatable("dmls.module.greeter.name"), parent);
         this.module = module;
         this.messages = new ArrayList<>(module.customMessages());
         if (messages.isEmpty()) {
@@ -50,15 +49,15 @@ public final class GreeterScreen extends DMLSMenuScreen {
         int formX = (width - formWidth) / 2;
         int controlWidth = scaled(200);
         int x = width / 2 - controlWidth / 2;
-        addScrollableChild(CyclingButtonWidget.builder((Boolean value) -> Text.translatable(value ? "dmls.option.on" : "dmls.option.off")
-                        .formatted(value ? Formatting.GREEN : Formatting.RED), module.enabled()).values(true, false)
-                .build(x, contentY(0), controlWidth, STANDARD_BUTTON_HEIGHT, Text.translatable("dmls.module.greeter.toggle"),
+        addScrollableChild(CycleButton.builder((Boolean value) -> Component.translatable(value ? "dmls.option.on" : "dmls.option.off")
+                        .withStyle(value ? ChatFormatting.GREEN : ChatFormatting.RED), module.enabled()).withValues(true, false)
+                .create(x, contentY(0), controlWidth, STANDARD_BUTTON_HEIGHT, Component.translatable("dmls.module.greeter.toggle"),
                         (button, value) -> {
-                            if (module.setEnabled(client, value)) {
-                                saveStatus = Text.empty();
+                            if (module.setEnabled(minecraft, value)) {
+                                saveStatus = Component.empty();
                             } else {
                                 button.setValue(module.enabled());
-                                saveStatus = Text.translatable("dmls.validation.config.save_failed");
+                                saveStatus = Component.translatable("dmls.validation.config.save_failed");
                                 saveStatusColor = 0xFFFF5555;
                             }
                         }), 0);
@@ -72,16 +71,16 @@ public final class GreeterScreen extends DMLSMenuScreen {
                     + index * MESSAGE_ROW_HEIGHT_UNSCALED);
             int fieldOffset = rowOffset + scaled(13);
             int fieldWidth = removable ? formWidth - removeWidth - gap : formWidth;
-            TextFieldWidget field = addScrollableChild(new TextFieldWidget(
-                    textRenderer, formX, contentY(fieldOffset), fieldWidth, STANDARD_BUTTON_HEIGHT,
-                    Text.translatable("dmls.module.greeter.message_field", index + 1)), fieldOffset);
+            EditBox field = addScrollableChild(new EditBox(
+                    font, formX, contentY(fieldOffset), fieldWidth, STANDARD_BUTTON_HEIGHT,
+                    Component.translatable("dmls.module.greeter.message_field", index + 1)), fieldOffset);
             field.setMaxLength(GreeterMessages.MAX_TEMPLATE_LENGTH);
-            field.setText(messages.get(index));
+            field.setValue(messages.get(index));
             updateSuggestion(field);
-            field.setChangedListener(value -> {
+            field.setResponder(value -> {
                 messages.set(messageIndex, value);
                 updateSuggestion(field);
-                saveStatus = Text.empty();
+                saveStatus = Component.empty();
             });
             messageFields.add(field);
 
@@ -93,22 +92,22 @@ public final class GreeterScreen extends DMLSMenuScreen {
             }
         }
 
-        addScrollableChild(ButtonWidget.builder(
-                        Text.translatable("dmls.module.greeter.add_message"), button -> addMessage())
-                .dimensions(formX, contentY(addButtonOffset), formWidth, STANDARD_BUTTON_HEIGHT).build(),
+        addScrollableChild(Button.builder(
+                        Component.translatable("dmls.module.greeter.add_message"), button -> addMessage())
+                .bounds(formX, contentY(addButtonOffset), formWidth, STANDARD_BUTTON_HEIGHT).build(),
                 addButtonOffset);
 
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        addDrawableChild(ButtonWidget.builder(
-                        Text.translatable("dmls.button.save"), button -> saveMessages())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, button -> onClose())
+                .bounds(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(
+                        Component.translatable("dmls.button.save"), button -> saveMessages())
+                .bounds(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
     }
 
     private void addMessage() {
         messages.add("");
-        saveStatus = Text.empty();
-        clearAndInit();
+        saveStatus = Component.empty();
+        rebuildWidgets();
         scrollContentToBottom();
         if (!messageFields.isEmpty()) {
             setFocused(messageFields.get(messageFields.size() - 1));
@@ -118,33 +117,33 @@ public final class GreeterScreen extends DMLSMenuScreen {
     private void removeMessage(int index) {
         if (messages.size() <= 1) return;
         messages.remove(index);
-        saveStatus = Text.empty();
-        clearAndInit();
+        saveStatus = Component.empty();
+        rebuildWidgets();
     }
 
     private void saveMessages() {
         if (GreeterMessages.normalizeTemplates(messages).isEmpty()) {
-            saveStatus = Text.translatable("dmls.validation.greeter.message");
+            saveStatus = Component.translatable("dmls.validation.greeter.message");
             saveStatusColor = 0xFFFF5555;
             return;
         }
         if (module.setCustomMessages(messages)) {
-            saveStatus = Text.translatable("dmls.module.greeter.messages_saved");
+            saveStatus = Component.translatable("dmls.module.greeter.messages_saved");
             saveStatusColor = 0xFF55FF55;
         } else {
-            saveStatus = Text.translatable("dmls.validation.config.save_failed");
+            saveStatus = Component.translatable("dmls.validation.config.save_failed");
             saveStatusColor = 0xFFFF5555;
         }
     }
 
-    private void updateSuggestion(TextFieldWidget field) {
-        field.setSuggestion(field.getText().isEmpty()
-                ? Text.translatable("dmls.module.greeter.message_placeholder").getString()
+    private void updateSuggestion(EditBox field) {
+        field.setSuggestion(field.getValue().isEmpty()
+                ? Component.translatable("dmls.module.greeter.message_placeholder").getString()
                 : null);
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         renderModuleHeader(context, module);
         beginContentScissor(context);
@@ -153,33 +152,33 @@ public final class GreeterScreen extends DMLSMenuScreen {
         for (int index = 0; index < messages.size(); index++) {
             int labelY = contentY(scaled(MESSAGE_START_UNSCALED
                     + index * MESSAGE_ROW_HEIGHT_UNSCALED));
-            if (isContentVisible(labelY, textRenderer.fontHeight)) {
-                context.drawTextWithShadow(textRenderer,
-                        Text.translatable("dmls.module.greeter.message_field", index + 1),
+            if (isContentVisible(labelY, font.lineHeight)) {
+                context.text(font,
+                        Component.translatable("dmls.module.greeter.message_field", index + 1),
                         formX, labelY, 0xFFCCCCCC);
             }
         }
         int addButtonOffset = scaled(MESSAGE_START_UNSCALED
                 + messages.size() * MESSAGE_ROW_HEIGHT_UNSCALED);
         int hintY = contentY(addButtonOffset + scaled(HINT_FIRST_LINE_GAP_UNSCALED));
-        Text variableHint = Text.translatable("dmls.module.greeter.variable_hint",
+        Component variableHint = Component.translatable("dmls.module.greeter.variable_hint",
                 GreeterMessages.PLAYER_VARIABLE);
-        if (isContentVisible(hintY, textRenderer.fontHeight)) {
-            context.drawCenteredTextWithShadow(textRenderer, variableHint,
+        if (isContentVisible(hintY, font.lineHeight)) {
+            context.centeredText(font, variableHint,
                     width / 2, hintY, 0xFFAAAAAA);
         }
         int fallbackY = hintY + scaled(HINT_LINE_SPACING_UNSCALED);
-        if (isContentVisible(fallbackY, textRenderer.fontHeight)) {
-            context.drawCenteredTextWithShadow(textRenderer,
-                    Text.translatable("dmls.module.greeter.default_hint"),
+        if (isContentVisible(fallbackY, font.lineHeight)) {
+            context.centeredText(font,
+                    Component.translatable("dmls.module.greeter.default_hint"),
                     width / 2, fallbackY, 0xFFAAAAAA);
         }
         endContentScissor(context);
 
         if (!saveStatus.getString().isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, saveStatus, width / 2,
+            context.centeredText(font, saveStatus, width / 2,
                     footerButtonY() - scaled(13), saveStatusColor);
         }
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 }

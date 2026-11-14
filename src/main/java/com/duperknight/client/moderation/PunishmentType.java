@@ -1,7 +1,7 @@
 package com.duperknight.client.moderation;
 
 import com.duperknight.client.modules.StaffRank;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
 public enum PunishmentType {
     BAN("dmls.moderation.punishment.ban", "ban", true, StaffRank.MODERATOR, 0xFF9B2020),
@@ -24,7 +24,7 @@ public enum PunishmentType {
         this.accentColor = accentColor;
     }
 
-    public Text displayName() { return Text.translatable(translationKey); }
+    public Component displayName() { return Component.translatable(translationKey); }
     public String command() { return command; }
     public boolean durationRequired() { return durationRequired; }
     public StaffRank minimumRank() { return minimumRank; }

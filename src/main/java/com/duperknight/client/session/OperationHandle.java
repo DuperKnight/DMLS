@@ -2,9 +2,8 @@ package com.duperknight.client.session;
 
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.utils.DMLSConfig;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.Objects;
+import net.minecraft.client.Minecraft;
 
 /** Capability passed to an operation for dispatch, completion, and owner-scoped cancellation. */
 public final class OperationHandle {
@@ -26,11 +25,11 @@ public final class OperationHandle {
         return coordinator.isActive(this);
     }
 
-    public CommandDispatch dispatchCommand(MinecraftClient client, String command) {
+    public CommandDispatch dispatchCommand(Minecraft client, String command) {
         return coordinator.dispatchCommand(this, client, command);
     }
 
-    public CommandDispatch dispatchChatMessage(MinecraftClient client, String message) {
+    public CommandDispatch dispatchChatMessage(Minecraft client, String message) {
         return coordinator.dispatchChatMessage(this, client, message);
     }
 
@@ -53,11 +52,11 @@ public final class OperationHandle {
         return coordinator.complete(this);
     }
 
-    public OperationCancelResult cancel(MinecraftClient client) {
+    public OperationCancelResult cancel(Minecraft client) {
         return coordinator.cancel(this, client, OperationCancelReason.MODULE_REQUESTED);
     }
 
-    public OperationCancelResult cancel(MinecraftClient client, OperationCancelReason reason) {
+    public OperationCancelResult cancel(Minecraft client, OperationCancelReason reason) {
         return coordinator.cancel(this, client, Objects.requireNonNull(reason, "reason"));
     }
 

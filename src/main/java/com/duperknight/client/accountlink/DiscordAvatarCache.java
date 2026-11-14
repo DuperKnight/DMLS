@@ -1,12 +1,11 @@
 package com.duperknight.client.accountlink;
 
 import com.duperknight.DMLS;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.util.Identifier;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.resources.Identifier;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.http.HttpClient;
@@ -45,7 +44,7 @@ public final class DiscordAvatarCache {
                 .whenComplete((path, error) -> IN_FLIGHT.remove(target)));
     }
 
-    public static Identifier loadTexture(MinecraftClient client, DiscordAccountProfile profile) {
+    public static Identifier loadTexture(Minecraft client, DiscordAccountProfile profile) {
         Path path = avatarPath(profile);
         if (!Files.isRegularFile(path)) return null;
         try (InputStream stream = Files.newInputStream(path)) {
@@ -56,8 +55,8 @@ public final class DiscordAvatarCache {
                 return null;
             }
             Identifier identifier = textureIdentifier(profile);
-            client.getTextureManager().registerTexture(identifier,
-                    new NativeImageBackedTexture(() -> "DMLS Discord avatar", image));
+            client.getTextureManager().register(identifier,
+                    new DynamicTexture(() -> "DMLS Discord avatar", image));
             return identifier;
         } catch (IOException | RuntimeException error) {
             DMLS.LOGGER.warn("Could not load the cached Discord avatar", error);
@@ -105,7 +104,7 @@ public final class DiscordAvatarCache {
             if (!validDimensions(image)) throw new IOException("Discord avatar dimensions are invalid");
             Files.createDirectories(target.getParent());
             temporary = Files.createTempFile(target.getParent(), "dmls-discord-avatar-", ".png");
-            image.writeTo(temporary);
+            image.writeToFile(temporary);
             try {
                 Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException ignored) {
@@ -136,7 +135,7 @@ public final class DiscordAvatarCache {
     }
 
     private static Identifier textureIdentifier(DiscordAccountProfile profile) {
-        return Identifier.of(DMLS.MOD_ID, "discord_avatar/" + profile.minecraftUuid() + "_"
+        return Identifier.fromNamespaceAndPath(DMLS.MOD_ID, "discord_avatar/" + profile.minecraftUuid() + "_"
                 + avatarHash(profile.discordAvatarUrl()));
     }
 

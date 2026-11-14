@@ -2,9 +2,6 @@ package com.duperknight.client.reimbursement;
 
 import com.duperknight.client.utils.InputValidators;
 import com.duperknight.client.utils.PrefixTextFormatter;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,6 +11,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
 /** Validated immutable execution snapshot. */
 public record ReimbursementPlan(ReimbursementDraft.Snapshot draft, int requiredStacks) {
@@ -32,8 +31,8 @@ public record ReimbursementPlan(ReimbursementDraft.Snapshot draft, int requiredS
     }
 
     public static Preparation prepare(ReimbursementDraft.Snapshot draft) {
-        return prepare(draft, Registries.ITEM::containsId,
-                id -> Math.max(1, Registries.ITEM.get(id).getDefaultStack().getMaxCount()));
+        return prepare(draft, BuiltInRegistries.ITEM::containsKey,
+                id -> Math.max(1, BuiltInRegistries.ITEM.getValue(id).getDefaultInstance().getMaxStackSize()));
     }
 
     static Preparation prepare(
@@ -139,7 +138,7 @@ public record ReimbursementPlan(ReimbursementDraft.Snapshot draft, int requiredS
 
     public static int stackCount(ItemEntry entry) {
         return stackCount(entry,
-                id -> Math.max(1, Registries.ITEM.get(id).getDefaultStack().getMaxCount()));
+                id -> Math.max(1, BuiltInRegistries.ITEM.getValue(id).getDefaultInstance().getMaxStackSize()));
     }
 
     static int stackCount(ItemEntry entry, ToIntFunction<Identifier> maxStackSize) {

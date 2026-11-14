@@ -1,10 +1,9 @@
 package com.duperknight.client.utils;
 
-import net.minecraft.client.MinecraftClient;
-
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
 
 /** Exact-host (or explicit *.subdomain) allowlist for Stoneworks-specific commands. */
 public final class ServerGuard {
@@ -13,17 +12,17 @@ public final class ServerGuard {
     private ServerGuard() {
     }
 
-    public static GuardResult check(MinecraftClient client) {
-        if (client == null || client.isInSingleplayer()) return new GuardResult(false, "singleplayer", "");
-        if (ClientUtils.isNotConnected(client) || client.getCurrentServerEntry() == null) {
+    public static GuardResult check(Minecraft client) {
+        if (client == null || client.isLocalServer()) return new GuardResult(false, "singleplayer", "");
+        if (ClientUtils.isNotConnected(client) || client.getCurrentServer() == null) {
             return new GuardResult(false, "disconnected", "");
         }
-        String address = normalizeAddress(client.getCurrentServerEntry().address);
+        String address = normalizeAddress(client.getCurrentServer().ip);
         boolean allowed = isAllowed(address, DMLSConfig.allowedServers());
         return new GuardResult(allowed, allowed ? "allowed" : "not_allowed", address);
     }
 
-    public static String connectionIdentity(MinecraftClient client) {
+    public static String connectionIdentity(Minecraft client) {
         GuardResult result = check(client);
         return result.allowed ? result.address : "";
     }

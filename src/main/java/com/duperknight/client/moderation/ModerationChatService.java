@@ -14,12 +14,11 @@ import com.mojang.authlib.GameProfile;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.hud.ChatHud;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
@@ -102,7 +101,7 @@ public final class ModerationChatService {
     }
 
     /** Adds a DMLS-local chat component that bypasses Fabric's receive-message events. */
-    public static void captureClientMessage(Text text) {
+    public static void captureClientMessage(Component text) {
         capture(text, null, false, false);
     }
 
@@ -133,7 +132,7 @@ public final class ModerationChatService {
         return AUTOMATIC_RULE_DETECTOR.snapshot().alertRevision();
     }
 
-    static synchronized void capture(Text text, GameProfile sender, boolean playerEvent, boolean overlay) {
+    static synchronized void capture(Component text, GameProfile sender, boolean playerEvent, boolean overlay) {
         if (text == null || overlay) return;
         String clean = ChatUtils.cleanLine(text.getString());
         if (clean.isEmpty()) return;
@@ -168,15 +167,15 @@ public final class ModerationChatService {
                         senderKey(capturedUuid, capturedIgn, visible), measureBodyLines(body, channel)));
         revision++;
         if (detection.newAlert()) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            if (client != null && client.currentScreen instanceof ModerationScreen screen) {
+            Minecraft client = Minecraft.getInstance();
+            if (client != null && client.gui.screen() instanceof ModerationScreen screen) {
                 screen.onAutomaticRuleAlert(detection.alertRevision());
             }
         }
     }
 
     /** Keeps asynchronously modified vanilla chat lines in sync with the moderation feed. */
-    public static synchronized void replaceRecentText(Text original, Text replacement) {
+    public static synchronized void replaceRecentText(Component original, Component replacement) {
         if (original == null || replacement == null || MESSAGES.isEmpty()) return;
         List<ModerationMessage> messages = new ArrayList<>(MESSAGES);
         int match = findRecentText(messages, original, true);
@@ -188,10 +187,10 @@ public final class ModerationChatService {
         revision++;
     }
 
-    private static int findRecentText(List<ModerationMessage> messages, Text original, boolean identityOnly) {
+    private static int findRecentText(List<ModerationMessage> messages, Component original, boolean identityOnly) {
         String originalString = identityOnly ? null : original.getString();
         for (int index = messages.size() - 1; index >= 0; index--) {
-            Text candidate = messages.get(index).text();
+            Component candidate = messages.get(index).text();
             if (identityOnly ? candidate == original : candidate.getString().equals(originalString)) return index;
         }
         return -1;
@@ -249,7 +248,7 @@ public final class ModerationChatService {
                 : Optional.empty();
     }
 
-    static Optional<String> extractIgnFromClickMetadata(Text text) {
+    static Optional<String> extractIgnFromClickMetadata(Component text) {
         if (text == null) return Optional.empty();
         return text.visit((style, value) -> ignFromStyle(style), Style.EMPTY);
     }
@@ -268,7 +267,7 @@ public final class ModerationChatService {
                 Optional.ofNullable(RESOLVED_IGN_BY_SEQUENCE.get(message.sequence())));
     }
 
-    public static void resolveIgn(MinecraftClient client, ModerationMessage message,
+    public static void resolveIgn(Minecraft client, ModerationMessage message,
                                   Consumer<Optional<String>> callback) {
         Optional<String> known = knownIgn(message);
         if (known.isPresent() || message == null || !message.playerMessage() || DMLSConfig.dryRun()) {
@@ -281,7 +280,7 @@ public final class ModerationChatService {
         }
     }
 
-    public static void resolveUuid(MinecraftClient client, ModerationMessage message,
+    public static void resolveUuid(Minecraft client, ModerationMessage message,
                                    Consumer<Optional<UUID>> callback) {
         resolveIgn(client, message, ign -> {
             if (ign.isEmpty()) {
@@ -315,7 +314,7 @@ public final class ModerationChatService {
         });
     }
 
-    private static synchronized boolean handleRealnameResponse(Text text) {
+    private static synchronized boolean handleRealnameResponse(Component text) {
         if (activeRealname == null || text == null) return false;
         Optional<String> parsed = parseRealnameResponse(activeRealname.visibleUsername(),
                 ChatUtils.cleanLine(text.getString()));
@@ -326,11 +325,11 @@ public final class ModerationChatService {
         activeRealname = null;
         activeRealnameTicks = 0;
         callback.accept(Optional.of(ign));
-        startNextRealname(MinecraftClient.getInstance());
+        startNextRealname(Minecraft.getInstance());
         return true;
     }
 
-    private static synchronized void startNextRealname(MinecraftClient client) {
+    private static synchronized void startNextRealname(Minecraft client) {
         if (activeRealname != null || REALNAME_QUEUE.isEmpty()) return;
         RealnameRequest next = REALNAME_QUEUE.getFirst();
         if (DMLSConfig.dryRun()) {
@@ -359,7 +358,7 @@ public final class ModerationChatService {
         activeRealnameTicks = REALNAME_TIMEOUT_TICKS;
     }
 
-    private static void tick(MinecraftClient client) {
+    private static void tick(Minecraft client) {
         Consumer<Optional<String>> expired = null;
         synchronized (ModerationChatService.class) {
             if (activeRealname != null && --activeRealnameTicks <= 0) {
@@ -423,11 +422,11 @@ public final class ModerationChatService {
     static int measureBodyLines(String body, ChatChannel channel) {
         if (channel == ChatChannel.SERVER || body == null || body.isEmpty()) return 1;
         int lines = body.split("\\R", -1).length;
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.textRenderer == null || client.options == null) return lines;
-        double chatScale = client.options.getChatScale().getValue();
-        int chatWidth = (int) Math.floor(ChatHud.getWidth(client.options.getChatWidth().getValue()) / chatScale);
-        return Math.max(lines, client.textRenderer.wrapLines(Text.literal(body), chatWidth).size());
+        Minecraft client = Minecraft.getInstance();
+        if (client == null || client.font == null || client.options == null) return lines;
+        double chatScale = client.options.chatScale().get();
+        int chatWidth = (int) Math.floor(ChatComponent.getWidth(client.options.chatWidth().get()) / chatScale);
+        return Math.max(lines, client.font.split(Component.literal(body), chatWidth).size());
     }
 
     record ParsedPlayerLine(String visibleUsername, String messageBody) {

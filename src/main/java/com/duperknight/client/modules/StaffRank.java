@@ -1,24 +1,24 @@
 package com.duperknight.client.modules;
 
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 
 /**
  * Represents the Stoneworks staff ranks recognized from the hub scoreboard.
  */
 public enum StaffRank {
-    NONE("dmls.staff_rank.none", Formatting.GRAY, -1),
-    HELPER("dmls.staff_rank.helper", Formatting.AQUA, 0),
-    MODERATOR("dmls.staff_rank.moderator", Formatting.DARK_GREEN, 1),
-    SENIOR_MODERATOR("dmls.staff_rank.senior_moderator", Formatting.GOLD, 2),
-    SUPPORT("dmls.staff_rank.support", Formatting.WHITE, 3),
-    ADMIN("dmls.staff_rank.admin", Formatting.DARK_RED, 4);
+    NONE("dmls.staff_rank.none", ChatFormatting.GRAY, -1),
+    HELPER("dmls.staff_rank.helper", ChatFormatting.AQUA, 0),
+    MODERATOR("dmls.staff_rank.moderator", ChatFormatting.DARK_GREEN, 1),
+    SENIOR_MODERATOR("dmls.staff_rank.senior_moderator", ChatFormatting.GOLD, 2),
+    SUPPORT("dmls.staff_rank.support", ChatFormatting.WHITE, 3),
+    ADMIN("dmls.staff_rank.admin", ChatFormatting.DARK_RED, 4);
 
     private final String translationKey;
-    private final Formatting color;
+    private final ChatFormatting color;
     private final int level;
 
-    StaffRank(String translationKey, Formatting color, int level) {
+    StaffRank(String translationKey, ChatFormatting color, int level) {
         this.translationKey = translationKey;
         this.color = color;
         this.level = level;
@@ -29,8 +29,8 @@ public enum StaffRank {
      *
      * @return the display name of the staff rank
      */
-    public Text displayName() {
-        return Text.translatable(translationKey).formatted(color, Formatting.BOLD);
+    public Component displayName() {
+        return Component.translatable(translationKey).withStyle(color, ChatFormatting.BOLD);
     }
 
     /**

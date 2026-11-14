@@ -4,12 +4,11 @@ import com.duperknight.client.gui.modules.ChatSpamMuteScreen;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import java.util.List;
 
 /** Client-side filter for repetitive trade chat and server messages. */
@@ -19,8 +18,8 @@ public final class ChatSpamMuteModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.chat_spam.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.chat_spam.name");
     }
 
     @Override
@@ -29,8 +28,8 @@ public final class ChatSpamMuteModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.chat_spam.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.chat_spam.description"));
     }
 
     @Override
@@ -39,8 +38,8 @@ public final class ChatSpamMuteModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new ChatSpamMuteScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new ChatSpamMuteScreen(parent, this));
     }
 
     @Override
@@ -49,7 +48,7 @@ public final class ChatSpamMuteModule extends DMLSModule {
         ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> !shouldHide(message));
     }
 
-    private boolean shouldHide(Text message) {
+    private boolean shouldHide(Component message) {
         return shouldHideForCurrentSettings(ChatUtils.cleanLine(message.getString()));
     }
 

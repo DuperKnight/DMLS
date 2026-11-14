@@ -1,9 +1,8 @@
 package com.duperknight.client.session;
 
 import com.duperknight.client.utils.ServerGuard;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.Objects;
+import net.minecraft.client.Minecraft;
 
 /**
  * Identity of the connection on which an operation started.
@@ -24,13 +23,13 @@ public final class ConnectionSnapshot {
         this.connected = connected;
     }
 
-    public static ConnectionSnapshot capture(MinecraftClient client) {
-        if (client == null || client.isInSingleplayer() || client.player == null || client.world == null
-                || client.getNetworkHandler() == null || !client.getNetworkHandler().isConnectionOpen()
-                || client.getCurrentServerEntry() == null) {
+    public static ConnectionSnapshot capture(Minecraft client) {
+        if (client == null || client.isLocalServer() || client.player == null || client.level == null
+                || client.getConnection() == null || !client.getConnection().isAcceptingMessages()
+                || client.getCurrentServer() == null) {
             return DISCONNECTED;
         }
-        return connected(client.getCurrentServerEntry().address, client.getNetworkHandler());
+        return connected(client.getCurrentServer().ip, client.getConnection());
     }
 
     /** Creates a snapshot around a caller-owned identity object, primarily for adapters and tests. */
@@ -62,7 +61,7 @@ public final class ConnectionSnapshot {
                 && networkHandlerIdentity == other.networkHandlerIdentity;
     }
 
-    public boolean matches(MinecraftClient client) {
+    public boolean matches(Minecraft client) {
         return sameConnection(capture(client));
     }
 

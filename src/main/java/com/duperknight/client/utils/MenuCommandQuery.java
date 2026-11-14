@@ -3,21 +3,20 @@ package com.duperknight.client.utils;
 import com.duperknight.client.utils.TooltipUtils.TooltipLine;
 import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.session.ConnectionSnapshot;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
 
 /**
  * Sends a command and waits for the expected menu to open, then reads tooltip data
  * from the configured slots.
  *
  * <p>This helper is tick-based because Minecraft menus do not appear immediately
- * after sending a command. Call {@link #start(MinecraftClient)} once, then call
- * {@link #tick(MinecraftClient)} every client tick until it returns READY or
+ * after sending a command. Call {@link #start(Minecraft)} once, then call
+ * {@link #tick(Minecraft)} every client tick until it returns READY or
  * TIMED_OUT.
  */
 public final class MenuCommandQuery {
@@ -70,12 +69,12 @@ public final class MenuCommandQuery {
      *
      * @param client the Minecraft client
      */
-    public CommandDispatch start(MinecraftClient client) {
+    public CommandDispatch start(Minecraft client) {
         return start(client, ClientUtils::dispatchCommand);
     }
 
     /** Starts using an operation-owned dispatcher with captured dry-run and connection state. */
-    public CommandDispatch start(MinecraftClient client, CommandDispatcher dispatcher) {
+    public CommandDispatch start(Minecraft client, CommandDispatcher dispatcher) {
         previousSyncId = environment.currentSyncId(client);
         waitTicks = 0;
         started = true;
@@ -97,7 +96,7 @@ public final class MenuCommandQuery {
      * @param client the Minecraft client
      * @return the result of the tick operation
      */
-    public TickResult tick(MinecraftClient client) {
+    public TickResult tick(Minecraft client) {
         if (!started) {
             start(client);
         }
@@ -206,34 +205,34 @@ public final class MenuCommandQuery {
 
     @FunctionalInterface
     public interface CommandDispatcher {
-        CommandDispatch dispatch(MinecraftClient client, String command);
+        CommandDispatch dispatch(Minecraft client, String command);
     }
 
     interface Environment {
         Environment DEFAULT = new Environment() {
             @Override
-            public int currentSyncId(MinecraftClient client) {
+            public int currentSyncId(Minecraft client) {
                 return ScreenUtils.currentSyncId(client);
             }
 
             @Override
-            public ConnectionSnapshot connection(MinecraftClient client) {
+            public ConnectionSnapshot connection(Minecraft client) {
                 return ConnectionSnapshot.capture(client);
             }
 
             @Override
-            public Optional<ScreenUtils.ScreenSnapshot> readSlot(MinecraftClient client, int slotIndex,
+            public Optional<ScreenUtils.ScreenSnapshot> readSlot(Minecraft client, int slotIndex,
                                                                   String expectedTitle, int previousSyncId,
                                                                   int waitTicks) {
                 return ScreenUtils.readSlot(client, slotIndex, expectedTitle, previousSyncId, waitTicks);
             }
         };
 
-        int currentSyncId(MinecraftClient client);
+        int currentSyncId(Minecraft client);
 
-        ConnectionSnapshot connection(MinecraftClient client);
+        ConnectionSnapshot connection(Minecraft client);
 
-        Optional<ScreenUtils.ScreenSnapshot> readSlot(MinecraftClient client, int slotIndex,
+        Optional<ScreenUtils.ScreenSnapshot> readSlot(Minecraft client, int slotIndex,
                                                        String expectedTitle, int previousSyncId, int waitTicks);
     }
 }

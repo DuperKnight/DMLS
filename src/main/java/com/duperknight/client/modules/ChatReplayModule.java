@@ -10,14 +10,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -62,7 +61,7 @@ public final class ChatReplayModule extends DMLSModule {
     private static int currentMessageCount;
 
     /** One captured chat line with its arrival time. */
-    public record Entry(String time, Text text, String cleanText) {
+    public record Entry(String time, Component text, String cleanText) {
     }
 
     /** Lightweight session metadata; message contents remain on disk until a chunk is requested. */
@@ -83,8 +82,8 @@ public final class ChatReplayModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.chat_replay.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.chat_replay.name");
     }
 
     @Override
@@ -93,18 +92,18 @@ public final class ChatReplayModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.chat_replay.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.chat_replay.description"));
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new ChatReplayScreen(parent, this, ""));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new ChatReplayScreen(parent, this, ""));
     }
 
     /** Opens the replay screen with a prefilled filter. */
-    public void openScreenWithFilter(MinecraftClient client, String filter) {
-        client.send(() -> client.setScreen(new ChatReplayScreen(null, this, filter)));
+    public void openScreenWithFilter(Minecraft client, String filter) {
+        client.schedule(() -> client.gui.setScreen(new ChatReplayScreen(null, this, filter)));
     }
 
     @Override
@@ -338,7 +337,7 @@ public final class ChatReplayModule extends DMLSModule {
         entry.text().visit((style, value) -> {
             JsonObject segment = new JsonObject();
             segment.addProperty("value", value);
-            if (style.getColor() != null) segment.addProperty("color", style.getColor().getRgb());
+            if (style.getColor() != null) segment.addProperty("color", style.getColor().getValue());
             if (style.isBold()) segment.addProperty("bold", true);
             if (style.isItalic()) segment.addProperty("italic", true);
             if (style.isUnderlined()) segment.addProperty("underlined", true);
@@ -355,17 +354,17 @@ public final class ChatReplayModule extends DMLSModule {
         try {
             JsonObject object = JsonParser.parseString(line).getAsJsonObject();
             String cleanText = object.get("cleanText").getAsString();
-            MutableText text = Text.empty();
+            MutableComponent text = Component.empty();
             for (var element : object.getAsJsonArray("segments")) {
                 JsonObject segment = element.getAsJsonObject();
                 Style style = Style.EMPTY;
                 if (segment.has("color")) style = style.withColor(segment.get("color").getAsInt());
                 if (segment.has("bold")) style = style.withBold(true);
                 if (segment.has("italic")) style = style.withItalic(true);
-                if (segment.has("underlined")) style = style.withUnderline(true);
+                if (segment.has("underlined")) style = style.withUnderlined(true);
                 if (segment.has("strikethrough")) style = style.withStrikethrough(true);
                 if (segment.has("obfuscated")) style = style.withObfuscated(true);
-                text.append(Text.literal(segment.get("value").getAsString()).setStyle(style));
+                text.append(Component.literal(segment.get("value").getAsString()).setStyle(style));
             }
             return Optional.of(new Entry(object.get("time").getAsString(), text, cleanText));
         } catch (RuntimeException e) {

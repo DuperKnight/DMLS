@@ -4,27 +4,24 @@ import com.duperknight.DMLS;
 import com.duperknight.client.feedback.FeedbackService;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.gui.widgets.SettingsToggleWidget;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.EditBoxWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
+import com.mojang.blaze3d.platform.NativeImage;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.MultiLineEditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 
 /** Form for sending optional screenshots and diagnostics to the DMLS feedback API. */
 public final class FeedbackScreen extends DMLSMenuScreen {
@@ -37,18 +34,18 @@ public final class FeedbackScreen extends DMLSMenuScreen {
     private static final int SUCCESS_COLOR = 0xFF77FF99;
 
     private final Draft draft = new Draft();
-    private TextFieldWidget titleField;
-    private EditBoxWidget descriptionField;
-    private ButtonWidget submitButton;
-    private ButtonWidget screenshotButton;
-    private ButtonWidget removeScreenshotButton;
+    private EditBox titleField;
+    private MultiLineEditBox descriptionField;
+    private Button submitButton;
+    private Button screenshotButton;
+    private Button removeScreenshotButton;
     private Path screenshot;
     private Identifier screenshotTexture;
     private int screenshotWidth;
     private int screenshotHeight;
     private String screenshotError = "";
     private boolean submitting;
-    private Text status;
+    private Component status;
     private int statusColor = STATUS_COLOR;
     private int formX;
     private int formWidth;
@@ -62,7 +59,7 @@ public final class FeedbackScreen extends DMLSMenuScreen {
     private int baseContentHeight;
 
     public FeedbackScreen(Screen parent) {
-        super(Text.translatable("dmls.feedback.screen.title"), parent);
+        super(Component.translatable("dmls.feedback.screen.title"), parent);
     }
 
     @Override
@@ -80,96 +77,96 @@ public final class FeedbackScreen extends DMLSMenuScreen {
         baseContentHeight = statusOffset + scaled(21);
         configureScrollableContent(contentTop, contentBottom, baseContentHeight);
 
-        titleField = addScrollableChild(new TextFieldWidget(textRenderer, formX, contentY(scaled(13)),
-                formWidth, STANDARD_BUTTON_HEIGHT, Text.translatable("dmls.feedback.title")), scaled(13));
+        titleField = addScrollableChild(new EditBox(font, formX, contentY(scaled(13)),
+                formWidth, STANDARD_BUTTON_HEIGHT, Component.translatable("dmls.feedback.title")), scaled(13));
         titleField.setMaxLength(120);
-        titleField.setPlaceholder(Text.translatable("dmls.feedback.title.placeholder"));
-        titleField.setText(draft.title);
-        titleField.setChangedListener(value -> {
+        titleField.setHint(Component.translatable("dmls.feedback.title.placeholder"));
+        titleField.setValue(draft.title);
+        titleField.setResponder(value -> {
             draft.title = value;
             updateSubmitState();
         });
 
         addScrollableDropdownChild(DropdownWidget.builder(
-                        Text.translatable("dmls.feedback.category"), CATEGORIES, draft.category,
-                        Text::literal, (dropdown, value) -> draft.category = value)
+                        Component.translatable("dmls.feedback.category"), CATEGORIES, draft.category,
+                        Component::literal, (dropdown, value) -> draft.category = value)
                 .dimensions(formX, contentY(scaled(59)), formWidth, STANDARD_BUTTON_HEIGHT)
                 .maxVisibleRows(5)
                 .showOptionLabel(true)
                 .build(), scaled(59));
 
-        int emptyGroupHeight = textRenderer.fontHeight + scaled(12) + STANDARD_BUTTON_HEIGHT;
+        int emptyGroupHeight = font.lineHeight + scaled(12) + STANDARD_BUTTON_HEIGHT;
         int emptyGroupTop = screenshotY + (screenshotPanelHeight - emptyGroupHeight) / 2;
-        int screenshotButtonOffset = emptyGroupTop + textRenderer.fontHeight + scaled(12);
-        screenshotButton = addScrollableChild(ButtonWidget.builder(
-                        Text.translatable("dmls.feedback.screenshot.select"),
-                        ignored -> openScreenshotPicker())
-                .dimensions(formX + formWidth / 2 - scaled(75),
-                        contentY(screenshotButtonOffset),
-                        scaled(150), STANDARD_BUTTON_HEIGHT).build(),
+        int screenshotButtonOffset = emptyGroupTop + font.lineHeight + scaled(12);
+        screenshotButton = addScrollableChild(Button.builder(
+                                Component.translatable("dmls.feedback.screenshot.select"),
+                                ignored -> openScreenshotPicker())
+                        .bounds(formX + formWidth / 2 - scaled(75),
+                                contentY(screenshotButtonOffset),
+                                scaled(150), STANDARD_BUTTON_HEIGHT).build(),
                 screenshotButtonOffset);
         setScrollableChildEnabled(screenshotButton, screenshot == null);
 
         int removeSize = scaled(16);
         int removeOffset = screenshotY + scaled(4);
-        removeScreenshotButton = addScrollableChild(ButtonWidget.builder(Text.literal("×"),
+        removeScreenshotButton = addScrollableChild(Button.builder(Component.literal("×"),
                         ignored -> removeScreenshot())
-                .dimensions(
-                formX + formWidth - removeSize - scaled(5), contentY(removeOffset),
-                removeSize, removeSize).build(), removeOffset);
+                .bounds(
+                        formX + formWidth - removeSize - scaled(5), contentY(removeOffset),
+                        removeSize, removeSize).build(), removeOffset);
         setScrollableChildEnabled(removeScreenshotButton, screenshot != null);
 
-        SettingsToggleWidget diagnostics = new SettingsToggleWidget(textRenderer,
+        SettingsToggleWidget diagnostics = new SettingsToggleWidget(font,
                 formX, contentY(diagnosticsOffset), formWidth,
-                Text.translatable("dmls.feedback.include_diagnostics"), draft.includeDiagnostics,
+                Component.translatable("dmls.feedback.include_diagnostics"), draft.includeDiagnostics,
                 checked -> draft.includeDiagnostics = checked);
         addScrollableChild(diagnostics, diagnosticsOffset);
 
-        descriptionField = EditBoxWidget.builder().x(formX).y(contentY(descriptionOffset))
-                .placeholder(Text.translatable("dmls.feedback.description.placeholder"))
-                .build(textRenderer, formWidth, scaled(68), Text.translatable("dmls.feedback.description"));
-        descriptionField.setMaxLength(2_000);
-        descriptionField.setText(draft.description);
-        descriptionField.setChangeListener(value -> {
+        descriptionField = MultiLineEditBox.builder().setX(formX).setY(contentY(descriptionOffset))
+                .setPlaceholder(Component.translatable("dmls.feedback.description.placeholder"))
+                .build(font, formWidth, scaled(68), Component.translatable("dmls.feedback.description"));
+        descriptionField.setCharacterLimit(2_000);
+        descriptionField.setValue(draft.description);
+        descriptionField.setValueListener(value -> {
             draft.description = value;
             updateSubmitState();
         });
         addScrollableChild(descriptionField, descriptionOffset);
 
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, ignored -> close())
-                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        submitButton = addDrawableChild(ButtonWidget.builder(
-                        Text.translatable("dmls.feedback.submit"), ignored -> submit())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, ignored -> onClose())
+                .bounds(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        submitButton = addRenderableWidget(Button.builder(
+                        Component.translatable("dmls.feedback.submit"), ignored -> submit())
+                .bounds(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         updateSubmitState();
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2,
+        context.centeredText(font, title, width / 2,
                 headerHeight() + scaled(16), 0xFFFFFFFF);
 
-        int statusLineCount = status == null ? 0 : textRenderer.wrapLines(status, formWidth).size();
+        int statusLineCount = status == null ? 0 : font.split(status, formWidth).size();
         updateScrollableContentHeight(baseContentHeight + statusLineCount * scaled(11));
         beginContentScissor(context);
-        drawLabel(context, Text.translatable("dmls.feedback.title"), contentY(0));
-        drawLabel(context, Text.translatable("dmls.feedback.category"), contentY(scaled(46)));
+        drawLabel(context, Component.translatable("dmls.feedback.title"), contentY(0));
+        drawLabel(context, Component.translatable("dmls.feedback.category"), contentY(scaled(46)));
         renderScreenshotPanel(context);
-        drawLabel(context, Text.translatable("dmls.feedback.description"), contentY(commentaryLabelOffset));
+        drawLabel(context, Component.translatable("dmls.feedback.description"), contentY(commentaryLabelOffset));
         if (status != null) {
             int statusY = contentY(statusOffset);
-            List<OrderedText> lines = textRenderer.wrapLines(status, formWidth);
-            for (OrderedText line : lines) {
-                context.drawCenteredTextWithShadow(textRenderer, line, width / 2, statusY, statusColor);
+            List<FormattedCharSequence> lines = font.split(status, formWidth);
+            for (FormattedCharSequence line : lines) {
+                context.centeredText(font, line, width / 2, statusY, statusColor);
                 statusY += scaled(11);
             }
         }
         endContentScissor(context);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
-    private void renderScreenshotPanel(DrawContext context) {
+    private void renderScreenshotPanel(GuiGraphicsExtractor context) {
         int y = contentY(screenshotY);
         renderPanel(context, formX, y, formWidth, screenshotPanelHeight);
         if (screenshotTexture != null) {
@@ -182,43 +179,41 @@ public final class FeedbackScreen extends DMLSMenuScreen {
             int renderHeight = Math.max(1, (int) Math.round(screenshotHeight * scale));
             int imageX = formX + (formWidth - renderWidth) / 2;
             int imageY = y + (screenshotPanelHeight - renderHeight) / 2;
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, screenshotTexture,
+            context.blit(RenderPipelines.GUI_TEXTURED, screenshotTexture,
                     imageX, imageY, 0, 0, renderWidth, renderHeight,
                     screenshotWidth, screenshotHeight, screenshotWidth, screenshotHeight);
         } else if (screenshot == null) {
-            Text hint = screenshotError.isBlank()
-                    ? Text.translatable("dmls.feedback.screenshot.optional")
-                    : Text.literal(screenshotError);
-            int emptyGroupHeight = textRenderer.fontHeight + scaled(12) + STANDARD_BUTTON_HEIGHT;
+            Component hint = screenshotError.isBlank()
+                    ? Component.translatable("dmls.feedback.screenshot.optional")
+                    : Component.literal(screenshotError);
+            int emptyGroupHeight = font.lineHeight + scaled(12) + STANDARD_BUTTON_HEIGHT;
             int hintY = y + (screenshotPanelHeight - emptyGroupHeight) / 2;
-            context.drawCenteredTextWithShadow(textRenderer, hint, width / 2,
+            context.centeredText(font, hint, width / 2,
                     hintY, screenshotError.isBlank() ? 0xFFAAAAAA : ERROR_COLOR);
         }
     }
 
-    private void drawLabel(DrawContext context, Text label, int y) {
-        context.drawTextWithShadow(textRenderer, label, formX, y, 0xFFDDDDDD);
+    private void drawLabel(GuiGraphicsExtractor context, Component label, int y) {
+        context.text(font, label, formX, y, 0xFFDDDDDD);
     }
 
+    /** The native file dialog is gone in 26.3 (SDL), so screenshots are attached by dropping them on the window. */
     private void openScreenshotPicker() {
-        screenshotButton.active = false;
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            PointerBuffer filters = stack.mallocPointer(4);
-            filters.put(stack.UTF8("*.png"));
-            filters.put(stack.UTF8("*.jpg"));
-            filters.put(stack.UTF8("*.jpeg"));
-            filters.put(stack.UTF8("*.webp"));
-            filters.flip();
-            String selected = TinyFileDialogs.tinyfd_openFileDialog(
-                    Text.translatable("dmls.feedback.screenshot.dialog").getString(),
-                    null, filters, "Images (*.png, *.jpg, *.jpeg, *.webp)", false);
-            if (selected != null) selectScreenshot(Path.of(selected).toAbsolutePath().normalize());
-        } catch (RuntimeException | UnsatisfiedLinkError exception) {
-            DMLS.LOGGER.warn("Could not open the operating system screenshot picker", exception);
-            setStatus(Text.translatable("dmls.feedback.screenshot.picker_unavailable"), ERROR_COLOR);
-        } finally {
-            screenshotButton.active = true;
+        setStatus(Component.translatable("dmls.feedback.screenshot.drop_hint"), STATUS_COLOR);
+    }
+
+    @Override
+    public void onFilesDrop(List<Path> paths) {
+        if (screenshot != null) return;
+        for (Path path : paths) {
+            String lower = path.getFileName().toString().toLowerCase(Locale.ROOT);
+            if (lower.endsWith(".png") || lower.endsWith(".jpg")
+                    || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
+                selectScreenshot(path.toAbsolutePath().normalize());
+                return;
+            }
         }
+        screenshotError = Component.translatable("dmls.feedback.screenshot.invalid").getString();
     }
 
     private void selectScreenshot(Path selected) {
@@ -228,7 +223,7 @@ public final class FeedbackScreen extends DMLSMenuScreen {
         try {
             long size = Files.size(selected);
             if (size <= 0 || size > FeedbackService.MAX_SCREENSHOT_BYTES) {
-                screenshotError = Text.translatable("dmls.feedback.screenshot.too_large").getString();
+                screenshotError = Component.translatable("dmls.feedback.screenshot.too_large").getString();
                 return;
             }
             byte[] encoded = Files.readAllBytes(selected);
@@ -236,10 +231,10 @@ public final class FeedbackScreen extends DMLSMenuScreen {
                 NativeImage image = NativeImage.read(encoded);
                 screenshotWidth = image.getWidth();
                 screenshotHeight = image.getHeight();
-                screenshotTexture = Identifier.of(DMLS.MOD_ID,
+                screenshotTexture = Identifier.fromNamespaceAndPath(DMLS.MOD_ID,
                         "feedback/preview_" + Integer.toUnsignedString(selected.hashCode(), 36));
-                client.getTextureManager().registerTexture(screenshotTexture,
-                        new NativeImageBackedTexture(() -> "DMLS feedback screenshot preview", image));
+                minecraft.getTextureManager().register(screenshotTexture,
+                        new DynamicTexture(() -> "DMLS feedback screenshot preview", image));
             } catch (IOException previewFailure) {
                 // NativeImage cannot preview every accepted WebP image, but the service validates its signature.
                 String lower = selected.getFileName().toString().toLowerCase(Locale.ROOT);
@@ -251,7 +246,7 @@ public final class FeedbackScreen extends DMLSMenuScreen {
             clearStatus();
         } catch (IOException | RuntimeException exception) {
             DMLS.LOGGER.warn("Could not load feedback screenshot '{}'", selected, exception);
-            screenshotError = Text.translatable("dmls.feedback.screenshot.invalid").getString();
+            screenshotError = Component.translatable("dmls.feedback.screenshot.invalid").getString();
         }
     }
 
@@ -267,30 +262,30 @@ public final class FeedbackScreen extends DMLSMenuScreen {
     private void submit() {
         if (submitting) return;
         submitting = true;
-        submitButton.setMessage(Text.translatable("dmls.feedback.submitting"));
+        submitButton.setMessage(Component.translatable("dmls.feedback.submitting"));
         updateSubmitState();
-        setStatus(Text.translatable("dmls.feedback.submitting_hint"), STATUS_COLOR);
+        setStatus(Component.translatable("dmls.feedback.submitting_hint"), STATUS_COLOR);
         FeedbackService.Submission submission = new FeedbackService.Submission(
                 draft.title, draft.category, draft.description, screenshot, draft.includeDiagnostics);
         FeedbackService.submit(submission).thenAccept(result -> {
-            if (client != null) client.execute(() -> applyResult(result));
+            if (minecraft != null) minecraft.execute(() -> applyResult(result));
         });
     }
 
     private void applyResult(FeedbackService.Result result) {
         submitting = false;
-        submitButton.setMessage(Text.translatable("dmls.feedback.submit"));
+        submitButton.setMessage(Component.translatable("dmls.feedback.submit"));
         updateSubmitState();
         if (result.succeeded()) {
             draft.title = "";
             draft.description = "";
-            titleField.setText("");
-            descriptionField.setText("");
+            titleField.setValue("");
+            descriptionField.setValue("");
             removeScreenshot();
-            setStatus(Text.translatable("dmls.feedback.success", result.feedbackId()), SUCCESS_COLOR);
+            setStatus(Component.translatable("dmls.feedback.success", result.feedbackId()), SUCCESS_COLOR);
             return;
         }
-        setStatus(Text.literal(result.message()), ERROR_COLOR);
+        setStatus(Component.literal(result.message()), ERROR_COLOR);
     }
 
     private void updateSubmitState() {
@@ -301,7 +296,7 @@ public final class FeedbackScreen extends DMLSMenuScreen {
         }
     }
 
-    private void setStatus(Text message, int color) {
+    private void setStatus(Component message, int color) {
         status = message;
         statusColor = color;
     }
@@ -312,8 +307,8 @@ public final class FeedbackScreen extends DMLSMenuScreen {
     }
 
     private void releaseScreenshotTexture() {
-        if (screenshotTexture != null && client != null) {
-            client.getTextureManager().destroyTexture(screenshotTexture);
+        if (screenshotTexture != null && minecraft != null) {
+            minecraft.getTextureManager().release(screenshotTexture);
         }
         screenshotTexture = null;
         screenshotWidth = 0;

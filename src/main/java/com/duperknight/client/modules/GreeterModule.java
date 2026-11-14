@@ -8,15 +8,14 @@ import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.InputValidators;
 import com.duperknight.client.utils.ServerGuard;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -52,8 +51,8 @@ public final class GreeterModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.greeter.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.greeter.name");
     }
 
     @Override
@@ -62,13 +61,13 @@ public final class GreeterModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.greeter.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.greeter.description"));
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new GreeterScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new GreeterScreen(parent, this));
     }
 
     @Override
@@ -81,7 +80,7 @@ public final class GreeterModule extends DMLSModule {
     }
 
     /** Enables or disables first-join prompts and saves the preference. */
-    public boolean setEnabled(MinecraftClient client, boolean enabled) {
+    public boolean setEnabled(Minecraft client, boolean enabled) {
         if (!DMLSConfig.setGreeterEnabled(enabled)) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.config.save_failed");
             return false;
@@ -108,7 +107,7 @@ public final class GreeterModule extends DMLSModule {
     }
 
     /** Sends the public welcome message for the given player. */
-    public CommandDispatch greet(MinecraftClient client, String ign) {
+    public CommandDispatch greet(Minecraft client, String ign) {
         if (!InputValidators.isUsername(ign)) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.common.invalid_ign");
             return CommandDispatch.BLOCKED;
@@ -129,17 +128,17 @@ public final class GreeterModule extends DMLSModule {
         return result;
     }
 
-    private Text appendWelcomeAction(Text message, boolean overlay) {
+    private Component appendWelcomeAction(Component message, boolean overlay) {
         if (overlay || !enabled() || !isAvailableToDetectedRank()) {
             return message;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (ClientUtils.isNotConnected(client) || !ServerGuard.check(client).allowed()) {
             resetPromptCache();
             return message;
         }
-        Object currentConnection = client.getNetworkHandler();
+        Object currentConnection = client.getConnection();
         if (promptConnectionIdentity != currentConnection) {
             recentPrompts.clear();
             promptConnectionIdentity = currentConnection;
@@ -159,10 +158,10 @@ public final class GreeterModule extends DMLSModule {
             return message;
         }
 
-        Text button = Text.translatable("dmls.chat.greeter.button").formatted(Formatting.GREEN)
-                .styled(style -> style
+        Component button = Component.translatable("dmls.chat.greeter.button").withStyle(ChatFormatting.GREEN)
+                .withStyle(style -> style
                         .withClickEvent(new ClickEvent.RunCommand("/dmls greet " + name))
-                        .withHoverEvent(new HoverEvent.ShowText(Text.translatable("dmls.chat.greeter.button.hover", name))));
+                        .withHoverEvent(new HoverEvent.ShowText(Component.translatable("dmls.chat.greeter.button.hover", name))));
         return message.copy().append(" ").append(button);
     }
 

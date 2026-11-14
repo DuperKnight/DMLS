@@ -3,10 +3,9 @@ package com.duperknight.client.utils;
 import com.duperknight.DMLS;
 import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.session.ConnectionSnapshot;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-
 import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 
 /**
  * Utility methods for interacting with the Minecraft client.
@@ -23,12 +22,12 @@ public final class ClientUtils {
      * @param client the Minecraft client
      * @return true if the client is not connected, false otherwise
      */
-    public static boolean isNotConnected(MinecraftClient client) {
+    public static boolean isNotConnected(Minecraft client) {
         return client == null
                 || client.player == null
-                || client.world == null
-                || client.getNetworkHandler() == null
-                || !client.getNetworkHandler().isConnectionOpen();
+                || client.level == null
+                || client.getConnection() == null
+                || !client.getConnection().isAcceptingMessages();
     }
 
     /**
@@ -38,11 +37,11 @@ public final class ClientUtils {
      * @param client the Minecraft client
      * @return the known online player names, or an empty list when disconnected
      */
-    public static List<String> getOnlinePlayerNames(MinecraftClient client) {
-        ClientPlayNetworkHandler networkHandler = client == null ? null : client.getNetworkHandler();
-        if (networkHandler == null || !networkHandler.isConnectionOpen()) return List.of();
+    public static List<String> getOnlinePlayerNames(Minecraft client) {
+        ClientPacketListener networkHandler = client == null ? null : client.getConnection();
+        if (networkHandler == null || !networkHandler.isAcceptingMessages()) return List.of();
 
-        return networkHandler.getPlayerList().stream()
+        return networkHandler.getOnlinePlayers().stream()
                 .map(entry -> entry.getProfile().name())
                 .toList();
     }
@@ -53,12 +52,12 @@ public final class ClientUtils {
      * @param client the Minecraft client
      * @param command the command to send
      */
-    public static boolean sendCommand(MinecraftClient client, String command) {
+    public static boolean sendCommand(Minecraft client, String command) {
         return dispatchCommand(client, command).accepted();
     }
 
     /** Dispatches a one-shot command using the dry-run state observed at this call. */
-    public static CommandDispatch dispatchCommand(MinecraftClient client, String command) {
+    public static CommandDispatch dispatchCommand(Minecraft client, String command) {
         return dispatchCommand(client, command, DMLSConfig.dryRun(), ConnectionSnapshot.capture(client),
                 DryRunFeedback.COMMAND_PREVIEW);
     }
@@ -68,7 +67,7 @@ public final class ClientUtils {
      * dry-run setting, and the expected connection protects against same-host reconnects.
      */
     public static CommandDispatch dispatchCommand(
-            MinecraftClient client,
+            Minecraft client,
             String command,
             boolean dryRunCaptured,
             ConnectionSnapshot expectedConnection
@@ -79,7 +78,7 @@ public final class ClientUtils {
 
     /** Dispatches with an explicit dry-run reporting policy. */
     public static CommandDispatch dispatchCommand(
-            MinecraftClient client,
+            Minecraft client,
             String command,
             boolean dryRunCaptured,
             ConnectionSnapshot expectedConnection,
@@ -96,12 +95,12 @@ public final class ClientUtils {
             }
             return CommandDispatch.SIMULATED;
         }
-        if (!ServerGuard.check(client).allowed() || client.getNetworkHandler() == null
-                || !client.getNetworkHandler().isConnectionOpen()) {
+        if (!ServerGuard.check(client).allowed() || client.getConnection() == null
+                || !client.getConnection().isAcceptingMessages()) {
             return CommandDispatch.BLOCKED;
         }
         try {
-            client.getNetworkHandler().sendChatCommand(command);
+            client.getConnection().sendCommand(command);
             return CommandDispatch.SENT;
         } catch (RuntimeException exception) {
             DMLS.LOGGER.warn("Failed to dispatch a guarded command", exception);
@@ -115,18 +114,18 @@ public final class ClientUtils {
      * @param client the Minecraft client
      * @param message the message to send
      */
-    public static void sendChatMessage(MinecraftClient client, String message) {
+    public static void sendChatMessage(Minecraft client, String message) {
         dispatchChatMessage(client, message);
     }
 
     /** Dispatches a one-shot chat message using the dry-run state observed at this call. */
-    public static CommandDispatch dispatchChatMessage(MinecraftClient client, String message) {
+    public static CommandDispatch dispatchChatMessage(Minecraft client, String message) {
         return dispatchChatMessage(client, message, DMLSConfig.dryRun(), ConnectionSnapshot.capture(client));
     }
 
     /** Guarded chat-message equivalent of {@link #dispatchCommand}. */
     public static CommandDispatch dispatchChatMessage(
-            MinecraftClient client,
+            Minecraft client,
             String message,
             boolean dryRunCaptured,
             ConnectionSnapshot expectedConnection
@@ -137,7 +136,7 @@ public final class ClientUtils {
 
     /** Guarded chat-message dispatch with an explicit dry-run reporting policy. */
     public static CommandDispatch dispatchChatMessage(
-            MinecraftClient client,
+            Minecraft client,
             String message,
             boolean dryRunCaptured,
             ConnectionSnapshot expectedConnection,

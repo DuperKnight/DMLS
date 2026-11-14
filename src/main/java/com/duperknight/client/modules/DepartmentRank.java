@@ -1,10 +1,9 @@
 package com.duperknight.client.modules;
 
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
 import java.util.Arrays;
 import java.util.List;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 
 /** A persisted rank within one of the three Stoneworks staff departments. */
 public enum DepartmentRank {
@@ -32,9 +31,9 @@ public enum DepartmentRank {
         this.level = level;
     }
 
-    public Text displayName() {
-        return Text.translatable(translationKey).formatted(
-                this == NOT_ASSIGNED ? Formatting.GRAY : Formatting.WHITE);
+    public Component displayName() {
+        return Component.translatable(translationKey).withStyle(
+                this == NOT_ASSIGNED ? ChatFormatting.GRAY : ChatFormatting.WHITE);
     }
 
     public boolean belongsTo(StaffDepartment department) {

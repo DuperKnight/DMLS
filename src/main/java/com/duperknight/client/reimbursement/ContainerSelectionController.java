@@ -1,29 +1,30 @@
 package com.duperknight.client.reimbursement;
 
+import com.mojang.blaze3d.platform.InputConstants;
+
 import com.duperknight.DMLS;
 import net.fabricmc.fabric.api.event.client.player.ClientPreAttackCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.minecraft.block.ChestBlock;
-import net.minecraft.block.EnderChestBlock;
-import net.minecraft.block.enums.ChestType;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.render.DrawStyle;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.debug.gizmo.GizmoDrawing;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gizmos.GizmoStyle;
+import net.minecraft.gizmos.Gizmos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.Container;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.EnderChestBlock;
+import net.minecraft.world.level.block.state.properties.ChestType;
+import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -51,33 +52,34 @@ public final class ContainerSelectionController {
         registered = true;
         ClientPreAttackCallback.EVENT.register((client, player, clickCount) -> {
             if (!active) return false;
-            if (clickCount != 0 && client.crosshairTarget instanceof BlockHitResult hit) {
+            if (clickCount != 0 && client.hitResult instanceof BlockHitResult hit) {
                 select(hit.getBlockPos(), false);
             }
             return true;
         });
         UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
-            if (!active || !world.isClient()) return ActionResult.PASS;
-            if (hand == Hand.MAIN_HAND) select(hit.getBlockPos(), true);
-            return ActionResult.FAIL;
+            if (!active || !world.isClientSide()) return InteractionResult.PASS;
+            if (hand == InteractionHand.MAIN_HAND) select(hit.getBlockPos(), true);
+            return InteractionResult.FAIL;
         });
         UseItemCallback.EVENT.register((player, world, hand) ->
-                active && world.isClient() ? ActionResult.FAIL : ActionResult.PASS);
+                active && world.isClientSide() ? InteractionResult.FAIL : InteractionResult.PASS);
         UseEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
-                active && world.isClient() ? ActionResult.FAIL : ActionResult.PASS);
+                active && world.isClientSide() ? InteractionResult.FAIL : InteractionResult.PASS);
         ClientTickEvents.END_CLIENT_TICK.register(ContainerSelectionController::tick);
-        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(ContainerSelectionController::renderSelections);
-        HudElementRegistry.addLast(Identifier.of(DMLS.MOD_ID, "reimbursement_container_selection"),
+        // 26.x: WorldRenderEvents.BEFORE_DEBUG_RENDER became LevelRenderEvents.DEBUG_RENDER (interface DebugRender).
+        LevelRenderEvents.BEFORE_GIZMOS.register(ContainerSelectionController::renderSelections);
+        HudElementRegistry.addLast(Identifier.fromNamespaceAndPath(DMLS.MOD_ID, "reimbursement_container_selection"),
                 (context, tickCounter) -> renderHud(context));
     }
 
     public static void begin(
-            MinecraftClient client,
+            Minecraft client,
             Screen screen,
             List<ContainerTarget> initial,
             Consumer<List<ContainerTarget>> onConfirmed
     ) {
-        if (client == null || client.world == null || screen == null || onConfirmed == null) return;
+        if (client == null || client.level == null || screen == null || onConfirmed == null) return;
         selected.clear();
         selected.addAll(initial);
         returnScreen = screen;
@@ -86,8 +88,8 @@ public final class ContainerSelectionController {
         active = true;
         enterWasDown = true;
         escapeWasDown = true;
-        if (client.interactionManager != null) client.interactionManager.cancelBlockBreaking();
-        client.setScreen(null);
+        if (client.gameMode != null) client.gameMode.stopDestroyBlock();
+        client.gui.setScreen(null);
     }
 
     public static boolean active() {
@@ -95,15 +97,15 @@ public final class ContainerSelectionController {
     }
 
     private static void select(BlockPos clicked, boolean toggle) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) return;
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return;
         BlockPos pos = canonicalChest(clicked);
         if (!isContainer(pos)) {
             status = "That block is not a supported physical container.";
             return;
         }
         ContainerTarget target = new ContainerTarget(
-                client.world.getRegistryKey().getValue().toString(), pos);
+                client.level.dimension().identifier().toString(), pos);
         if (toggle) {
             if (!selected.remove(target)) selected.add(target);
         } else {
@@ -114,28 +116,28 @@ public final class ContainerSelectionController {
     }
 
     private static boolean isContainer(BlockPos pos) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null || !(client.world.getBlockEntity(pos) instanceof Inventory)) return false;
-        return !(client.world.getBlockState(pos).getBlock() instanceof EnderChestBlock);
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null || !(client.level.getBlockEntity(pos) instanceof Container)) return false;
+        return !(client.level.getBlockState(pos).getBlock() instanceof EnderChestBlock);
     }
 
     private static BlockPos canonicalChest(BlockPos pos) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null || !(client.world.getBlockState(pos).getBlock() instanceof ChestBlock)) {
-            return pos.toImmutable();
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null || !(client.level.getBlockState(pos).getBlock() instanceof ChestBlock)) {
+            return pos.immutable();
         }
-        var state = client.world.getBlockState(pos);
-        ChestType type = state.get(ChestBlock.CHEST_TYPE);
-        if (type == ChestType.SINGLE) return pos.toImmutable();
-        BlockPos canonical = pos.toImmutable();
-        for (var direction : net.minecraft.util.math.Direction.Type.HORIZONTAL) {
-            BlockPos neighbor = pos.offset(direction);
-            var neighborState = client.world.getBlockState(neighbor);
+        var state = client.level.getBlockState(pos);
+        ChestType type = state.getValue(ChestBlock.TYPE);
+        if (type == ChestType.SINGLE) return pos.immutable();
+        BlockPos canonical = pos.immutable();
+        for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            BlockPos neighbor = pos.relative(direction);
+            var neighborState = client.level.getBlockState(neighbor);
             if (neighborState.getBlock() == state.getBlock()
-                    && neighborState.get(ChestBlock.FACING) == state.get(ChestBlock.FACING)
-                    && neighborState.get(ChestBlock.CHEST_TYPE) == type.getOpposite()
+                    && neighborState.getValue(ChestBlock.FACING) == state.getValue(ChestBlock.FACING)
+                    && neighborState.getValue(ChestBlock.TYPE) == type.getOpposite()
                     && compare(neighbor, canonical) < 0) {
-                canonical = neighbor.toImmutable();
+                canonical = neighbor.immutable();
             }
         }
         return canonical;
@@ -148,44 +150,44 @@ public final class ContainerSelectionController {
         return y != 0 ? y : Integer.compare(first.getZ(), second.getZ());
     }
 
-    private static void tick(MinecraftClient client) {
+    private static void tick(Minecraft client) {
         if (!active) return;
-        if (client.world == null || client.player == null) {
+        if (client.level == null || client.player == null) {
             cancel(client);
             return;
         }
         int previousSize = selected.size();
-        String currentDimension = client.world.getRegistryKey().getValue().toString();
+        String currentDimension = client.level.dimension().identifier().toString();
         selected.removeIf(target -> !currentDimension.equals(target.dimension())
-                || (client.world.isChunkLoaded(target.position()) && !isContainer(target.position())));
+                || (client.level.hasChunkAt(target.position()) && !isContainer(target.position())));
         if (selected.size() != previousSize) {
             status = "A selected container was removed because it no longer exists.";
         }
-        boolean enter = keyDown(client, GLFW.GLFW_KEY_ENTER) || keyDown(client, GLFW.GLFW_KEY_KP_ENTER);
-        boolean escape = keyDown(client, GLFW.GLFW_KEY_ESCAPE);
+        boolean enter = keyDown(client, InputConstants.KEY_RETURN) || keyDown(client, InputConstants.KEY_NUMPADENTER);
+        boolean escape = keyDown(client, InputConstants.KEY_ESCAPE);
         if (enter && !enterWasDown) confirm(client);
         else if (escape && !escapeWasDown) cancel(client);
         enterWasDown = enter;
         escapeWasDown = escape;
     }
 
-    private static boolean keyDown(MinecraftClient client, int key) {
-        return org.lwjgl.glfw.GLFW.glfwGetKey(client.getWindow().getHandle(), key) == GLFW.GLFW_PRESS;
+    private static boolean keyDown(Minecraft client, int key) {
+        return InputConstants.isKeyDown(key);
     }
 
-    private static void confirm(MinecraftClient client) {
+    private static void confirm(Minecraft client) {
         Consumer<List<ContainerTarget>> callback = confirmation;
         List<ContainerTarget> result = List.copyOf(selected);
         Screen screen = returnScreen;
         reset();
         if (callback != null) callback.accept(result);
-        client.setScreen(screen);
+        client.gui.setScreen(screen);
     }
 
-    private static void cancel(MinecraftClient client) {
+    private static void cancel(Minecraft client) {
         Screen screen = returnScreen;
         reset();
-        client.setScreen(screen);
+        client.gui.setScreen(screen);
     }
 
     private static void reset() {
@@ -196,27 +198,27 @@ public final class ContainerSelectionController {
         status = "";
     }
 
-    private static void renderHud(net.minecraft.client.gui.DrawContext context) {
+    private static void renderHud(net.minecraft.client.gui.GuiGraphicsExtractor context) {
         if (!active) return;
-        MinecraftClient client = MinecraftClient.getInstance();
-        Text instructions = Text.literal(
+        Minecraft client = Minecraft.getInstance();
+        Component instructions = Component.literal(
                 "Left-click: select one  •  Right-click: toggle multiple  •  Enter: confirm  •  Esc: cancel");
-        int x = (context.getScaledWindowWidth() - client.textRenderer.getWidth(instructions)) / 2;
-        context.fill(x - 6, 8, x + client.textRenderer.getWidth(instructions) + 6,
-                8 + client.textRenderer.fontHeight + 6, 0xC0000000);
-        context.drawTextWithShadow(client.textRenderer, instructions, x, 12, 0xFFFFFFFF);
+        int x = (context.guiWidth() - client.font.width(instructions)) / 2;
+        context.fill(x - 6, 8, x + client.font.width(instructions) + 6,
+                8 + client.font.lineHeight + 6, 0xC0000000);
+        context.text(client.font, instructions, x, 12, 0xFFFFFFFF);
         if (!status.isEmpty()) {
-            int statusX = (context.getScaledWindowWidth() - client.textRenderer.getWidth(status)) / 2;
-            context.drawTextWithShadow(client.textRenderer, status, statusX,
+            int statusX = (context.guiWidth() - client.font.width(status)) / 2;
+            context.text(client.font, status, statusX,
                     25, status.startsWith("That") ? 0xFFFF5555 : 0xFF55FF55);
         }
     }
 
-    private static void renderSelections(WorldRenderContext context) {
+    private static void renderSelections(LevelRenderContext context) {
         if (!active || selected.isEmpty()) return;
-        DrawStyle style = DrawStyle.filledAndStroked(OUTLINE_COLOR, 3.0F, TINT_COLOR);
+        GizmoStyle style = GizmoStyle.strokeAndFill(OUTLINE_COLOR, 3.0F, TINT_COLOR);
         for (ContainerTarget target : selected) {
-            GizmoDrawing.box(target.position(), 0.002F, style).ignoreOcclusion();
+            Gizmos.cuboid(target.position(), 0.002F, style).setAlwaysOnTop();
         }
     }
 }

@@ -14,17 +14,16 @@ import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.InputValidators;
 import com.duperknight.client.utils.MenuCommandQuery;
 import com.duperknight.client.utils.ScreenUtils;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-
 import java.util.List;
 import java.util.Objects;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class CheckMembersModule extends DMLSModule {
     public static final String OPERATION_ID = "check-members";
@@ -46,8 +45,8 @@ public final class CheckMembersModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.check_members.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.check_members.name");
     }
 
     @Override
@@ -56,10 +55,10 @@ public final class CheckMembersModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
+    public List<Component> description() {
         return List.of(
-                Text.translatable("dmls.module.check_members.description.1"),
-                Text.translatable("dmls.module.check_members.description.2")
+                Component.translatable("dmls.module.check_members.description.1"),
+                Component.translatable("dmls.module.check_members.description.2")
         );
     }
 
@@ -69,8 +68,8 @@ public final class CheckMembersModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new CheckMembersScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new CheckMembersScreen(parent, this));
     }
 
     @Override
@@ -79,7 +78,7 @@ public final class CheckMembersModule extends DMLSModule {
     }
 
     /** Starts a mutually exclusive member-menu query. */
-    public OperationStartResult submit(MinecraftClient client, String landInput) {
+    public OperationStartResult submit(Minecraft client, String landInput) {
         if (!canRunPrivilegedOperation(client)) return OperationStartResult.SERVER_BLOCKED;
         String land = Objects.requireNonNullElse(landInput, "").trim();
         if (!InputValidators.isSafeCommandArgument(land, MAX_LAND_NAME_LENGTH)) {
@@ -101,13 +100,13 @@ public final class CheckMembersModule extends DMLSModule {
         return result;
     }
 
-    private void replaceOwnOperation(MinecraftClient client) {
+    private void replaceOwnOperation(Minecraft client) {
         if (coordinator.activeDescriptor().filter(descriptor -> descriptor.operationId().equals(OPERATION_ID)).isPresent()) {
             coordinator.cancel(OPERATION_ID, client);
         }
     }
 
-    private void reportStartFailure(MinecraftClient client, OperationStartResult result) {
+    private void reportStartFailure(Minecraft client, OperationStartResult result) {
         if (result == OperationStartResult.BUSY) {
             String owner = coordinator.activeDescriptor().map(descriptor -> descriptor.displayName()).orElse("Another operation");
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.operation.busy", owner);
@@ -128,12 +127,12 @@ public final class CheckMembersModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             this.handle = handle;
             if (!handle.descriptor().dryRunCaptured()) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.check_members.checking", land);
             }
-            activeQuery = new MenuCommandQuery("la info " + land, land, MENU_TIMEOUT_TICKS, PLAYER_LIST_SLOT);
+            activeQuery = new MenuCommandQuery("lands info land " + land, land, MENU_TIMEOUT_TICKS, PLAYER_LIST_SLOT);
             initialDispatch = activeQuery.start(client, handle::dispatchCommand);
             if (initialDispatch == CommandDispatch.BLOCKED) {
                 handle.cancel(client, OperationCancelReason.DISPATCH_BLOCKED);
@@ -145,13 +144,13 @@ public final class CheckMembersModule extends DMLSModule {
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             MenuCommandQuery.TickResult tickResult = activeQuery.tick(client);
             switch (tickResult.status()) {
                 case WAITING -> { return; }
                 case TIMED_OUT -> {
                     ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.timeout",
-                            "/la info " + land);
+                            "/lands info land " + land);
                     finish(client);
                     return;
                 }
@@ -160,7 +159,7 @@ public final class CheckMembersModule extends DMLSModule {
                     return;
                 }
                 case SIMULATED -> {
-                    ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.simulated", "/la info " + land);
+                    ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.simulated", "/lands info land " + land);
                     finish(client);
                     return;
                 }
@@ -172,7 +171,7 @@ public final class CheckMembersModule extends DMLSModule {
             Scan scan = tickResult.result().flatMap(result -> result.tooltip(PLAYER_LIST_SLOT))
                     .map(MembersMenuParser::parse).orElseGet(() -> MembersMenuParser.parse(List.of()));
             if (scan.status() == MembersMenuParser.ParseStatus.MALFORMED) {
-                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.malformed", "/la info " + land);
+                ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.menu_query.malformed", "/lands info land " + land);
                 finish(client);
                 return;
             }
@@ -181,7 +180,7 @@ public final class CheckMembersModule extends DMLSModule {
         }
 
         @Override
-        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+        public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
             ScreenUtils.closeHandledScreen(client);
             if (activeSession == this) activeSession = null;
             if (reason != OperationCancelReason.MODULE_REQUESTED) {
@@ -189,11 +188,11 @@ public final class CheckMembersModule extends DMLSModule {
             }
         }
 
-        private void report(MinecraftClient client, Scan scan) {
+        private void report(Minecraft client, Scan scan) {
             String header = PREFIX + "Land §6" + land + "§7 ";
             ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
             for (Group group : scan.groups()) {
-                MutableText line = Text.literal(group.formattedRank() + "§r§7 (" + group.players().size() + "): ");
+                MutableComponent line = Component.literal(group.formattedRank() + "§r§7 (" + group.players().size() + "): ");
                 for (int i = 0; i < group.players().size(); i++) {
                     if (i > 0) line.append("§7, ");
                     line.append(clickablePlayer(group.players().get(i)));
@@ -204,14 +203,14 @@ public final class CheckMembersModule extends DMLSModule {
             ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
         }
 
-        private MutableText clickablePlayer(String playerName) {
-            return Text.literal("§6" + playerName).styled(style -> style
+        private MutableComponent clickablePlayer(String playerName) {
+            return Component.literal("§6" + playerName).withStyle(style -> style
                     .withClickEvent(new ClickEvent.RunCommand("/dmls lands " + playerName))
                     .withHoverEvent(new HoverEvent.ShowText(
-                            Text.translatable("dmls.chat.check_members.hover_lands", playerName))));
+                            Component.translatable("dmls.chat.check_members.hover_lands", playerName))));
         }
 
-        private void finish(MinecraftClient client) {
+        private void finish(Minecraft client) {
             ScreenUtils.closeHandledScreen(client);
             if (activeSession == this) activeSession = null;
             if (handle != null) handle.complete();

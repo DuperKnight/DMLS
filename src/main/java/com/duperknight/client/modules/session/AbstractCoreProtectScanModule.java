@@ -15,9 +15,6 @@ import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.InputValidators;
 import com.duperknight.client.utils.ServerGuard;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -26,6 +23,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 /** Shared coordinator-backed lifecycle and report rendering for CoreProtect scans. */
 public abstract class AbstractCoreProtectScanModule extends DMLSModule {
@@ -80,7 +79,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
     }
 
     /** Starts a validated scan from either the command or GUI entrypoint. */
-    public final SubmissionResult submit(MinecraftClient client, String ign, String time, String radius) {
+    public final SubmissionResult submit(Minecraft client, String ign, String time, String radius) {
         if (!hasRequiredRank(client)) {
             return SubmissionResult.RANK_BLOCKED;
         }
@@ -117,7 +116,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
     }
 
     /** Cancels only this module's scan; another module's active operation is left untouched. */
-    public final boolean cancel(MinecraftClient client) {
+    public final boolean cancel(Minecraft client) {
         OperationCancelResult result = coordinator.cancel(operationId, client);
         if (result != OperationCancelResult.CANCELLED) {
             ChatUtils.sendTranslatedMessage(client, prefix, translationNamespace + ".nothing");
@@ -155,7 +154,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
                 new ScanRequest(kind, target, cleanTime, cleanRadius, command));
     }
 
-    private SubmissionResult handleStartFailure(MinecraftClient client, OperationStartResult started) {
+    private SubmissionResult handleStartFailure(Minecraft client, OperationStartResult started) {
         return switch (started) {
             case BUSY -> {
                 String activeName = coordinator.activeDescriptor()
@@ -178,12 +177,12 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
         };
     }
 
-    private void report(MinecraftClient client, ScanRequest request, CoreProtectScanSession.Snapshot snapshot) {
+    private void report(Minecraft client, ScanRequest request, CoreProtectScanSession.Snapshot snapshot) {
         if (client == null) {
             return;
         }
 
-        String header = Text.translatable(translationNamespace + ".header",
+        String header = Component.translatable(translationNamespace + ".header",
                 request.target(), request.time(), request.radius()).getString();
         ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
 
@@ -200,7 +199,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
                             (Map.Entry<String, Map<String, Map<String, Long>>> entry) -> total(entry.getValue()))
                             .reversed())
                     .forEach(playerEntry -> playerEntry.getValue().forEach((action, materials) ->
-                            ChatUtils.sendClientMessage(client, Text.literal("§8• ").append(ChatUtils.translated(
+                            ChatUtils.sendClientMessage(client, Component.literal("§8• ").append(ChatUtils.translated(
                                     translationNamespace + "." + action,
                                     playerEntry.getKey(), itemsSummary(materials))))));
         }
@@ -214,7 +213,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
     }
 
-    private void sendCompletionDetail(MinecraftClient client, CoreProtectScanSession.Snapshot snapshot) {
+    private void sendCompletionDetail(Minecraft client, CoreProtectScanSession.Snapshot snapshot) {
         switch (snapshot.completion()) {
             case COMPLETE, NO_RESULTS, PAGE_LIMIT, SIMULATED, ACTIVE -> {
             }
@@ -269,7 +268,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
                 .forEach(entry -> parts.add("x" + entry.getValue() + " " + entry.getKey()));
         int remaining = materials.size() - MAX_ITEMS_PER_LINE;
         if (remaining > 0) {
-            parts.add(Text.translatable("dmls.chat.scan.more", remaining).getString());
+            parts.add(Component.translatable("dmls.chat.scan.more", remaining).getString());
         }
         return String.join(", ", parts);
     }
@@ -335,7 +334,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             if (!handle.canDispatchAutomatedCommand()) {
                 initialPending = true;
                 return;
@@ -343,7 +342,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
             dispatchInitial(handle, client);
         }
 
-        private void dispatchInitial(OperationHandle handle, MinecraftClient client) {
+        private void dispatchInitial(OperationHandle handle, Minecraft client) {
             initialPending = false;
             initialDispatch = handle.dispatchCommand(client, request.command());
             switch (initialDispatch) {
@@ -366,7 +365,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             if (initialPending) {
                 if (handle.canDispatchAutomatedCommand()) dispatchInitial(handle, client);
                 return;
@@ -379,7 +378,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
         }
 
         @Override
-        public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+        public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
             if (message.origin() != MessageOrigin.SERVER_SYSTEM) {
                 return;
             }
@@ -390,7 +389,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
         @Override
         public void onCancelled(
                 OperationHandle handle,
-                MinecraftClient client,
+                Minecraft client,
                 OperationCancelReason reason
         ) {
             if (reported) return;
@@ -412,7 +411,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
 
         private void apply(
                 OperationHandle handle,
-                MinecraftClient client,
+                Minecraft client,
                 CoreProtectScanSession.Action action
         ) {
             if (action.type() == CoreProtectScanSession.ActionType.NONE || reported) {
@@ -426,7 +425,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
             finishAndReport(handle, client, action.completion());
         }
 
-        private void dispatchPage(OperationHandle handle, MinecraftClient client, int page) {
+        private void dispatchPage(OperationHandle handle, Minecraft client, int page) {
             CommandDispatch dispatch = handle.dispatchCommand(client, "co page " + page);
             if (dispatch == CommandDispatch.SENT) {
                 pendingPage = null;
@@ -446,7 +445,7 @@ public abstract class AbstractCoreProtectScanModule extends DMLSModule {
 
         private void finishAndReport(
                 OperationHandle handle,
-                MinecraftClient client,
+                Minecraft client,
                 CoreProtectScanSession.Completion completion
         ) {
             session.stop(completion);

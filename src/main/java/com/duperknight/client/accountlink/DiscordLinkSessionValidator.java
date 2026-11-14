@@ -2,12 +2,11 @@ package com.duperknight.client.accountlink;
 
 import com.duperknight.DMLS;
 import com.duperknight.client.utils.DMLSConfig;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.client.Minecraft;
 
 /**
  * Confirms persisted Discord links with the server and keeps connection-gated features in sync.
@@ -18,11 +17,11 @@ public final class DiscordLinkSessionValidator {
     private DiscordLinkSessionValidator() {
     }
 
-    public static CompletableFuture<Boolean> validateSavedLink(MinecraftClient client) {
-        if (client == null || client.getSession().getUuidOrNull() == null) {
+    public static CompletableFuture<Boolean> validateSavedLink(Minecraft client) {
+        if (client == null || client.getUser().getProfileId() == null) {
             return CompletableFuture.completedFuture(false);
         }
-        UUID minecraftUuid = client.getSession().getUuidOrNull();
+        UUID minecraftUuid = client.getUser().getProfileId();
         String token = DiscordLinkTokenStore.load(minecraftUuid).orElse("");
         if (token.isEmpty()) {
             DiscordLinkAvailability.markUnlinked(minecraftUuid);
@@ -50,7 +49,6 @@ public final class DiscordLinkSessionValidator {
     private static boolean applyResult(UUID minecraftUuid, DiscordLinkService.LinkStatusResult result) {
         if (result.status() == DiscordLinkService.LinkStatus.LINKED) {
             DiscordLinkAvailability.markLinked(minecraftUuid);
-            DMLSConfig.enableDoNotInstaBanByDefaultForConfirmedLink();
             if (result.profile() != null) {
                 DiscordAccountProfileStore.save(result.profile());
                 DiscordAvatarCache.ensureCached(result.profile());

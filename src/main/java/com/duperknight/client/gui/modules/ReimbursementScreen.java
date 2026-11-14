@@ -1,5 +1,9 @@
 package com.duperknight.client.gui.modules;
 
+import com.duperknight.client.utils.EditBoxUtils;
+
+import com.mojang.blaze3d.platform.InputConstants;
+
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.ReimbursementModule;
 import com.duperknight.client.modules.StaffRank;
@@ -18,29 +22,6 @@ import com.duperknight.client.session.OutboundSpamSafety;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.PrefixTextFormatter;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.tab.GridScreenTab;
-import net.minecraft.client.gui.tab.Tab;
-import net.minecraft.client.gui.tab.TabManager;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.gui.widget.EditBoxWidget;
-import net.minecraft.client.gui.widget.TabButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -49,6 +30,29 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.MultiLineEditBox;
+import net.minecraft.client.gui.components.TabButton;
+import net.minecraft.client.gui.components.tabs.GridLayoutTab;
+import net.minecraft.client.gui.components.tabs.Tab;
+import net.minecraft.client.gui.components.tabs.TabManager;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
 
 /** Two-tab editor and locked terminal view for Reimbursement Helper. */
 public final class ReimbursementScreen extends DMLSMenuScreen {
@@ -64,14 +68,14 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     private static final int SUGGESTION_TEXT = 0xFFAAAAAA;
     private static final int SUGGESTION_SELECTED_TEXT = 0xFFFFFF00;
     private static final Identifier LIST_BACKGROUND =
-            Identifier.ofVanilla("textures/gui/inworld_menu_list_background.png");
+            Identifier.withDefaultNamespace("textures/gui/inworld_menu_list_background.png");
     private static final Identifier LIST_HEADER_SEPARATOR =
-            Identifier.ofVanilla("textures/gui/inworld_header_separator.png");
+            Identifier.withDefaultNamespace("textures/gui/inworld_header_separator.png");
     private static final Identifier LIST_FOOTER_SEPARATOR =
-            Identifier.ofVanilla("textures/gui/inworld_footer_separator.png");
-    private static final Identifier REMOVE_TEXTURE = Identifier.ofVanilla("pending_invite/reject");
+            Identifier.withDefaultNamespace("textures/gui/inworld_footer_separator.png");
+    private static final Identifier REMOVE_TEXTURE = Identifier.withDefaultNamespace("pending_invite/reject");
     private static final Identifier REMOVE_HIGHLIGHTED_TEXTURE =
-            Identifier.ofVanilla("pending_invite/reject_highlighted");
+            Identifier.withDefaultNamespace("pending_invite/reject_highlighted");
 
     private enum ViewTab { REIMBURSEMENT, CONFIG }
     private enum Pane { LEFT, CENTER, RIGHT, CONFIG }
@@ -80,7 +84,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     private final ReimbursementDraft draft;
     private final ReimbursementResult result;
     private final List<PaneChild> paneChildren = new ArrayList<>();
-    private final List<ButtonWidget> destinationButtons = new ArrayList<>();
+    private final List<Button> destinationButtons = new ArrayList<>();
 
     private ViewTab activeTab = ViewTab.REIMBURSEMENT;
     private int selectedEntry;
@@ -97,21 +101,21 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     private TabManager tabManager;
     private Tab reimbursementTab;
     private Tab configTab;
-    private TextFieldWidget itemSearch;
-    private TextFieldWidget moneyAmount;
-    private TextFieldWidget itemName;
-    private EditBoxWidget loreField;
-    private TextFieldWidget itemAmount;
-    private TextFieldWidget enchantSearch;
-    private TextFieldWidget playerIgn;
-    private TextFieldWidget configIgn;
-    private TextFieldWidget discordUsername;
-    private TextFieldWidget discordId;
-    private EditBoxWidget reasonField;
-    private TextFieldWidget ticketField;
-    private ButtonWidget startButton;
-    private ButtonWidget doneButton;
-    private ButtonWidget destinationFollowup;
+    private EditBox itemSearch;
+    private EditBox moneyAmount;
+    private EditBox itemName;
+    private MultiLineEditBox loreField;
+    private EditBox itemAmount;
+    private EditBox enchantSearch;
+    private EditBox playerIgn;
+    private EditBox configIgn;
+    private EditBox discordUsername;
+    private EditBox discordId;
+    private MultiLineEditBox reasonField;
+    private EditBox ticketField;
+    private Button startButton;
+    private Button doneButton;
+    private Button destinationFollowup;
     private int suggestionIndex;
     private int suggestionWindowOffset;
     private int enchantmentSuggestionIndex;
@@ -120,7 +124,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     private List<ItemChoice> filteredItems = List.of();
     private List<EnchantmentChoice> filteredEnchantments = List.of();
     private List<EnchantmentChoice> availableEnchantments = List.of();
-    private final Map<Identifier, TextFieldWidget> enchantmentLevelFields = new LinkedHashMap<>();
+    private final Map<Identifier, EditBox> enchantmentLevelFields = new LinkedHashMap<>();
     private int initializedDestinationBase;
 
     public ReimbursementScreen(
@@ -129,7 +133,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             ReimbursementDraft draft,
             ReimbursementResult result
     ) {
-        super(Text.translatable("dmls.module.reimbursement.name"), parent);
+        super(Component.translatable("dmls.module.reimbursement.name"), parent);
         this.module = module;
         this.draft = draft;
         this.result = result;
@@ -165,50 +169,40 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     private void initTabs() {
-        tabManager = new TabManager(this::addDrawableChild, this::remove);
-        reimbursementTab = new GridScreenTab(Text.translatable("dmls.reimbursement.tab.entries"));
-        configTab = new GridScreenTab(Text.translatable("dmls.reimbursement.tab.config"));
+        tabManager = new TabManager(this::addRenderableWidget, this::removeWidget);
+        reimbursementTab = new GridLayoutTab(Component.translatable("dmls.reimbursement.tab.entries"));
+        configTab = new GridLayoutTab(Component.translatable("dmls.reimbursement.tab.config"));
         int totalWidth = tabTotalWidth();
         int tabWidth = totalWidth / 2;
         int tabHeight = 24;
         int tabX = (width - totalWidth) / 2;
         int tabY = settledHeaderHeight() - tabHeight;
-        TabButtonWidget reimbursementButton =
-                new TabButtonWidget(tabManager, reimbursementTab, tabWidth, tabHeight) {
-                    @Override
-                    public void onClick(Click click, boolean doubled) {
-                        tabManager.setCurrentTab(reimbursementTab, true);
-                    }
-                };
-        reimbursementButton.setDimensionsAndPosition(tabWidth, tabHeight, tabX, tabY);
-        addDrawableChild(reimbursementButton);
-        TabButtonWidget configButton = new TabButtonWidget(tabManager, configTab, tabWidth, tabHeight) {
-            @Override
-            public void onClick(Click click, boolean doubled) {
-                tabManager.setCurrentTab(configTab, true);
-            }
-        };
-        configButton.setDimensionsAndPosition(tabWidth, tabHeight, tabX + tabWidth, tabY);
-        addDrawableChild(configButton);
+        TabButton reimbursementButton =
+                new MenuTabButton(tabManager, reimbursementTab, tabWidth, tabHeight, font);
+        reimbursementButton.setRectangle(tabWidth, tabHeight, tabX, tabY);
+        addRenderableWidget(reimbursementButton);
+        TabButton configButton = new MenuTabButton(tabManager, configTab, tabWidth, tabHeight, font);
+        configButton.setRectangle(tabWidth, tabHeight, tabX + tabWidth, tabY);
+        addRenderableWidget(configButton);
         tabManager.setCurrentTab(activeTab == ViewTab.REIMBURSEMENT ? reimbursementTab : configTab, false);
     }
 
     private void initReimbursement() {
         Layout layout = layout();
-        addDrawableChild(ButtonWidget.builder(Text.literal("Back"), ignored -> client.setScreen(parent))
-                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), 20).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Next"), ignored -> next())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Back"), ignored -> minecraft.gui.setScreen(parent))
+                .bounds(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Next"), ignored -> next())
+                .bounds(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), 20).build());
         selectedEntry = Math.clamp(selectedEntry, 0, Math.max(0, draft.entries().size() - 1));
         if (draft.entries().isEmpty()) return;
         ReimbursementEntry entry = draft.entries().get(selectedEntry);
         int half = (layout.centerWidth() - 10) / 2;
-        ButtonWidget itemToggle = ButtonWidget.builder(Text.literal("Item"), ignored -> changeType(true))
-                .dimensions(layout.centerX() + 3, layout.top() + 3, half, 20).build();
+        Button itemToggle = Button.builder(Component.literal("Item"), ignored -> changeType(true))
+                .bounds(layout.centerX() + 3, layout.top() + 3, half, 20).build();
         itemToggle.active = !(entry instanceof ItemEntry);
         addPaneChild(itemToggle, Pane.CENTER, 3);
-        ButtonWidget moneyToggle = ButtonWidget.builder(Text.literal("Money"), ignored -> changeType(false))
-                .dimensions(layout.centerX() + 7 + half, layout.top() + 3, half, 20).build();
+        Button moneyToggle = Button.builder(Component.literal("Money"), ignored -> changeType(false))
+                .bounds(layout.centerX() + 7 + half, layout.top() + 3, half, 20).build();
         moneyToggle.active = !(entry instanceof MoneyEntry);
         addPaneChild(moneyToggle, Pane.CENTER, 3);
 
@@ -244,14 +238,14 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                         updateItem(currentItem().withCustomName(value)));
         addPaneChild(itemName, Pane.RIGHT, 23);
 
-        loreField = EditBoxWidget.builder().x(layout.rightX() + 4)
-                .y(layout.top() + rightLayout.loreField())
-                .placeholder(Text.literal("Shift+Enter for another lore line")
-                        .formatted(Formatting.DARK_GRAY))
-                .build(textRenderer, rightWidth, 58, Text.literal("Lore"));
-        loreField.setMaxLength(2048);
-        loreField.setText(String.join("\n", entry.lore()));
-        loreField.setChangeListener(value ->
+        loreField = MultiLineEditBox.builder().setX(layout.rightX() + 4)
+                .setY(layout.top() + rightLayout.loreField())
+                .setPlaceholder(Component.literal("Shift+Enter for another lore line")
+                        .withStyle(ChatFormatting.DARK_GRAY))
+                .build(font, rightWidth, 58, Component.literal("Lore"));
+        loreField.setCharacterLimit(2048);
+        loreField.setValue(String.join("\n", entry.lore()));
+        loreField.setValueListener(value ->
                 updateItem(currentItem().withLore(List.of(value.split("\\n", -1)))));
         addPaneChild(loreField, Pane.RIGHT, rightLayout.loreField());
 
@@ -262,7 +256,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                     } catch (NumberFormatException ignored) {
                     }
                 });
-        itemAmount.setTextPredicate(value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
+        EditBoxUtils.setFilter(itemAmount, value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
         addPaneChild(itemAmount, Pane.RIGHT, rightLayout.amountField());
 
         enchantSearch = textField(layout.rightX() + 4, layout.top() + rightLayout.enchantSearch(), rightWidth,
@@ -271,10 +265,10 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         int row = 0;
         for (Map.Entry<Identifier, Integer> enchantment : entry.enchantments().entrySet()) {
             int offset = rightLayout.enchantmentRows() + row * 28 + 2;
-            TextFieldWidget level = textField(layout.rightX() + 4, layout.top() + offset,
+            EditBox level = textField(layout.rightX() + 4, layout.top() + offset,
                     38, Integer.toString(enchantment.getValue()), "1", 3,
                     value -> updateEnchantmentLevel(enchantment.getKey(), value));
-            level.setTextPredicate(value -> value.isEmpty()
+            EditBoxUtils.setFilter(level, value -> value.isEmpty()
                     || value.chars().allMatch(Character::isDigit));
             enchantmentLevelFields.put(enchantment.getKey(), level);
             addPaneChild(level, Pane.RIGHT, offset);
@@ -307,10 +301,10 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         }
         if (containersAllowed && entry.destination() == Destination.CONTAINER) {
             ItemEntry item = (ItemEntry) entry;
-            destinationFollowup = registerCommandControl(ButtonWidget.builder(
-                            Text.literal("Select containers (" + item.containers().size() + ")"),
+            destinationFollowup = registerCommandControl(Button.builder(
+                            Component.literal("Select containers (" + item.containers().size() + ")"),
                             ignored -> selectContainers())
-                    .dimensions(layout.rightX() + 4, layout.top() + base + 28,
+                    .bounds(layout.rightX() + 4, layout.top() + base + 28,
                             contentWidth, 20).build());
             addPaneChild(destinationFollowup, Pane.RIGHT, base + 28);
         }
@@ -324,12 +318,12 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             int offset,
             int buttonWidth
     ) {
-        ButtonWidget button = destinationButton(layout, label, destination, base, offset, buttonWidth);
+        Button button = destinationButton(layout, label, destination, base, offset, buttonWidth);
         destinationButtons.add(button);
         addPaneChild(button, Pane.RIGHT, base);
     }
 
-    private ButtonWidget destinationButton(
+    private Button destinationButton(
             Layout layout,
             String label,
             Destination destination,
@@ -338,11 +332,11 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             int buttonWidth
     ) {
         boolean selected = currentEntry().destination() == destination;
-        ButtonWidget button = ButtonWidget.builder(Text.literal(label), ignored -> {
+        Button button = Button.builder(Component.literal(label), ignored -> {
                     updateEntry(currentEntry().withDestination(destination));
-                    clearAndInit();
+                    rebuildWidgets();
                 })
-                .dimensions(layout.rightX() + 4 + offset, layout.top() + base, buttonWidth, 20).build();
+                .bounds(layout.rightX() + 4 + offset, layout.top() + base, buttonWidth, 20).build();
         button.active = !selected;
         return button;
     }
@@ -357,26 +351,26 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                 "Discord username", 64, draft::setDiscordUsername);
         discordId = configField(x + discordWidth + 18, 70, discordWidth, draft.discordId(),
                 "Optional Discord ID", 20, draft::setDiscordId);
-        discordId.setTextPredicate(value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
+        EditBoxUtils.setFilter(discordId, value -> value.isEmpty() || value.chars().allMatch(Character::isDigit));
 
-        reasonField = EditBoxWidget.builder().x(x).y(layout.top() + 126)
-                .placeholder(Text.literal("Reason — Shift+Enter for another line"))
-                .build(textRenderer, formWidth, 80, Text.literal("Reason"));
-        reasonField.setMaxLength(2048);
-        reasonField.setText(draft.reason());
-        reasonField.setChangeListener(draft::setReason);
+        reasonField = MultiLineEditBox.builder().setX(x).setY(layout.top() + 126)
+                .setPlaceholder(Component.literal("Reason — Shift+Enter for another line"))
+                .build(font, formWidth, 80, Component.literal("Reason"));
+        reasonField.setCharacterLimit(2048);
+        reasonField.setValue(draft.reason());
+        reasonField.setValueListener(draft::setReason);
         addPaneChild(reasonField, Pane.CONFIG, 126);
         ticketField = configField(x, 232, formWidth, draft.ticket(), "Ticket", 96, draft::setTicket);
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Back"), ignored -> switchTab(ViewTab.REIMBURSEMENT))
-                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), 20).build());
-        startButton = registerCommandControl(addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Start Reimbursement"), ignored -> start())
-                .dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), 20).build()),
+        addRenderableWidget(Button.builder(Component.literal("Back"), ignored -> switchTab(ViewTab.REIMBURSEMENT))
+                .bounds(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), 20).build());
+        startButton = registerCommandControl(addRenderableWidget(Button.builder(
+                                Component.literal("Start Reimbursement"), ignored -> start())
+                        .bounds(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), 20).build()),
                 () -> ReimbursementPlan.prepare(draft).valid());
     }
 
-    private TextFieldWidget configField(
+    private EditBox configField(
             int x,
             int offset,
             int fieldWidth,
@@ -386,7 +380,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             java.util.function.Consumer<String> listener
     ) {
         Layout layout = layout();
-        TextFieldWidget field = textField(x, layout.top() + offset, fieldWidth, value,
+        EditBox field = textField(x, layout.top() + offset, fieldWidth, value,
                 placeholder, max, listener);
         addPaneChild(field, Pane.CONFIG, offset);
         return field;
@@ -395,19 +389,19 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     private void initResult() {
         int buttonWidth = Math.min(220, (width - 36) / 2);
         if (result.requiresLogCopy()) {
-            addDrawableChild(ButtonWidget.builder(Text.literal(copied ? "Copied!" : "Copy Reimbursement Log"),
+            addRenderableWidget(Button.builder(Component.literal(copied ? "Copied!" : "Copy Reimbursement Log"),
                             ignored -> copyResult())
-                    .dimensions(width / 2 - buttonWidth - 4, footerButtonY(), buttonWidth, 20).build());
-            doneButton = addDrawableChild(ButtonWidget.builder(Text.literal("Done"), ignored -> done())
-                    .dimensions(width / 2 + 4, footerButtonY(), buttonWidth, 20).build());
+                    .bounds(width / 2 - buttonWidth - 4, footerButtonY(), buttonWidth, 20).build());
+            doneButton = addRenderableWidget(Button.builder(Component.literal("Done"), ignored -> done())
+                    .bounds(width / 2 + 4, footerButtonY(), buttonWidth, 20).build());
             doneButton.active = copied;
         } else {
-            doneButton = addDrawableChild(ButtonWidget.builder(Text.literal("Done"), ignored -> done())
-                    .dimensions((width - buttonWidth) / 2, footerButtonY(), buttonWidth, 20).build());
+            doneButton = addRenderableWidget(Button.builder(Component.literal("Done"), ignored -> done())
+                    .bounds((width - buttonWidth) / 2, footerButtonY(), buttonWidth, 20).build());
         }
     }
 
-    private TextFieldWidget textField(
+    private EditBox textField(
             int x,
             int y,
             int fieldWidth,
@@ -416,18 +410,18 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             int max,
             java.util.function.Consumer<String> listener
     ) {
-        TextFieldWidget field = addDrawableChild(new TextFieldWidget(
-                textRenderer, x, y, fieldWidth, 20, Text.empty()));
+        EditBox field = addRenderableWidget(new EditBox(
+                font, x, y, fieldWidth, 20, Component.empty()));
         field.setMaxLength(max);
-        field.setText(value == null ? "" : value);
-        field.setPlaceholder(Text.literal(textRenderer.trimToWidth(
+        field.setValue(value == null ? "" : value);
+        field.setHint(Component.literal(font.plainSubstrByWidth(
                 placeholder, Math.max(0, fieldWidth - 8))));
-        field.setChangedListener(listener);
+        field.setResponder(listener);
         return field;
     }
 
-    private void addPaneChild(ClickableWidget widget, Pane pane, int offset) {
-        if (!children().contains(widget)) addDrawableChild(widget);
+    private void addPaneChild(AbstractWidget widget, Pane pane, int offset) {
+        if (!children().contains(widget)) addRenderableWidget(widget);
         paneChildren.add(new PaneChild(widget, pane, offset));
     }
 
@@ -446,7 +440,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             enchantSearch.setWidth(contentWidth);
             if (playerIgn != null) playerIgn.setWidth(contentWidth);
             if (destinationFollowup != null) destinationFollowup.setWidth(contentWidth);
-            for (TextFieldWidget level : enchantmentLevelFields.values()) {
+            for (EditBox level : enchantmentLevelFields.values()) {
                 level.setX(layout.rightX() + 4 + contentWidth - 64);
                 level.setWidth(38);
             }
@@ -454,7 +448,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                     (contentWidth - Math.max(0, destinationButtons.size() - 1) * 4)
                             / Math.max(1, destinationButtons.size()));
             for (int index = 0; index < destinationButtons.size(); index++) {
-                ButtonWidget button = destinationButtons.get(index);
+                Button button = destinationButtons.get(index);
                 button.setX(layout.rightX() + 4 + index * (buttonWidth + 4));
                 button.setWidth(buttonWidth);
             }
@@ -488,7 +482,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     @Override
     public void tick() {
         if (result == null && knownContainerCount != selectedContainerCount()) {
-            clearAndInit();
+            rebuildWidgets();
             return;
         }
         if (result == null && tabManager != null) {
@@ -501,7 +495,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         if (result != null) renderResult(context);
         else {
@@ -510,12 +504,12 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             else renderConfig(context);
         }
         paneChildren.forEach(child -> child.widget().visible = false);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
         if (result == null) renderPaneWidgets(context, mouseX, mouseY, delta);
         if (result == null) renderSuggestions(context, mouseX, mouseY);
     }
 
-    private void renderPaneWidgets(DrawContext context, int mouseX, int mouseY, float delta) {
+    private void renderPaneWidgets(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         Layout layout = layout();
         for (Pane pane : Pane.values()) {
             int left = switch (pane) {
@@ -537,20 +531,20 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             int clippedMouseY = clippedMouseX != Integer.MIN_VALUE ? mouseY : Integer.MIN_VALUE;
             for (PaneChild child : paneChildren) {
                 if (child.pane() != pane) continue;
-                ClickableWidget widget = child.widget();
+                AbstractWidget widget = child.widget();
                 widget.visible = widget.getBottom() > layout.top()
                         && widget.getY() < layout.bottom();
-                if (widget.visible) widget.render(context, clippedMouseX, clippedMouseY, delta);
+                if (widget.visible) widget.extractRenderState(context, clippedMouseX, clippedMouseY, delta);
             }
             context.disableScissor();
         }
     }
 
-    private void renderTabsAndPanels(DrawContext context) {
+    private void renderTabsAndPanels(GuiGraphicsExtractor context) {
         Layout layout = layout();
         int tabTop = settledHeaderHeight() - 24;
-        int titleY = Math.max(2, tabTop - textRenderer.fontHeight - 3);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, titleY, 0xFFFFFFFF);
+        int titleY = Math.max(2, tabTop - font.lineHeight - 3);
+        context.centeredText(font, title, width / 2, titleY, 0xFFFFFFFF);
         renderHeaderSeparatorOutsideTabs(context);
         if (activeTab == ViewTab.REIMBURSEMENT) {
             renderTexturedPanel(context, layout.leftX(), layout.top(), layout.leftWidth(),
@@ -567,7 +561,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         }
     }
 
-    private void renderReimbursement(DrawContext context, int mouseX, int mouseY) {
+    private void renderReimbursement(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         renderEntryList(context, mouseX, mouseY);
         if (draft.entries().isEmpty()) return;
         ReimbursementEntry entry = currentEntry();
@@ -575,18 +569,18 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         context.enableScissor(layout.centerX(), layout.top(),
                 layout.centerX() + layout.centerWidth(), layout.bottom());
         if (entry instanceof ItemEntry item) {
-            context.drawTextWithShadow(textRenderer, Text.literal("Item"),
+            context.text(font, Component.literal("Item"),
                     layout.centerX() + 4, layout.top() + 27 - centerUiScroll, 0xFFCCCCCC);
             renderItemGrid(context, layout, mouseX, mouseY);
         } else {
-            context.drawTextWithShadow(textRenderer, Text.literal("Amount"),
+            context.text(font, Component.literal("Amount"),
                     layout.centerX() + 4, layout.top() + 27 - centerUiScroll, 0xFFCCCCCC);
         }
         context.disableScissor();
         if (entry instanceof ItemEntry item) renderItemDetails(context, layout, item, mouseX, mouseY);
         renderDestinationTitle(context, layout, entry);
         if (!validation.isEmpty()) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal(validation),
+            context.centeredText(font, Component.literal(validation),
                     width / 2, layout.bottom() - 12, 0xFFFF5555);
         }
         addFooterForEntriesIfMissing();
@@ -596,7 +590,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         // Footer controls are rebuilt only once per init; this method intentionally does no work.
     }
 
-    private void renderItemGrid(DrawContext context, Layout layout, int mouseX, int mouseY) {
+    private void renderItemGrid(GuiGraphicsExtractor context, Layout layout, int mouseX, int mouseY) {
         int x = layout.centerX() + Math.max(4, (layout.centerWidth() - GRID_COLUMNS * SLOT_SIZE) / 2);
         int y = layout.top() + 68 - centerUiScroll;
         int boxX = x - 4;
@@ -618,7 +612,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                     && currentItem().itemId().equals(filteredItems.get(index).id());
             context.fill(slotX, slotY, slotX + 17, slotY + 17,
                     selected ? 0xAA55FF55 : 0x80303030);
-            context.drawItem(filteredItems.get(index).stack(), slotX, slotY);
+            context.item(filteredItems.get(index).stack(), slotX, slotY);
         }
         context.disableScissor();
         int rows = (filteredItems.size() + GRID_COLUMNS - 1) / GRID_COLUMNS;
@@ -626,7 +620,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                 y, GRID_HEIGHT, centerScroll, rows * SLOT_SIZE, GRID_HEIGHT);
     }
 
-    private void renderEntryList(DrawContext context, int mouseX, int mouseY) {
+    private void renderEntryList(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Layout layout = layout();
         int rowX = layout.leftX() + 4;
         int rowWidth = entryRowWidth(layout);
@@ -642,10 +636,10 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
 
             ReimbursementEntry entry = draft.entries().get(index);
             ItemStack icon = entryIcon(entry);
-            context.drawItem(icon, rowX + 6, rowY + 9);
+            context.item(icon, rowX + 6, rowY + 9);
             int textWidth = rowWidth - 34 - (selected && hovered ? 22 : 0);
-            String rowLabel = textRenderer.trimToWidth(entryLabel(entry).getString(), textWidth);
-            context.drawTextWithShadow(textRenderer, rowLabel,
+            String rowLabel = font.plainSubstrByWidth(entryLabel(entry).getString(), textWidth);
+            context.text(font, rowLabel,
                     rowX + 28, rowY + 13, 0xFFFFFFFF);
 
             if (selected && hovered) {
@@ -653,7 +647,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                 int removeY = rowY + 8;
                 boolean removeHovered = mouseX >= removeX && mouseX < removeX + 18
                         && mouseY >= removeY && mouseY < removeY + 18;
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED,
+                context.blitSprite(RenderPipelines.GUI_TEXTURED,
                         removeHovered ? REMOVE_HIGHLIGHTED_TEXTURE : REMOVE_TEXTURE,
                         removeX, removeY, 18, 18);
             }
@@ -663,13 +657,13 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         boolean addHovered = mouseX >= rowX && mouseX < rowX + rowWidth
                 && mouseY >= addY && mouseY < addY + ENTRY_ROW_HEIGHT - 2;
         renderEntryRowBackground(context, rowX, addY, rowWidth, false, addHovered);
-        context.drawCenteredTextWithShadow(textRenderer, Text.literal("+  Add Item/Money"),
+        context.centeredText(font, Component.literal("+  Add Item/Money"),
                 rowX + rowWidth / 2, addY + 13, 0xFFFFFFFF);
         context.disableScissor();
     }
 
     private void renderEntryRowBackground(
-            DrawContext context,
+            GuiGraphicsExtractor context,
             int x,
             int y,
             int rowWidth,
@@ -690,27 +684,27 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         ItemEntry item = (ItemEntry) entry;
         return item.itemId() == null
                 ? new ItemStack(Items.BARRIER)
-                : Registries.ITEM.get(item.itemId()).getDefaultStack();
+                : BuiltInRegistries.ITEM.getValue(item.itemId()).getDefaultInstance();
     }
 
     private void renderTexturedPanel(
-            DrawContext context,
+            GuiGraphicsExtractor context,
             int x,
             int y,
             int panelWidth,
             int panelHeight,
             int textureScroll
     ) {
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, LIST_BACKGROUND, x, y,
+        context.blit(RenderPipelines.GUI_TEXTURED, LIST_BACKGROUND, x, y,
                 x + panelWidth, y + panelHeight + textureScroll,
                 panelWidth, panelHeight, 32, 32);
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, LIST_HEADER_SEPARATOR, x, y - 2,
+        context.blit(RenderPipelines.GUI_TEXTURED, LIST_HEADER_SEPARATOR, x, y - 2,
                 0.0F, 0.0F, panelWidth, 2, 32, 2);
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, LIST_FOOTER_SEPARATOR, x, y + panelHeight,
+        context.blit(RenderPipelines.GUI_TEXTURED, LIST_FOOTER_SEPARATOR, x, y + panelHeight,
                 0.0F, 0.0F, panelWidth, 2, 32, 2);
     }
 
-    private void renderItemDetails(DrawContext context, Layout layout, ItemEntry item, int mouseX, int mouseY) {
+    private void renderItemDetails(GuiGraphicsExtractor context, Layout layout, ItemEntry item, int mouseX, int mouseY) {
         int y = layout.top() - rightScroll;
         int x = layout.rightX() + 4;
         int contentWidth = rightContentWidth(layout);
@@ -730,7 +724,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     private void renderDestinationTitle(
-            DrawContext context,
+            GuiGraphicsExtractor context,
             Layout layout,
             ReimbursementEntry entry
     ) {
@@ -739,7 +733,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                 layout.top() + base - 15 - rightScroll, layout);
     }
 
-    private void renderEnchantments(DrawContext context, Layout layout, int mouseX, int mouseY) {
+    private void renderEnchantments(GuiGraphicsExtractor context, Layout layout, int mouseX, int mouseY) {
         int y = layout.top() + itemRightLayout(layout).enchantmentRows() - rightScroll;
         int x = layout.rightX() + 4;
         boolean scrolling = rightContentHeight() > layout.height();
@@ -751,8 +745,8 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             int rowY = y + index * 28;
             context.fill(x, rowY, x + width, rowY + 24, 0x60303030);
             String text = enchantmentName(enchantment.getKey());
-            context.drawTextWithShadow(textRenderer,
-                    textRenderer.trimToWidth(text, Math.max(0, width - 72)),
+            context.text(font,
+                    font.plainSubstrByWidth(text, Math.max(0, width - 72)),
                     x + 3, rowY + 8, 0xFFFFFFFF);
             int removeX = x + width - 20;
             boolean rowHovered = mouseX >= x && mouseX < x + width
@@ -760,7 +754,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             boolean removeHovered = mouseX >= removeX && mouseX < removeX + 18
                     && mouseY >= rowY + 3 && mouseY < rowY + 21;
             if (rowHovered) {
-                context.drawGuiTexture(RenderPipelines.GUI_TEXTURED,
+                context.blitSprite(RenderPipelines.GUI_TEXTURED,
                         removeHovered ? REMOVE_HIGHLIGHTED_TEXTURE : REMOVE_TEXTURE,
                         removeX, rowY + 3, 18, 18);
             }
@@ -769,14 +763,14 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         context.disableScissor();
     }
 
-    private void renderConfig(DrawContext context) {
+    private void renderConfig(GuiGraphicsExtractor context) {
         Layout layout = layout();
         int formWidth = Math.min(460, width - 60);
         int x = (width - formWidth) / 2;
         int y = layout.top() - configScroll;
         label(context, "IGN", x, y + 8, layout);
         label(context, "Discord", x, y + 56, layout);
-        context.drawTextWithShadow(textRenderer, Text.literal("/"), x + (formWidth - 6) / 2,
+        context.text(font, Component.literal("/"), x + (formWidth - 6) / 2,
                 y + 76, 0xFFCCCCCC);
         label(context, "Reason", x, y + 112, layout);
         label(context, "Ticket", x, y + 218, layout);
@@ -784,42 +778,42 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         ReimbursementPlan.Preparation preparation = ReimbursementPlan.prepare(draft);
         if (preparation.valid()) {
             int ping = 100;
-            if (client.getNetworkHandler() != null) {
-                var player = client.getNetworkHandler().getPlayerListEntry(client.getSession().getUsername());
+            if (minecraft.getConnection() != null) {
+                var player = minecraft.getConnection().getPlayerInfo(minecraft.getUser().getName());
                 if (player != null) ping = player.getLatency();
             }
             boolean admin = DMLSConfig.staffRank() == StaffRank.ADMIN;
             ReimbursementEstimate estimate = ReimbursementEstimate.calculate(
                     preparation.plan(), admin, ping, OutboundSpamSafety.ticksUntilSafe(admin));
-            context.drawCenteredTextWithShadow(textRenderer,
-                    Text.literal("Estimated time: " + estimate.formatted() + " (approximate)"),
+            context.centeredText(font,
+                    Component.literal("Estimated time: " + estimate.formatted() + " (approximate)"),
                     width / 2, layout.bottom() - 14, 0xFFFFFF55);
         } else {
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal(preparation.error()),
+            context.centeredText(font, Component.literal(preparation.error()),
                     width / 2, layout.bottom() - 14, 0xFFFF5555);
         }
     }
 
-    private void renderResult(DrawContext context) {
+    private void renderResult(GuiGraphicsExtractor context) {
         int panelWidth = Math.min(560, width - 32);
         int panelX = (width - panelWidth) / 2;
         int top = contentTop();
         int bottom = footerTop() - 8;
         renderPanel(context, panelX, top, panelWidth, bottom - top);
-        Text title = Text.literal(switch (result.kind()) {
+        Component title = Component.literal(switch (result.kind()) {
             case SUCCESS -> "Reimbursement completed";
             case SUCCESS_WITH_WARNINGS -> "Reimbursement completed with warnings";
             case DRY_RUN -> "Reimbursement dry-run plan";
             case PREFLIGHT_REJECTED -> "Reimbursement did not start";
             case PARTIAL_FAILURE -> "Reimbursement stopped";
         });
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, top + 8, 0xFFFFFFFF);
+        context.centeredText(font, title, width / 2, top + 8, 0xFFFFFFFF);
         String body = result.requiresLogCopy() ? result.log() : summaryText();
-        List<OrderedText> lines = textRenderer.wrapLines(Text.literal(body), panelWidth - 20);
+        List<FormattedCharSequence> lines = font.split(Component.literal(body), panelWidth - 20);
         context.enableScissor(panelX + 4, top + 24, panelX + panelWidth - 8, bottom - 4);
         int y = top + 26 - resultScroll;
-        for (OrderedText line : lines) {
-            context.drawTextWithShadow(textRenderer, line, panelX + 8, y, 0xFFDDDDDD);
+        for (FormattedCharSequence line : lines) {
+            context.text(font, line, panelX + 8, y, 0xFFDDDDDD);
             y += 11;
         }
         context.disableScissor();
@@ -843,7 +837,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (result != null) return super.mouseClicked(click, doubled);
         if (handleSuggestionClick(click)) return true;
         if (activeTab == ViewTab.REIMBURSEMENT && clickEntryList(click)) return true;
@@ -926,22 +920,22 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
+    public boolean keyPressed(KeyEvent input) {
         if (result != null && result.requiresLogCopy() && !copied
-                && (input.isEscape() || client.options.inventoryKey.matchesKey(input))) return true;
+                && (input.isEscape() || minecraft.options.keyInventory.matches(input))) return true;
         if (playerIgn != null && playerIgn.isFocused() && !suggestions.isEmpty()) {
-            if (input.isTab() || input.key() == GLFW.GLFW_KEY_ENTER
-                    || input.key() == GLFW.GLFW_KEY_KP_ENTER) {
+            if (input.isCycleFocus() || input.key() == InputConstants.KEY_RETURN
+                    || input.key() == InputConstants.KEY_NUMPADENTER) {
                 acceptPlayerSuggestion();
                 return true;
             }
-            if (input.key() == GLFW.GLFW_KEY_DOWN) {
+            if (input.key() == InputConstants.KEY_DOWN) {
                 suggestionIndex = Math.min(suggestions.size() - 1, suggestionIndex + 1);
                 suggestionWindowOffset = visibleWindowOffset(
                         suggestionWindowOffset, suggestionIndex, suggestions.size());
                 return true;
             }
-            if (input.key() == GLFW.GLFW_KEY_UP) {
+            if (input.key() == InputConstants.KEY_UP) {
                 suggestionIndex = Math.max(0, suggestionIndex - 1);
                 suggestionWindowOffset = visibleWindowOffset(
                         suggestionWindowOffset, suggestionIndex, suggestions.size());
@@ -949,12 +943,12 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             }
         }
         if (enchantSearch != null && enchantSearch.isFocused() && !filteredEnchantments.isEmpty()) {
-            if (input.isTab() || input.key() == GLFW.GLFW_KEY_ENTER
-                    || input.key() == GLFW.GLFW_KEY_KP_ENTER) {
+            if (input.isCycleFocus() || input.key() == InputConstants.KEY_RETURN
+                    || input.key() == InputConstants.KEY_NUMPADENTER) {
                 acceptEnchantmentSuggestion();
                 return true;
             }
-            if (input.key() == GLFW.GLFW_KEY_DOWN) {
+            if (input.key() == InputConstants.KEY_DOWN) {
                 enchantmentSuggestionIndex = Math.min(
                         filteredEnchantments.size() - 1, enchantmentSuggestionIndex + 1);
                 enchantmentSuggestionWindowOffset = visibleWindowOffset(
@@ -962,7 +956,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                         enchantmentSuggestionIndex, filteredEnchantments.size());
                 return true;
             }
-            if (input.key() == GLFW.GLFW_KEY_UP) {
+            if (input.key() == InputConstants.KEY_UP) {
                 enchantmentSuggestionIndex = Math.max(0, enchantmentSuggestionIndex - 1);
                 enchantmentSuggestionWindowOffset = visibleWindowOffset(
                         enchantmentSuggestionWindowOffset,
@@ -979,12 +973,12 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public void close() {
+    public void onClose() {
         if (result != null && result.requiresLogCopy() && !copied) return;
-        super.close();
+        super.onClose();
     }
 
-    private boolean clickItemGrid(Click click, Layout layout) {
+    private boolean clickItemGrid(MouseButtonEvent click, Layout layout) {
         int gridX = layout.centerX() + Math.max(4, (layout.centerWidth() - GRID_COLUMNS * SLOT_SIZE) / 2);
         int gridY = layout.top() + 68 - centerUiScroll;
         if (click.x() < gridX || click.x() >= gridX + GRID_COLUMNS * SLOT_SIZE
@@ -999,7 +993,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         return false;
     }
 
-    private boolean clickEntryList(Click click) {
+    private boolean clickEntryList(MouseButtonEvent click) {
         Layout layout = layout();
         int rowX = layout.leftX() + 4;
         int rowWidth = entryRowWidth(layout);
@@ -1038,7 +1032,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                 && mouseY >= gridY - 4 && mouseY < gridY + GRID_HEIGHT + 4;
     }
 
-    private boolean clickEnchantment(Click click, Layout layout) {
+    private boolean clickEnchantment(MouseButtonEvent click, Layout layout) {
         int x = layout.rightX() + 4;
         int width = rightContentWidth(layout);
         int firstY = layout.top() + itemRightLayout(layout).enchantmentRows() - rightScroll;
@@ -1053,36 +1047,36 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         Map<Identifier, Integer> values = new LinkedHashMap<>(currentItem().enchantments());
         values.remove(id);
         updateItem(currentItem().withEnchantments(values));
-        clearAndInit();
+        rebuildWidgets();
         return true;
     }
 
     private void refreshItems(String query) {
         String needle = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
-        filteredItems = Registries.ITEM.getIds().stream()
-                .filter(id -> !id.equals(Identifier.ofVanilla("air")))
-                .filter(id -> client == null || client.world == null
-                        || Registries.ITEM.get(id).getRequiredFeatures()
-                        .isSubsetOf(client.world.getEnabledFeatures()))
-                .map(id -> new ItemChoice(id, Registries.ITEM.get(id).getDefaultStack()))
+        filteredItems = BuiltInRegistries.ITEM.keySet().stream()
+                .filter(id -> !id.equals(Identifier.withDefaultNamespace("air")))
+                .filter(id -> minecraft == null || minecraft.level == null
+                        || BuiltInRegistries.ITEM.getValue(id).requiredFeatures()
+                        .isSubsetOf(minecraft.level.enabledFeatures()))
+                .map(id -> new ItemChoice(id, BuiltInRegistries.ITEM.getValue(id).getDefaultInstance()))
                 .filter(choice -> needle.isEmpty()
                         || choice.id().toString().contains(needle)
-                        || choice.stack().getName().getString().toLowerCase(Locale.ROOT).contains(needle))
-                .sorted(Comparator.comparing(choice -> choice.stack().getName().getString(),
+                        || choice.stack().getHoverName().getString().toLowerCase(Locale.ROOT).contains(needle))
+                .sorted(Comparator.comparing(choice -> choice.stack().getHoverName().getString(),
                         String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }
 
     private void loadEnchantments() {
-        if (client == null || client.world == null) {
+        if (minecraft == null || minecraft.level == null) {
             availableEnchantments = List.of();
             return;
         }
-        availableEnchantments = client.world.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT)
-                .streamEntries()
-                .filter(entry -> entry.registryKey().getValue().getNamespace().equals(Identifier.DEFAULT_NAMESPACE))
-                .map(entry -> new EnchantmentChoice(entry.registryKey().getValue(),
-                        Enchantment.getName(entry, 1).getString().replaceAll("\\s+[IVXLCDM]+$", "")))
+        availableEnchantments = minecraft.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT)
+                .listElements()
+                .filter(entry -> entry.key().identifier().getNamespace().equals(Identifier.DEFAULT_NAMESPACE))
+                .map(entry -> new EnchantmentChoice(entry.key().identifier(),
+                        Enchantment.getFullname(entry, 1).getString().replaceAll("\\s+[IVXLCDM]+$", "")))
                 .sorted(Comparator.comparing(EnchantmentChoice::name, String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }
@@ -1114,8 +1108,8 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         if (playerIgn == null || !playerIgn.isFocused()) {
             suggestions = List.of();
         } else {
-            String needle = playerIgn.getText().trim().toLowerCase(Locale.ROOT);
-            suggestions = ClientUtils.getOnlinePlayerNames(client).stream()
+            String needle = playerIgn.getValue().trim().toLowerCase(Locale.ROOT);
+            suggestions = ClientUtils.getOnlinePlayerNames(minecraft).stream()
                     .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(needle))
                     .toList();
             suggestionIndex = Math.clamp(suggestionIndex, 0, Math.max(0, suggestions.size() - 1));
@@ -1123,11 +1117,11 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                     suggestionWindowOffset, suggestionIndex, suggestions.size());
         }
         if (enchantSearch != null && enchantSearch.isFocused()) {
-            refreshEnchantments(enchantSearch.getText());
+            refreshEnchantments(enchantSearch.getValue());
         }
     }
 
-    private void renderSuggestions(DrawContext context, int mouseX, int mouseY) {
+    private void renderSuggestions(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         if (playerIgn != null && playerIgn.isFocused() && !suggestions.isEmpty()) {
             renderSuggestionPopup(context, playerIgn, suggestions,
                     suggestionIndex, suggestionWindowOffset);
@@ -1140,14 +1134,14 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     private void renderSuggestionPopup(
-            DrawContext context,
-            TextFieldWidget field,
+            GuiGraphicsExtractor context,
+            EditBox field,
             List<String> values,
             int selected,
             int windowOffset
     ) {
         SuggestionPopup popup = suggestionPopup(field, values.size(), windowOffset);
-        context.createNewRootLayer();
+        context.nextStratum();
         if (popup.windowOffset() > 0) renderSuggestionOverflowDots(context, popup, true);
         if (popup.windowOffset() + popup.visibleCount() < popup.totalCount()) {
             renderSuggestionOverflowDots(context, popup, false);
@@ -1157,15 +1151,15 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             int rowY = popup.y() + visibleIndex * SUGGESTION_ROW_HEIGHT;
             context.fill(popup.x(), rowY, popup.x() + popup.width(),
                     rowY + SUGGESTION_ROW_HEIGHT, SUGGESTION_BACKGROUND);
-            context.drawTextWithShadow(textRenderer,
-                    textRenderer.trimToWidth(values.get(index), popup.width() - 2),
+            context.text(font,
+                    font.plainSubstrByWidth(values.get(index), popup.width() - 2),
                     popup.x() + 1, rowY + 2,
                     index == selected ? SUGGESTION_SELECTED_TEXT : SUGGESTION_TEXT);
         }
     }
 
     private void renderSuggestionOverflowDots(
-            DrawContext context,
+            GuiGraphicsExtractor context,
             SuggestionPopup popup,
             boolean top
     ) {
@@ -1175,7 +1169,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         }
     }
 
-    private boolean handleSuggestionClick(Click click) {
+    private boolean handleSuggestionClick(MouseButtonEvent click) {
         if (playerIgn != null && playerIgn.isFocused() && !suggestions.isEmpty()) {
             SuggestionPopup popup = suggestionPopup(
                     playerIgn, suggestions.size(), suggestionWindowOffset);
@@ -1199,8 +1193,8 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
 
     private void acceptPlayerSuggestion() {
         if (suggestions.isEmpty()) return;
-        playerIgn.setText(suggestions.get(suggestionIndex));
-        playerIgn.setCursorToEnd(false);
+        playerIgn.setValue(suggestions.get(suggestionIndex));
+        playerIgn.moveCursorToEnd(false);
         setFocused(null);
         playerIgn.setFocused(false);
         suggestions = List.of();
@@ -1214,10 +1208,10 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         updateItem(currentItem().withEnchantments(values));
         setFocused(null);
         enchantSearch.setFocused(false);
-        clearAndInit();
+        rebuildWidgets();
     }
 
-    private SuggestionPopup suggestionPopup(TextFieldWidget field, int totalCount, int windowOffset) {
+    private SuggestionPopup suggestionPopup(EditBox field, int totalCount, int windowOffset) {
         Layout layout = layout();
         int visibleCount = Math.min(totalCount, SUGGESTION_VISIBLE_ROWS);
         windowOffset = Math.clamp(windowOffset, 0, Math.max(0, totalCount - visibleCount));
@@ -1261,40 +1255,40 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     private void addEntry() {
         draft.add(ItemEntry.empty());
         selectedEntry = draft.entries().size() - 1;
-        clearAndInit();
+        rebuildWidgets();
     }
 
     private void removeEntry(int index) {
         if (index < 0 || index >= draft.entries().size()) return;
         draft.remove(index);
         selectedEntry = Math.clamp(selectedEntry, 0, Math.max(0, draft.entries().size() - 1));
-        clearAndInit();
+        rebuildWidgets();
     }
 
     private void selectEntry(int index) {
         selectedEntry = index;
-        clearAndInit();
+        rebuildWidgets();
     }
 
     private void changeType(boolean item) {
         ReimbursementEntry old = currentEntry();
         ReimbursementEntry replacement = item
                 ? ItemEntry.empty().withDestination(old.destination() == Destination.CONTAINER
-                ? Destination.CONTAINER : old.destination()).withPlayerIgn(old.playerIgn())
+                                                    ? Destination.CONTAINER : old.destination()).withPlayerIgn(old.playerIgn())
                 : MoneyEntry.empty().withDestination(old.destination()).withPlayerIgn(old.playerIgn());
         updateEntry(replacement);
-        clearAndInit();
+        rebuildWidgets();
     }
 
     private void selectContainers() {
         ItemEntry item = currentItem();
-        ContainerSelectionController.begin(client, this, item.containers(), selected ->
+        ContainerSelectionController.begin(minecraft, this, item.containers(), selected ->
                 updateItem(currentItem().withContainers(selected)));
     }
 
     private void switchTab(ViewTab tab) {
         activeTab = tab;
-        clearAndInit();
+        rebuildWidgets();
     }
 
     private void start() {
@@ -1304,7 +1298,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             return;
         }
         validation = "";
-        module.start(client, preparation.plan(), this);
+        module.start(minecraft, preparation.plan(), this);
     }
 
     private void next() {
@@ -1377,7 +1371,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     private void copyResult() {
-        client.keyboard.setClipboard(result.log());
+        minecraft.keyboardHandler.setClipboard(result.log());
         copied = true;
         if (doneButton != null) doneButton.active = true;
     }
@@ -1385,7 +1379,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     private void done() {
         if (result.requiresLogCopy() && !copied) return;
         if (result.requiresLogCopy()) module.clearDraft();
-        client.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     private ReimbursementEntry currentEntry() {
@@ -1404,67 +1398,67 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         draft.set(selectedEntry, entry);
     }
 
-    private Text entryLabel(ReimbursementEntry entry) {
+    private Component entryLabel(ReimbursementEntry entry) {
         String target = switch (entry.destination()) {
             case ME -> "Me";
             case PLAYER -> entry.playerIgn().isBlank() ? "Player" : entry.playerIgn();
             case CONTAINER -> "Container";
         };
         if (entry instanceof MoneyEntry money) {
-            return Text.literal("$" + money.amount().stripTrailingZeros().toPlainString() + " → " + target);
+            return Component.literal("$" + money.amount().stripTrailingZeros().toPlainString() + " → " + target);
         }
         ItemEntry item = (ItemEntry) entry;
         PrefixTextFormatter.PlainResult customName = PrefixTextFormatter.plainText(item.customName());
         String name = customName.valid() ? customName.text()
                 : item.itemId() == null ? "New item"
-                : Registries.ITEM.get(item.itemId()).getDefaultStack().getName().getString();
-        return Text.literal(item.amount() + "x " + name + " → " + target);
+                  : BuiltInRegistries.ITEM.getValue(item.itemId()).getDefaultInstance().getHoverName().getString();
+        return Component.literal(item.amount() + "x " + name + " → " + target);
     }
 
-    private void label(DrawContext context, String value, int x, int y, Layout layout) {
+    private void label(GuiGraphicsExtractor context, String value, int x, int y, Layout layout) {
         if (y >= layout.top() && y < layout.bottom()) {
-            context.drawTextWithShadow(textRenderer, Text.literal(value), x, y, 0xFFCCCCCC);
+            context.text(font, Component.literal(value), x, y, 0xFFCCCCCC);
         }
     }
 
-    private void rightLabel(DrawContext context, String value, int x, int y, Layout layout) {
+    private void rightLabel(GuiGraphicsExtractor context, String value, int x, int y, Layout layout) {
         if (y < layout.top() || y >= layout.bottom()) return;
         int maxWidth = rightContentWidth(layout);
         context.enableScissor(x, layout.top(), x + maxWidth, layout.bottom());
-        context.drawTextWithShadow(textRenderer,
-                textRenderer.trimToWidth(value, maxWidth), x, y, 0xFFCCCCCC);
+        context.text(font,
+                font.plainSubstrByWidth(value, maxWidth), x, y, 0xFFCCCCCC);
         context.disableScissor();
     }
 
     private void renderPreviewLines(
-            DrawContext context,
-            List<OrderedText> lines,
+            GuiGraphicsExtractor context,
+            List<FormattedCharSequence> lines,
             int x,
             int y,
             int maxWidth,
             Layout layout
     ) {
         context.enableScissor(x, layout.top(), x + maxWidth, layout.bottom());
-        for (OrderedText line : lines) {
+        for (FormattedCharSequence line : lines) {
             if (y >= layout.top() && y < layout.bottom()) {
-                context.drawTextWithShadow(textRenderer, line, x, y, 0xFFFFFFFF);
+                context.text(font, line, x, y, 0xFFFFFFFF);
             }
             y += 11;
         }
         context.disableScissor();
     }
 
-    private List<OrderedText> formattedPreviewLines(String value, boolean blankAsSpace, int maxWidth) {
+    private List<FormattedCharSequence> formattedPreviewLines(String value, boolean blankAsSpace, int maxWidth) {
         if (value == null || value.isEmpty()) {
             if (!blankAsSpace) return List.of();
             value = " ";
         }
         PrefixTextFormatter.ParseResult preview = PrefixTextFormatter.parse(value);
-        return preview.valid() ? textRenderer.wrapLines(preview.preview(), maxWidth) : List.of();
+        return preview.valid() ? font.split(preview.preview(), maxWidth) : List.of();
     }
 
-    private List<OrderedText> lorePreviewLines(ItemEntry item, int maxWidth) {
-        List<OrderedText> lines = new ArrayList<>();
+    private List<FormattedCharSequence> lorePreviewLines(ItemEntry item, int maxWidth) {
+        List<FormattedCharSequence> lines = new ArrayList<>();
         for (String loreLine : item.lore()) {
             lines.addAll(formattedPreviewLines(loreLine, true, maxWidth));
         }
@@ -1472,7 +1466,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
     }
 
     private void renderPaneScrollbar(
-            DrawContext context,
+            GuiGraphicsExtractor context,
             int x,
             int y,
             int height,
@@ -1576,17 +1570,17 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         return Math.min(400, Math.max(220, width - scaled(380)));
     }
 
-    private void renderHeaderSeparatorOutsideTabs(DrawContext context) {
+    private void renderHeaderSeparatorOutsideTabs(GuiGraphicsExtractor context) {
         int totalWidth = tabTotalWidth();
         int tabX = (width - totalWidth) / 2;
         int separatorY = settledHeaderHeight() - 2;
         if (tabX > 0) {
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, LIST_HEADER_SEPARATOR,
+            context.blit(RenderPipelines.GUI_TEXTURED, LIST_HEADER_SEPARATOR,
                     0, separatorY, 0.0F, 0.0F, tabX, 2, 32, 2);
         }
         int rightX = tabX + totalWidth;
         if (rightX < width) {
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, LIST_HEADER_SEPARATOR,
+            context.blit(RenderPipelines.GUI_TEXTURED, LIST_HEADER_SEPARATOR,
                     rightX, separatorY, 0.0F, 0.0F, width - rightX, 2, 32, 2);
         }
     }
@@ -1595,7 +1589,41 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
         return height - FOOTER_TOP_OFFSET;
     }
 
-    private record PaneChild(ClickableWidget widget, Pane pane, int offset) {
+    /** Tab button that draws itself, because vanilla's TabButton no longer provides a renderer in 26.3. */
+    private static final class MenuTabButton extends TabButton {
+        private final TabManager manager;
+        private final Tab target;
+        private final Font textFont;
+
+        private MenuTabButton(TabManager manager, Tab target, int width, int height, Font textFont) {
+            super(manager, target, width, height);
+            this.manager = manager;
+            this.target = target;
+            this.textFont = textFont;
+        }
+
+        @Override
+        public void onClick(MouseButtonEvent click, boolean doubled) {
+            manager.setCurrentTab(target, true);
+        }
+
+        @Override
+        public void extractWidgetRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+            boolean selected = manager.getCurrentTab() == target;
+            int x = getX();
+            int y = getY();
+            int w = getWidth();
+            int h = getHeight();
+            int background = selected ? 0xFF303030 : isHoveredOrFocused() ? 0xFF282828 : 0xFF1A1A1A;
+            context.fill(x, y, x + w, y + h, background);
+            context.outline(x, y, w, h, selected ? 0xFFFFFFFF : 0xFF707070);
+            if (selected) context.fill(x + 4, y + h - 3, x + w - 4, y + h - 2, 0xFFFFFFFF);
+            context.centeredText(textFont, getMessage(), x + w / 2,
+                    y + (h - textFont.lineHeight) / 2, selected ? 0xFFFFFFFF : 0xFFAAAAAA);
+        }
+    }
+
+    private record PaneChild(AbstractWidget widget, Pane pane, int offset) {
     }
 
     private record ItemChoice(Identifier id, ItemStack stack) {
@@ -1613,7 +1641,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
             int visibleCount,
             int windowOffset
     ) {
-        boolean contains(Click click) {
+        boolean contains(MouseButtonEvent click) {
             return contains(click.x(), click.y());
         }
 
@@ -1622,7 +1650,7 @@ public final class ReimbursementScreen extends DMLSMenuScreen {
                     && mouseY >= y && mouseY < y + height;
         }
 
-        int index(Click click) {
+        int index(MouseButtonEvent click) {
             int visibleIndex = Math.clamp(
                     (int) (click.y() - y) / SUGGESTION_ROW_HEIGHT, 0, visibleCount - 1);
             return windowOffset + visibleIndex;

@@ -8,11 +8,10 @@ import com.duperknight.client.session.OperationCancelReason;
 import com.duperknight.client.session.OperationHandle;
 import com.duperknight.client.session.PacedCommandSequence;
 import com.duperknight.client.session.ResponseStatus;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import net.minecraft.client.Minecraft;
 
 /** Shared fail-closed LuckPerms sequence used by promotion and demotion waves. */
 final class RankWaveOperation implements ManagedOperation {
@@ -29,13 +28,13 @@ final class RankWaveOperation implements ManagedOperation {
     }
 
     interface Listener {
-        void started(MinecraftClient client, int playerCount);
+        void started(Minecraft client, int playerCount);
 
-        void progress(MinecraftClient client, Step step, int commandIndex, int commandCount);
+        void progress(Minecraft client, Step step, int commandIndex, int commandCount);
 
-        void finished(MinecraftClient client, Summary summary);
+        void finished(Minecraft client, Summary summary);
 
-        void cancelled(MinecraftClient client, Summary summary, OperationCancelReason reason);
+        void cancelled(Minecraft client, Summary summary, OperationCancelReason reason);
     }
 
     private final List<Step> steps;
@@ -45,7 +44,7 @@ final class RankWaveOperation implements ManagedOperation {
     private final List<String> simulatedPlayers = new ArrayList<>();
 
     private OperationHandle handle;
-    private MinecraftClient client;
+    private Minecraft client;
     private PacedCommandSequence<Step> sequence;
     private int synchronizedSteps;
     private int announcedIndex = -1;
@@ -74,7 +73,7 @@ final class RankWaveOperation implements ManagedOperation {
     }
 
     @Override
-    public void onStarted(OperationHandle handle, MinecraftClient client) {
+    public void onStarted(OperationHandle handle, Minecraft client) {
         this.handle = handle;
         this.client = client;
         boolean dryRun = handle.descriptor().dryRunCaptured();
@@ -95,14 +94,14 @@ final class RankWaveOperation implements ManagedOperation {
     }
 
     @Override
-    public void onTick(OperationHandle handle, MinecraftClient client) {
+    public void onTick(OperationHandle handle, Minecraft client) {
         sequence.tick();
         synchronizeAndFinishIfNeeded();
         announceCurrent();
     }
 
     @Override
-    public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+    public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
         if (message.origin() != MessageOrigin.SERVER_SYSTEM) return;
         sequence.accept(message.cleanText());
         synchronizeAndFinishIfNeeded();
@@ -110,7 +109,7 @@ final class RankWaveOperation implements ManagedOperation {
     }
 
     @Override
-    public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+    public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
         if (sequence != null) sequence.cancel();
         synchronizeCompletedSteps();
         listener.cancelled(client, summary(), reason);

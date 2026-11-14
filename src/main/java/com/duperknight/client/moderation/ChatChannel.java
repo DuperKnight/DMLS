@@ -1,8 +1,7 @@
 package com.duperknight.client.moderation;
 
-import net.minecraft.text.Text;
-
 import java.util.List;
+import net.minecraft.network.chat.Component;
 
 /** Channels understood by the moderation view, including non-selectable server output. */
 public enum ChatChannel {
@@ -30,8 +29,8 @@ public enum ChatChannel {
         this.selectable = selectable;
     }
 
-    public Text displayName() {
-        return Text.translatable(translationKey);
+    public Component displayName() {
+        return Component.translatable(translationKey);
     }
 
     public String sendCommand() {

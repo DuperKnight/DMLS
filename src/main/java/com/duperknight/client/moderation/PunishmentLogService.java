@@ -3,8 +3,7 @@ package com.duperknight.client.moderation;
 import com.duperknight.DMLS;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.minecraft.client.MinecraftClient;
-
+import net.minecraft.client.Minecraft;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -106,7 +105,7 @@ public final class PunishmentLogService implements PunishmentLogSource {
         if (INSTANCE.registered) return;
         INSTANCE.registered = true;
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.world != null && client.currentScreen instanceof ModerationScreen) {
+            if (client.level != null && client.gui.screen() instanceof ModerationScreen) {
                 INSTANCE.refreshIfStale();
             }
         });
@@ -125,7 +124,7 @@ public final class PunishmentLogService implements PunishmentLogSource {
         }
     }
 
-    public synchronized void recordLocal(MinecraftClient client, PunishmentRequest request) {
+    public synchronized void recordLocal(Minecraft client, PunishmentRequest request) {
         if (request == null) return;
         long now = System.currentTimeMillis();
         String staffName = client != null && client.player != null

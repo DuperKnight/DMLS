@@ -15,14 +15,13 @@ import com.duperknight.client.parser.BalanceResponseParser;
 import com.duperknight.client.session.PendingConfirmation;
 import com.duperknight.client.session.RollbackSafetyGate;
 import com.duperknight.client.session.OperationOutcome;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class XrayRollbackModule extends DMLSModule {
     public static final String OPERATION_ID = "xray-rollback";
@@ -76,8 +75,8 @@ public final class XrayRollbackModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.xray.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.xray.name");
     }
 
     @Override
@@ -86,10 +85,10 @@ public final class XrayRollbackModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
+    public List<Component> description() {
         return List.of(
-                Text.translatable("dmls.module.xray.description.1"),
-                Text.translatable("dmls.module.xray.description.2")
+                Component.translatable("dmls.module.xray.description.1"),
+                Component.translatable("dmls.module.xray.description.2")
         );
     }
 
@@ -99,8 +98,8 @@ public final class XrayRollbackModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new XrayRollbackScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new XrayRollbackScreen(parent, this));
     }
 
     @Override
@@ -109,15 +108,15 @@ public final class XrayRollbackModule extends DMLSModule {
     }
 
     /** Compatibility entrypoint: prepares the rollback but never dispatches before confirmation. */
-    public StageResult submit(MinecraftClient client, String ign) {
+    public StageResult submit(Minecraft client, String ign) {
         return stage(client, ign);
     }
 
-    public StageResult stage(MinecraftClient client, String ign) {
+    public StageResult stage(Minecraft client, String ign) {
         return stage(client, ign, true);
     }
 
-    public StageResult stage(MinecraftClient client, String ign, boolean announcePreview) {
+    public StageResult stage(Minecraft client, String ign, boolean announcePreview) {
         invalidatePending();
         RollbackRequest request = prepare(ign);
         if (!request.valid()) {
@@ -140,7 +139,7 @@ public final class XrayRollbackModule extends DMLSModule {
         return new StageResult(StageStatus.STAGED, pendingConfirmation.token(), request);
     }
 
-    public boolean confirm(MinecraftClient client, String token) {
+    public boolean confirm(Minecraft client, String token) {
         PendingConfirmation<RollbackRequest> pending = pendingConfirmation;
         if (pending == null) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.confirmation.none");
@@ -165,7 +164,7 @@ public final class XrayRollbackModule extends DMLSModule {
     }
 
     /** Confirms the single currently staged command request without exposing its internal nonce. */
-    public boolean confirm(MinecraftClient client) {
+    public boolean confirm(Minecraft client) {
         PendingConfirmation<RollbackRequest> pending = pendingConfirmation;
         return confirm(client, pending == null ? "" : pending.token());
     }
@@ -180,7 +179,7 @@ public final class XrayRollbackModule extends DMLSModule {
         if (pending != null && pending.token().equals(token)) invalidatePending();
     }
 
-    public boolean cancel(MinecraftClient client) {
+    public boolean cancel(Minecraft client) {
         if (pendingConfirmation != null && pendingConfirmation.isActive()) {
             invalidatePending();
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.confirmation.cancelled");
@@ -197,7 +196,7 @@ public final class XrayRollbackModule extends DMLSModule {
         pendingConfirmation = null;
     }
 
-    private void sendPreview(MinecraftClient client, PendingConfirmation<RollbackRequest> pending) {
+    private void sendPreview(Minecraft client, PendingConfirmation<RollbackRequest> pending) {
         RollbackRequest request = pending.request();
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.xray.preview", request.username());
         request.commands().forEach(command -> ChatUtils.sendClientMessage(client, "§8• §7/" + command));
@@ -214,10 +213,10 @@ public final class XrayRollbackModule extends DMLSModule {
         };
     }
 
-    public List<Text> previewLines(RollbackRequest request) {
-        List<Text> lines = new ArrayList<>();
-        lines.add(Text.translatable("dmls.screen.xray.review_target", request.username()));
-        request.commands().forEach(command -> lines.add(Text.literal("/" + command)));
+    public List<Component> previewLines(RollbackRequest request) {
+        List<Component> lines = new ArrayList<>();
+        lines.add(Component.translatable("dmls.screen.xray.review_target", request.username()));
+        request.commands().forEach(command -> lines.add(Component.literal("/" + command)));
         return List.copyOf(lines);
     }
 
@@ -228,7 +227,7 @@ public final class XrayRollbackModule extends DMLSModule {
 
     private final class RollbackSession implements ManagedOperation {
         private final String ign;
-        private final List<Text> results = new ArrayList<>();
+        private final List<Component> results = new ArrayList<>();
 
         private OperationHandle handle;
         private int stepIndex = -1;
@@ -249,7 +248,7 @@ public final class XrayRollbackModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             this.handle = handle;
             if (handle.descriptor().dryRunCaptured()) {
                 for (Step step : STEPS) {
@@ -271,21 +270,21 @@ public final class XrayRollbackModule extends DMLSModule {
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             tick(client);
         }
 
         @Override
-        public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+        public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
             if (message.origin() != MessageOrigin.SERVER_SYSTEM) return;
             handleServerMessage(message.cleanText());
         }
 
         @Override
-        public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+        public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
             if (safetyGate != null) safetyGate.cancel();
             if (stepIndex >= 0 && stepIndex < STEPS.size()) {
-                results.add(Text.translatable("dmls.chat.xray.result.cancelled", Text.translatable(STEPS.get(stepIndex).label())));
+                results.add(Component.translatable("dmls.chat.xray.result.cancelled", Component.translatable(STEPS.get(stepIndex).label())));
             }
             ChatUtils.sendTranslatedMessage(client, PREFIX,
                     reason == OperationCancelReason.CONNECTION_CHANGED
@@ -293,7 +292,7 @@ public final class XrayRollbackModule extends DMLSModule {
             report(client);
         }
 
-        private void tick(MinecraftClient client) {
+        private void tick(Minecraft client) {
             if (stepIndex >= STEPS.size()) {
                 return;
             }
@@ -308,22 +307,22 @@ public final class XrayRollbackModule extends DMLSModule {
                 if (outcome == OperationOutcome.CONFIRMED) {
                     // small gap after the completion message before the next command
                     if (postCompletionTicks++ >= COMMAND_GAP_TICKS) {
-                        results.add(Text.translatable("dmls.chat.xray.result.success", Text.translatable(step.label())));
+                        results.add(Component.translatable("dmls.chat.xray.result.success", Component.translatable(step.label())));
                         nextStep(client);
                     }
                 } else if (outcome == OperationOutcome.TIMED_OUT) {
-                    results.add(Text.translatable("dmls.chat.xray.result.timed_out", Text.translatable(step.label())));
+                    results.add(Component.translatable("dmls.chat.xray.result.timed_out", Component.translatable(step.label())));
                     report(client);
                     finish();
                 }
             } else if (balanceOutcome == OperationOutcome.CONFIRMED) {
-                results.add(Text.translatable("dmls.chat.xray.result.balance_confirmed", Text.translatable(step.label())));
+                results.add(Component.translatable("dmls.chat.xray.result.balance_confirmed", Component.translatable(step.label())));
                 nextStep(client);
             } else if (balanceOutcome == OperationOutcome.REJECTED) {
-                results.add(Text.translatable("dmls.chat.xray.result.balance_rejected", Text.translatable(step.label())));
+                results.add(Component.translatable("dmls.chat.xray.result.balance_rejected", Component.translatable(step.label())));
                 nextStep(client);
             } else if (++waitTicks > BALANCE_WAIT_TICKS) {
-                results.add(Text.translatable("dmls.chat.xray.result.output", Text.translatable(step.label())));
+                results.add(Component.translatable("dmls.chat.xray.result.output", Component.translatable(step.label())));
                 nextStep(client);
             }
         }
@@ -346,8 +345,8 @@ public final class XrayRollbackModule extends DMLSModule {
                 case CONFIRMED -> safetyGate.confirm();
                 case REJECTED -> {
                     safetyGate.reject();
-                    results.add(Text.translatable("dmls.chat.xray.result.rejected", Text.translatable(STEPS.get(stepIndex).label())));
-                    MinecraftClient client = MinecraftClient.getInstance();
+                    results.add(Component.translatable("dmls.chat.xray.result.rejected", Component.translatable(STEPS.get(stepIndex).label())));
+                    Minecraft client = Minecraft.getInstance();
                     report(client);
                     finish();
                 }
@@ -355,7 +354,7 @@ public final class XrayRollbackModule extends DMLSModule {
             }
         }
 
-        private void nextStep(MinecraftClient client) {
+        private void nextStep(Minecraft client) {
             stepIndex++;
             if (stepIndex >= STEPS.size()) {
                 report(client);
@@ -369,12 +368,12 @@ public final class XrayRollbackModule extends DMLSModule {
             safetyGate = step.type() == StepType.ROLLBACK ? new RollbackSafetyGate(ROLLBACK_TIMEOUT_TICKS) : null;
             balanceOutcome = step.type() == StepType.BALANCE ? OperationOutcome.PENDING : null;
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.xray.step", stepIndex + 1, STEPS.size(),
-                    Text.translatable(step.label()));
+                    Component.translatable(step.label()));
             waitingToDispatch = true;
             tryDispatchCurrentStep(client);
         }
 
-        private void tryDispatchCurrentStep(MinecraftClient client) {
+        private void tryDispatchCurrentStep(Minecraft client) {
             if (!waitingToDispatch || !handle.canDispatchAutomatedCommand()) return;
             Step step = STEPS.get(stepIndex);
             CommandDispatch dispatch = handle.dispatchCommand(client, step.commandTemplate().formatted(ign));
@@ -392,10 +391,10 @@ public final class XrayRollbackModule extends DMLSModule {
             }
         }
 
-        private void report(MinecraftClient client) {
-            String header = Text.translatable("dmls.chat.xray.header", ign).getString();
+        private void report(Minecraft client) {
+            String header = Component.translatable("dmls.chat.xray.header", ign).getString();
             ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
-            for (Text result : results) {
+            for (Component result : results) {
                 ChatUtils.sendClientMessage(client, result);
             }
             ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));

@@ -13,16 +13,15 @@ import com.duperknight.client.modules.StaffDepartment;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.HeaderBehavior;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 
 /** Persisted mod-wide settings that do not belong to an individual module. */
 public final class DMLSOptionsScreen extends DMLSMenuScreen {
@@ -44,12 +43,12 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     private int linkCodeOffset;
     private int contentBottomPadding;
     private int baseContentHeight;
-    private ButtonWidget discordLinkButton;
+    private Button discordLinkButton;
     private LinkCodeWidget linkCodeWidget;
     private String linkCode = "";
     private String linkClientToken = "";
     private boolean linkCodeRevealed;
-    private Text linkStatus;
+    private Component linkStatus;
     private long linkStatusUntilMillis;
     private int linkStatusColor = STATUS_COLOR;
     private boolean pendingStatusShown;
@@ -59,7 +58,7 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     private int statusGeneration;
 
     public DMLSOptionsScreen(Screen parent) {
-        super(Text.translatable("dmls.title.options"), parent);
+        super(Component.translatable("dmls.title.options"), parent);
     }
 
     @Override
@@ -110,23 +109,23 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         int behaviorWidth = rankWidth;
         if (showAllowedServers) {
             int settingWidth = (departmentsWidth - settingGap) / 2;
-            addScrollableChild(ButtonWidget.builder(Text.translatable("dmls.option.allowed_servers"),
-                            button -> client.setScreen(new AllowedServersScreen(this)))
-                    .dimensions(departmentsX, contentY(settingsOffset), settingWidth, STANDARD_BUTTON_HEIGHT).build(),
+            addScrollableChild(Button.builder(Component.translatable("dmls.option.allowed_servers"),
+                            button -> minecraft.gui.setScreen(new AllowedServersScreen(this)))
+                    .bounds(departmentsX, contentY(settingsOffset), settingWidth, STANDARD_BUTTON_HEIGHT).build(),
                     settingsOffset);
             behaviorX = departmentsX + settingWidth + settingGap;
             behaviorWidth = settingWidth;
         }
         boolean collapseForced = isHeaderCollapseForced();
         DropdownWidget<HeaderBehavior> behaviorDropdown = DropdownWidget.builder(
-                        Text.translatable("dmls.option.header_behavior"),
+                        Component.translatable("dmls.option.header_behavior"),
                         HeaderBehavior.options(),
                         collapseForced ? HeaderBehavior.ALWAYS_SMALL : DMLSConfig.headerBehavior(),
                         HeaderBehavior::displayName,
                         (dropdown, value) -> {
                             if (DMLSConfig.setHeaderBehavior(value)) {
                                 applyHeaderPreferenceImmediately();
-                                clearAndInit();
+                                rebuildWidgets();
                             } else {
                                 dropdown.setValue(DMLSConfig.headerBehavior());
                             }
@@ -137,24 +136,24 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
                 .build();
         behaviorDropdown.active = !collapseForced;
         addScrollableDropdownChild(behaviorDropdown, settingsOffset);
-        discordLinkButton = addScrollableChild(ButtonWidget.builder(
+        discordLinkButton = addScrollableChild(Button.builder(
                         discordLinkButtonText(),
                         button -> requestDiscordLink())
-                .dimensions(rankX, contentY(discordLinkOffset), rankWidth, STANDARD_BUTTON_HEIGHT).build(),
+                .bounds(rankX, contentY(discordLinkOffset), rankWidth, STANDARD_BUTTON_HEIGHT).build(),
                 discordLinkOffset);
         discordLinkButton.active = !linked;
         linkCodeWidget = addScrollableChild(new LinkCodeWidget(
                 rankX, contentY(linkCodeOffset), rankWidth, STANDARD_BUTTON_HEIGHT, linkCode, linkCodeRevealed,
                 () -> linkCodeRevealed = true,
                 () -> {
-                    setLinkStatus(Text.translatable("dmls.option.discord_link.copied"), STATUS_COLOR);
+                    setLinkStatus(Component.translatable("dmls.option.discord_link.copied"), STATUS_COLOR);
                 }), linkCodeOffset);
         setScrollableChildEnabled(linkCodeWidget, !linked && !linkCode.isEmpty());
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
-        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.feedback.open"),
-                        button -> client.setScreen(new FeedbackScreen(this)))
-                .dimensions(width - scaled(132), footerButtonY(), scaled(116), STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, button -> onClose())
+                .bounds(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(Component.translatable("dmls.feedback.open"),
+                        button -> minecraft.gui.setScreen(new FeedbackScreen(this)))
+                .bounds(width - scaled(132), footerButtonY(), scaled(116), STANDARD_BUTTON_HEIGHT).build());
 
         if (!storedTokenLoaded) {
             storedTokenLoaded = true;
@@ -163,15 +162,15 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, headerHeight() + scaled(16), 0xFFFFFFFF);
+        context.centeredText(font, title, width / 2, headerHeight() + scaled(16), 0xFFFFFFFF);
 
         if (linkStatus != null && System.currentTimeMillis() >= linkStatusUntilMillis) {
             clearLinkStatus();
         }
-        List<OrderedText> statusLines = linkStatus == null
-                ? List.of() : textRenderer.wrapLines(linkStatus, departmentsWidth);
+        List<FormattedCharSequence> statusLines = linkStatus == null
+                ? List.of() : font.split(linkStatus, departmentsWidth);
         boolean showLinkCode = !linked && !linkCode.isEmpty();
         int statusOffset = linkCodeOffset + (showLinkCode
                 ? STANDARD_BUTTON_HEIGHT + scaled(7) : scaled(2));
@@ -182,26 +181,26 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         beginContentScissor(context);
         int rankY = contentY(rankOffset);
         renderPanel(context, rankX, rankY, rankWidth, STANDARD_BUTTON_HEIGHT);
-        context.drawCenteredTextWithShadow(textRenderer, DMLSConfig.staffRank().displayName(),
-                width / 2, rankY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2 + scaled(1), 0xFFFFFFFF);
+        context.centeredText(font, DMLSConfig.staffRank().displayName(),
+                width / 2, rankY + (STANDARD_BUTTON_HEIGHT - font.lineHeight) / 2 + scaled(1), 0xFFFFFFFF);
 
-        renderSectionDivider(context, contentY(dividerOffset), Text.translatable("dmls.option.departments"));
+        renderSectionDivider(context, contentY(dividerOffset), Component.translatable("dmls.option.departments"));
 
         int gap = scaled(8);
         int departmentWidth = (departmentsWidth - gap * 2) / 3;
         int index = 0;
         for (StaffDepartment department : StaffDepartment.values()) {
             int centerX = departmentsX + index * (departmentWidth + gap) + departmentWidth / 2;
-            context.drawCenteredTextWithShadow(textRenderer, department.displayName(), centerX,
+            context.centeredText(font, department.displayName(), centerX,
                     contentY(departmentsOffset), 0xFFDDDDDD);
             index++;
         }
-        renderSectionDivider(context, contentY(integrationsDividerOffset), Text.translatable("dmls.option.integrations"));
+        renderSectionDivider(context, contentY(integrationsDividerOffset), Component.translatable("dmls.option.integrations"));
         if (!statusLines.isEmpty()) {
             int statusY = contentY(statusOffset);
-            for (OrderedText line : statusLines) {
-                if (isContentVisible(statusY, textRenderer.fontHeight)) {
-                    context.drawCenteredTextWithShadow(textRenderer, line, width / 2, statusY, linkStatusColor);
+            for (FormattedCharSequence line : statusLines) {
+                if (isContentVisible(statusY, font.lineHeight)) {
+                    context.centeredText(font, line, width / 2, statusY, linkStatusColor);
                 }
                 statusY += scaled(11);
             }
@@ -210,18 +209,18 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         if (linkCodeWidget != null) {
             setScrollableChildEnabled(linkCodeWidget, !linked && !linkCode.isEmpty());
         }
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
-    private void renderSectionDivider(DrawContext context, int y, Text label) {
-        int titleHalfWidth = textRenderer.getWidth(label) / 2;
+    private void renderSectionDivider(GuiGraphicsExtractor context, int y, Component label) {
+        int titleHalfWidth = font.width(label) / 2;
         int titlePadding = scaled(8);
         context.fill(departmentsX, y,
                 width / 2 - titleHalfWidth - titlePadding, y + 1, PANEL_BORDER_COLOR);
         context.fill(width / 2 + titleHalfWidth + titlePadding, y,
                 departmentsX + departmentsWidth, y + 1, PANEL_BORDER_COLOR);
-        context.drawCenteredTextWithShadow(textRenderer, label,
-                width / 2, y - textRenderer.fontHeight / 2, 0xFFFFFFFF);
+        context.centeredText(font, label,
+                width / 2, y - font.lineHeight / 2, 0xFFFFFFFF);
     }
 
     @Override
@@ -230,8 +229,8 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     }
 
     private void requestDiscordLink() {
-        if (client == null || client.getSession().getUuidOrNull() == null) {
-            setLinkStatus(Text.translatable("dmls.option.discord_link.error.identity"), ERROR_COLOR);
+        if (minecraft == null || minecraft.getUser().getProfileId() == null) {
+            setLinkStatus(Component.translatable("dmls.option.discord_link.error.identity"), ERROR_COLOR);
             return;
         }
 
@@ -239,14 +238,14 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         pendingStatusShown = false;
         int generation = ++requestGeneration;
         discordLinkButton.active = false;
-        discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.requesting"));
-        setLinkStatus(Text.translatable("dmls.option.discord_link.requesting_hint"), STATUS_COLOR);
+        discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link.requesting"));
+        setLinkStatus(Component.translatable("dmls.option.discord_link.requesting_hint"), STATUS_COLOR);
 
-        var minecraftUuid = client.getSession().getUuidOrNull();
-        DiscordLinkService.request(minecraftUuid, client.getSession().getUsername())
+        var minecraftUuid = minecraft.getUser().getProfileId();
+        DiscordLinkService.request(minecraftUuid, minecraft.getUser().getName())
                 .thenApply(result -> new StoredLinkResult(result,
                         !result.succeeded() || DiscordLinkTokenStore.save(minecraftUuid, result.clientToken())))
-                .thenAccept(result -> client.execute(() -> applyLinkResult(generation, result)));
+                .thenAccept(result -> minecraft.execute(() -> applyLinkResult(generation, result)));
     }
 
     private void applyLinkResult(int generation, StoredLinkResult storedResult) {
@@ -260,8 +259,8 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
                 linkClientToken = "";
                 linkCodeRevealed = false;
                 setScrollableChildEnabled(linkCodeWidget, false);
-                discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link"));
-                setLinkStatus(Text.translatable("dmls.option.discord_link.error.storage"), ERROR_COLOR);
+                discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link"));
+                setLinkStatus(Component.translatable("dmls.option.discord_link.error.storage"), ERROR_COLOR);
                 return;
             }
             linkCode = result.code();
@@ -272,32 +271,32 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
             linkCodeRevealed = false;
             linkCodeWidget.setCode(linkCode);
             setScrollableChildEnabled(linkCodeWidget, true);
-            discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.new_code"));
-            setLinkStatus(Text.translatable("dmls.option.discord_link.instructions"), STATUS_COLOR);
+            discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link.new_code"));
+            setLinkStatus(Component.translatable("dmls.option.discord_link.instructions"), STATUS_COLOR);
             pendingStatusShown = true;
             beginStatusCheck(++statusGeneration);
             return;
         }
 
         discordLinkButton.setMessage(discordLinkButtonText());
-        Text error = switch (result.status()) {
-            case RATE_LIMITED -> Text.translatable("dmls.option.discord_link.error.rate_limited");
-            case TIMEOUT -> Text.translatable("dmls.option.discord_link.error.timeout");
-            case NETWORK_ERROR -> Text.translatable("dmls.option.discord_link.error.network");
+        Component error = switch (result.status()) {
+            case RATE_LIMITED -> Component.translatable("dmls.option.discord_link.error.rate_limited");
+            case TIMEOUT -> Component.translatable("dmls.option.discord_link.error.timeout");
+            case NETWORK_ERROR -> Component.translatable("dmls.option.discord_link.error.network");
             case SERVICE_ERROR -> result.message().isBlank()
-                    ? Text.translatable("dmls.option.discord_link.error.service")
-                    : Text.translatable("dmls.option.discord_link.error.service_message", safeMessage(result.message()));
-            default -> Text.translatable("dmls.option.discord_link.error.response");
+                    ? Component.translatable("dmls.option.discord_link.error.service")
+                    : Component.translatable("dmls.option.discord_link.error.service_message", safeMessage(result.message()));
+            default -> Component.translatable("dmls.option.discord_link.error.response");
         };
         setLinkStatus(error, ERROR_COLOR);
     }
 
     private void loadStoredLink() {
-        if (client == null || client.getSession().getUuidOrNull() == null) return;
-        DiscordLinkTokenStore.load(client.getSession().getUuidOrNull()).ifPresent(token -> {
+        if (minecraft == null || minecraft.getUser().getProfileId() == null) return;
+        DiscordLinkTokenStore.load(minecraft.getUser().getProfileId()).ifPresent(token -> {
             linkClientToken = token;
             discordLinkButton.active = false;
-            discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.checking"));
+            discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link.checking"));
             clearLinkStatus();
             pendingStatusShown = false;
             beginStatusCheck(++statusGeneration);
@@ -305,29 +304,29 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     }
 
     private void beginStatusCheck(int generation) {
-        if (client == null || client.currentScreen != this || generation != statusGeneration
-                || linkClientToken.isEmpty() || client.getSession().getUuidOrNull() == null) {
+        if (minecraft == null || minecraft.gui.screen() != this || generation != statusGeneration
+                || linkClientToken.isEmpty() || minecraft.getUser().getProfileId() == null) {
             return;
         }
 
-        var minecraftUuid = client.getSession().getUuidOrNull();
+        var minecraftUuid = minecraft.getUser().getProfileId();
         DiscordLinkService.checkStatus(minecraftUuid, linkClientToken)
-                .thenAccept(result -> client.execute(() -> applyStatusResult(generation, result)));
+                .thenAccept(result -> minecraft.execute(() -> applyStatusResult(generation, result)));
     }
 
     private void applyStatusResult(int generation, DiscordLinkService.LinkStatusResult result) {
-        if (client == null || client.currentScreen != this || generation != statusGeneration) return;
+        if (minecraft == null || minecraft.gui.screen() != this || generation != statusGeneration) return;
 
         switch (result.status()) {
             case LINKED -> showLinked(result.profile());
             case PENDING -> {
                 linked = false;
                 discordLinkButton.active = true;
-                discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.new_code"));
+                discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link.new_code"));
                 if (!pendingStatusShown) {
                     clearCachedProfile();
                     refreshDiscordAccount();
-                    setLinkStatus(Text.translatable(linkCode.isEmpty()
+                    setLinkStatus(Component.translatable(linkCode.isEmpty()
                             ? "dmls.option.discord_link.pending_without_code"
                             : "dmls.option.discord_link.instructions"), STATUS_COLOR);
                     pendingStatusShown = true;
@@ -340,8 +339,8 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
                 linked = false;
                 setScrollableChildEnabled(linkCodeWidget, false);
                 discordLinkButton.active = false;
-                discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.stale"));
-                setLinkStatus(Text.translatable("dmls.option.discord_link.error.stale"), ERROR_COLOR);
+                discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link.stale"));
+                setLinkStatus(Component.translatable("dmls.option.discord_link.error.stale"), ERROR_COLOR);
                 scheduleStatusCheck(generation, 30);
             }
             case RATE_LIMITED -> retryStatusCheck(generation,
@@ -357,14 +356,13 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
 
     private void showLinked(DiscordAccountProfile profile) {
         linked = true;
-        if (client != null) DiscordLinkAvailability.markLinked(client.getSession().getUuidOrNull());
-        DMLSConfig.enableDoNotInstaBanByDefaultForConfirmedLink();
+        if (minecraft != null) DiscordLinkAvailability.markLinked(minecraft.getUser().getProfileId());
         pendingStatusShown = false;
         linkCode = "";
         linkCodeRevealed = false;
         setScrollableChildEnabled(linkCodeWidget, false);
         discordLinkButton.active = false;
-        discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.linked"));
+        discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link.linked"));
         clearLinkStatus();
         if (profile != null) {
             DiscordAccountProfileStore.save(profile);
@@ -374,8 +372,8 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     }
 
     private void clearInvalidToken(String messageKey) {
-        if (client != null && client.getSession().getUuidOrNull() != null) {
-            DiscordLinkTokenStore.delete(client.getSession().getUuidOrNull());
+        if (minecraft != null && minecraft.getUser().getProfileId() != null) {
+            DiscordLinkTokenStore.delete(minecraft.getUser().getProfileId());
             clearCachedProfile();
         }
         statusGeneration++;
@@ -386,32 +384,32 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
         linkCodeRevealed = false;
         setScrollableChildEnabled(linkCodeWidget, false);
         discordLinkButton.active = true;
-        discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link"));
-        setLinkStatus(Text.translatable(messageKey), ERROR_COLOR);
+        discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link"));
+        setLinkStatus(Component.translatable(messageKey), ERROR_COLOR);
         refreshDiscordAccount();
     }
 
     private void retryStatusCheck(int generation, String messageKey, int delaySeconds) {
         discordLinkButton.active = false;
-        discordLinkButton.setMessage(Text.translatable("dmls.option.discord_link.checking"));
-        setLinkStatus(Text.translatable(messageKey), ERROR_COLOR);
+        discordLinkButton.setMessage(Component.translatable("dmls.option.discord_link.checking"));
+        setLinkStatus(Component.translatable(messageKey), ERROR_COLOR);
         scheduleStatusCheck(generation, delaySeconds);
     }
 
     private void scheduleStatusCheck(int generation, int delaySeconds) {
-        var currentClient = client;
+        var currentClient = minecraft;
         if (currentClient == null) return;
         CompletableFuture.delayedExecutor(Math.max(1, delaySeconds), TimeUnit.SECONDS).execute(() ->
                 currentClient.execute(() -> beginStatusCheck(generation)));
     }
 
-    private Text discordLinkButtonText() {
-        if (linked) return Text.translatable("dmls.option.discord_link.linked");
-        return Text.translatable(linkCode.isEmpty()
+    private Component discordLinkButtonText() {
+        if (linked) return Component.translatable("dmls.option.discord_link.linked");
+        return Component.translatable(linkCode.isEmpty()
                 ? "dmls.option.discord_link" : "dmls.option.discord_link.new_code");
     }
 
-    private void setLinkStatus(Text status, int color) {
+    private void setLinkStatus(Component status, int color) {
         linkStatus = status;
         linkStatusColor = color;
         linkStatusUntilMillis = System.currentTimeMillis() + STATUS_DURATION_MILLIS;
@@ -423,8 +421,8 @@ public final class DMLSOptionsScreen extends DMLSMenuScreen {
     }
 
     private void clearCachedProfile() {
-        if (client == null || client.getSession().getUuidOrNull() == null) return;
-        var minecraftUuid = client.getSession().getUuidOrNull();
+        if (minecraft == null || minecraft.getUser().getProfileId() == null) return;
+        var minecraftUuid = minecraft.getUser().getProfileId();
         DiscordAccountProfileStore.load(minecraftUuid).ifPresent(DiscordAvatarCache::deleteCached);
         DiscordAccountProfileStore.delete(minecraftUuid);
     }

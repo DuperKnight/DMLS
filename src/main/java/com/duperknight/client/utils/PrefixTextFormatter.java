@@ -6,8 +6,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextCodecs;
+import net.minecraft.network.chat.ComponentSerialization;
 
 /** Parses server prefix text for the in-game preview without changing the submitted value. */
 public final class PrefixTextFormatter {
@@ -25,7 +24,7 @@ public final class PrefixTextFormatter {
             String miniMessage = normalizeLegacyFormatting(input);
             Component component = MINI_MESSAGE.deserialize(miniMessage);
             String json = GsonComponentSerializer.gson().serialize(component);
-            Text preview = TextCodecs.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(json))
+            net.minecraft.network.chat.Component preview = ComponentSerialization.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(json))
                     .getOrThrow(IllegalArgumentException::new);
             return ParseResult.success(preview);
         } catch (RuntimeException exception) {
@@ -142,13 +141,13 @@ public final class PrefixTextFormatter {
         };
     }
 
-    public record ParseResult(Text preview, String error) {
-        public static ParseResult success(Text preview) {
+    public record ParseResult(net.minecraft.network.chat.Component preview, String error) {
+        public static ParseResult success(net.minecraft.network.chat.Component preview) {
             return new ParseResult(preview, "");
         }
 
         public static ParseResult error(String error) {
-            return new ParseResult(Text.empty(), error);
+            return new ParseResult(net.minecraft.network.chat.Component.empty(), error);
         }
 
         public boolean valid() {

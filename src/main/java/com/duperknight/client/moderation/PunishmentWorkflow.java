@@ -2,13 +2,12 @@ package com.duperknight.client.moderation;
 
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.DMLSConfig;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 /** Shared validation, formatting, and dispatch logic for the rulebook's punishment composer. */
 public final class PunishmentWorkflow {
@@ -40,8 +39,8 @@ public final class PunishmentWorkflow {
             return type;
         }
 
-        public Text displayText() {
-            return Text.literal(label);
+        public Component displayText() {
+            return Component.literal(label);
         }
     }
 
@@ -122,7 +121,7 @@ public final class PunishmentWorkflow {
     }
 
     /** Dispatches a previously prepared immutable request after rechecking rank and server safety. */
-    public static PunishmentOutcome punish(MinecraftClient client, PunishmentRequest request) {
+    public static PunishmentOutcome punish(Minecraft client, PunishmentRequest request) {
         if (request == null) {
             return PunishmentOutcome.INVALID;
         }
@@ -154,7 +153,7 @@ public final class PunishmentWorkflow {
     }
 
     /** Sends the localized validation message used by both direct and GUI entrypoints. */
-    public static void sendValidationFailure(MinecraftClient client, PunishmentRequest.Validation validation) {
+    public static void sendValidationFailure(Minecraft client, PunishmentRequest.Validation validation) {
         ChatUtils.sendTranslatedMessage(client, PREFIX, validationTranslationKey(validation));
     }
 
@@ -187,7 +186,7 @@ public final class PunishmentWorkflow {
         return clean.isEmpty() ? "perm" : clean;
     }
 
-    private static void sendSuccessMessage(MinecraftClient client, PunishmentRequest request, boolean simulated) {
+    private static void sendSuccessMessage(Minecraft client, PunishmentRequest request, boolean simulated) {
         switch (request.type()) {
             case BAN -> ChatUtils.sendTranslatedMessage(client, PREFIX,
                     simulated ? "dmls.chat.punish.ban_simulated" : "dmls.chat.punish.banned",

@@ -2,7 +2,7 @@ package com.duperknight.client.utils;
 
 import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.session.ConnectionSnapshot;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 /** Sends module chat directly to global chat without changing the player's active channel. */
 public final class GlobalChatMessenger {
@@ -12,7 +12,7 @@ public final class GlobalChatMessenger {
     }
 
     public static CommandDispatch dispatch(
-            MinecraftClient client,
+            Minecraft client,
             String message,
             boolean dryRunCaptured,
             ConnectionSnapshot expectedConnection
@@ -22,7 +22,7 @@ public final class GlobalChatMessenger {
     }
 
     static CommandDispatch dispatch(
-            MinecraftClient client,
+            Minecraft client,
             String message,
             boolean dryRunCaptured,
             ConnectionSnapshot expectedConnection,

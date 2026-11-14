@@ -1,18 +1,19 @@
 package com.duperknight.client.war;
 
+import com.duperknight.client.utils.LegacyColors;
+
 import com.duperknight.client.utils.TooltipUtils;
 import com.duperknight.client.utils.TooltipUtils.TooltipLine;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
-import net.minecraft.util.Formatting;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.TextColor;
 
 /** Parses the Lands item at column 4, row 2 in `/n info`. */
 public final class NationMenuParser {
@@ -61,7 +62,7 @@ public final class NationMenuParser {
     }
 
     /** Extracts a styled nation-name substring and emits Lands-compatible ampersand color codes. */
-    public static String coloredNationName(Text title, String plainNationName) {
+    public static String coloredNationName(Component title, String plainNationName) {
         if (title == null || plainNationName == null || plainNationName.isBlank()) return "";
         String target = plainNationName.trim();
         String whole = title.getString();
@@ -102,12 +103,12 @@ public final class NationMenuParser {
     private static String colorCode(Style style) {
         TextColor color = style.getColor();
         if (color == null) return "";
-        for (Formatting formatting : Formatting.values()) {
-            if (formatting.isColor() && color.equals(TextColor.fromFormatting(formatting))) {
-                return "&" + formatting.getCode();
+        for (ChatFormatting formatting : ChatFormatting.values()) {
+            if (LegacyColors.isColor(formatting) && color.equals(TextColor.fromLegacyFormat(formatting))) {
+                return "&" + LegacyColors.code(formatting);
             }
         }
-        return "&#%06X".formatted(color.getRgb() & 0xFFFFFF);
+        return "&#%06X".formatted(color.getValue() & 0xFFFFFF);
     }
 
     public record Result(boolean parsed, String capital, String alternateCapital,

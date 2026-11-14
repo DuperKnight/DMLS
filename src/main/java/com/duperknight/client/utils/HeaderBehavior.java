@@ -1,9 +1,8 @@
 package com.duperknight.client.utils;
 
-import net.minecraft.text.Text;
-
 import java.util.List;
 import java.util.Locale;
+import net.minecraft.network.chat.Component;
 
 /** Controls how the shared DMLS menu header uses vertical space. */
 public enum HeaderBehavior {
@@ -17,8 +16,8 @@ public enum HeaderBehavior {
         this.translationKey = translationKey;
     }
 
-    public Text displayName() {
-        return Text.translatable(translationKey);
+    public Component displayName() {
+        return Component.translatable(translationKey);
     }
 
     public static List<HeaderBehavior> options() {

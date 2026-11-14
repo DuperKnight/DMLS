@@ -17,29 +17,8 @@ import com.duperknight.client.rulebook.RulebookRule;
 import com.duperknight.client.rulebook.RulebookService;
 import com.duperknight.client.rulebook.RulebookSnapshot;
 import com.duperknight.client.rulebook.RulebookStatus;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.tooltip.Tooltip;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.ClickEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.NativeImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -51,6 +30,26 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** Native continuous reader for the anonymous Google Docs export. */
 public final class RulebookScreen extends DMLSMenuScreen {
@@ -76,11 +75,11 @@ public final class RulebookScreen extends DMLSMenuScreen {
     private List<SearchMatch> findMatches = List.of();
     private RulebookSnapshot snapshot;
     private RulebookRule selectedRule;
-    private ButtonWidget reloadButton;
-    private TextFieldWidget findField;
-    private ButtonWidget findPreviousButton;
-    private ButtonWidget findNextButton;
-    private ButtonWidget findCloseButton;
+    private Button reloadButton;
+    private EditBox findField;
+    private Button findPreviousButton;
+    private Button findNextButton;
+    private Button findCloseButton;
     private int findPanelX;
     private int findPanelY;
     private int findPanelWidth;
@@ -98,7 +97,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
     private int selectedFindIndex = -1;
 
     public RulebookScreen(Screen parent, String initialRuleId) {
-        super(Text.translatable("dmls.rulebook.title"), parent);
+        super(Component.translatable("dmls.rulebook.title"), parent);
         this.initialRuleId = initialRuleId;
     }
 
@@ -132,29 +131,29 @@ public final class RulebookScreen extends DMLSMenuScreen {
             }
         }
 
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        reloadButton = addDrawableChild(ButtonWidget.builder(Text.empty(),
+        addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, button -> onClose())
+                .bounds(leftPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        reloadButton = addRenderableWidget(Button.builder(Component.empty(),
                         button -> RulebookService.shared().refresh())
-                .dimensions(contentScrollbarX() - STANDARD_BUTTON_HEIGHT - scaled(5),
+                .bounds(contentScrollbarX() - STANDARD_BUTTON_HEIGHT - scaled(5),
                         viewerBottom - STANDARD_BUTTON_HEIGHT - scaled(5),
                         STANDARD_BUTTON_HEIGHT, STANDARD_BUTTON_HEIGHT).build());
         reloadButton.active = !snapshot.refreshing();
-        ButtonWidget makeLog = addDrawableChild(ButtonWidget.builder(logLabel(), button -> {
-                    if (selectedRule != null) client.setScreen(new BanLogScreen(this, selectedRule));
-                }).dimensions(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        Button makeLog = addRenderableWidget(Button.builder(logLabel(), button -> {
+                    if (selectedRule != null) minecraft.gui.setScreen(new BanLogScreen(this, selectedRule));
+                }).bounds(rightPairedButtonX(), footerButtonY(), pairedButtonWidth(), STANDARD_BUTTON_HEIGHT).build());
         makeLog.active = selectedRule != null;
         if (selectedRule == null) {
-            makeLog.setTooltip(Tooltip.of(Text.translatable("dmls.rulebook.select_rule_tooltip")));
+            makeLog.setTooltip(Tooltip.create(Component.translatable("dmls.rulebook.select_rule_tooltip")));
         }
 
         initFindWidgets();
         rebuildFindMatches(false);
     }
 
-    private Text logLabel() {
-        return selectedRule == null ? Text.translatable("dmls.rulebook.make_log_disabled")
-                : Text.translatable("dmls.rulebook.make_log", selectedRule.id());
+    private Component logLabel() {
+        return selectedRule == null ? Component.translatable("dmls.rulebook.make_log_disabled")
+                : Component.translatable("dmls.rulebook.make_log", selectedRule.id());
     }
 
     private void initFindWidgets() {
@@ -170,21 +169,21 @@ public final class RulebookScreen extends DMLSMenuScreen {
                 - buttonSize * 3 - gap * 4);
         int widgetY = findPanelY + (findPanelHeight - STANDARD_BUTTON_HEIGHT) / 2;
 
-        findField = addDrawableChild(new TextFieldWidget(textRenderer, findPanelX + inset, widgetY,
-                fieldWidth, STANDARD_BUTTON_HEIGHT, Text.literal("Find in rulebook")));
+        findField = addRenderableWidget(new EditBox(font, findPanelX + inset, widgetY,
+                fieldWidth, STANDARD_BUTTON_HEIGHT, Component.literal("Find in rulebook")));
         findField.setMaxLength(128);
-        findField.setPlaceholder(Text.literal("Find"));
-        findField.setText(findQuery);
-        findField.setChangedListener(this::onFindChanged);
+        findField.setHint(Component.literal("Find"));
+        findField.setValue(findQuery);
+        findField.setResponder(this::onFindChanged);
 
         findCountX = findField.getX() + findField.getWidth() + gap;
         int buttonX = findCountX + findCountWidth + gap;
-        findPreviousButton = addDrawableChild(ButtonWidget.builder(Text.literal("↑"), button -> selectFindResult(-1))
-                .dimensions(buttonX, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
-        findNextButton = addDrawableChild(ButtonWidget.builder(Text.literal("↓"), button -> selectFindResult(1))
-                .dimensions(buttonX + buttonSize + gap, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
-        findCloseButton = addDrawableChild(ButtonWidget.builder(Text.literal("×"), button -> closeFind())
-                .dimensions(buttonX + (buttonSize + gap) * 2, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
+        findPreviousButton = addRenderableWidget(Button.builder(Component.literal("↑"), button -> selectFindResult(-1))
+                .bounds(buttonX, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
+        findNextButton = addRenderableWidget(Button.builder(Component.literal("↓"), button -> selectFindResult(1))
+                .bounds(buttonX + buttonSize + gap, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
+        findCloseButton = addRenderableWidget(Button.builder(Component.literal("×"), button -> closeFind())
+                .bounds(buttonX + (buttonSize + gap) * 2, widgetY, buttonSize, STANDARD_BUTTON_HEIGHT).build());
         layoutFindWidgets();
         setFindWidgetsVisible(findOpen);
     }
@@ -197,16 +196,16 @@ public final class RulebookScreen extends DMLSMenuScreen {
         int widgetY = findPanelY + (findPanelHeight - STANDARD_BUTTON_HEIGHT) / 2;
         String widestCount = findMatches.isEmpty() ? "0 of 0"
                 : findMatches.size() + " of " + findMatches.size();
-        findCountWidth = Math.max(scaled(64), textRenderer.getWidth(widestCount) + scaled(12));
+        findCountWidth = Math.max(scaled(64), font.width(widestCount) + scaled(12));
         int fieldWidth = Math.max(scaled(60), findPanelWidth - inset * 2 - findCountWidth
                 - buttonSize * 3 - gap * 4);
-        findField.setDimensionsAndPosition(fieldWidth, STANDARD_BUTTON_HEIGHT, findPanelX + inset, widgetY);
+        findField.setRectangle(fieldWidth, STANDARD_BUTTON_HEIGHT, findPanelX + inset, widgetY);
         findCountX = findField.getRight() + gap;
         int buttonX = findCountX + findCountWidth + gap;
-        findPreviousButton.setDimensionsAndPosition(buttonSize, STANDARD_BUTTON_HEIGHT, buttonX, widgetY);
-        findNextButton.setDimensionsAndPosition(buttonSize, STANDARD_BUTTON_HEIGHT,
+        findPreviousButton.setRectangle(buttonSize, STANDARD_BUTTON_HEIGHT, buttonX, widgetY);
+        findNextButton.setRectangle(buttonSize, STANDARD_BUTTON_HEIGHT,
                 buttonX + buttonSize + gap, widgetY);
-        findCloseButton.setDimensionsAndPosition(buttonSize, STANDARD_BUTTON_HEIGHT,
+        findCloseButton.setRectangle(buttonSize, STANDARD_BUTTON_HEIGHT,
                 buttonX + (buttonSize + gap) * 2, widgetY);
     }
 
@@ -221,7 +220,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
         rebuildFindMatches(true);
         setFocused(findField);
         findField.setFocused(true);
-        findField.setCursorToEnd(false);
+        findField.moveCursorToEnd(false);
     }
 
     private void closeFind() {
@@ -303,7 +302,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
         }
     }
 
-    private String orderedText(OrderedText text) {
+    private String orderedText(FormattedCharSequence text) {
         StringBuilder result = new StringBuilder();
         text.accept((index, style, codePoint) -> {
             result.appendCodePoint(codePoint);
@@ -335,7 +334,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
         super.tick();
         if (RulebookService.shared().snapshot().revision() != observedRevision) {
             releaseTextures();
-            clearAndInit();
+            rebuildWidgets();
         }
     }
 
@@ -389,10 +388,10 @@ public final class RulebookScreen extends DMLSMenuScreen {
                     ? scaled(LIST_BASE_INDENT + text.indent() * LIST_LEVEL_INDENT)
                     : scaled(text.indent() * LIST_LEVEL_INDENT);
             layout.indent = indent;
-            layout.lines = textRenderer.wrapLines(toText(text.text(), isHeading(text.kind())),
+            layout.lines = font.split(toText(text.text(), isHeading(text.kind())),
                     Math.max(24, (int) ((availableWidth - indent) / layout.textScale)));
             layout.lineStep = Math.max(1, Math.round(lineHeight() * layout.textScale));
-            layout.height = Math.max(Math.round(textRenderer.fontHeight * layout.textScale),
+            layout.height = Math.max(Math.round(font.lineHeight * layout.textScale),
                     layout.lines.size() * layout.lineStep);
         } else if (block instanceof ImageBlock image) {
             layout.renderWidth = Math.min(Math.min(availableWidth, scaled(MAX_IMAGE_WIDTH)), scaled(image.displayWidth()));
@@ -426,7 +425,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
         for (int rowIndex = 0; rowIndex < table.rows().size(); rowIndex++) {
             List<TableCell> row = table.rows().get(rowIndex);
             List<TableCellLayout> cells = new ArrayList<>();
-            int rowHeight = textRenderer.fontHeight + scaled(8);
+            int rowHeight = font.lineHeight + scaled(8);
             for (int column = 0; column < row.size(); column++) {
                 TableCell cell = row.get(column);
                 int contentWidth = Math.max(20, columnWidths[column] - scaled(TABLE_PADDING * 2));
@@ -498,7 +497,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         renderMenuBackgroundWithoutHeader(context);
         renderStatus(context);
         beginContentScissor(context);
@@ -507,45 +506,45 @@ public final class RulebookScreen extends DMLSMenuScreen {
             if (isContentVisible(y, layout.height)) renderLayout(context, layout, documentX, y, documentWidth);
         }
         if (snapshot.document() == null) {
-            Text message = snapshot.status() == RulebookStatus.LOADING
-                    ? Text.translatable("dmls.rulebook.connecting") : Text.translatable("dmls.rulebook.unavailable");
-            context.drawCenteredTextWithShadow(textRenderer, message, width / 2, contentY(scaled(16)),
+            Component message = snapshot.status() == RulebookStatus.LOADING
+                    ? Component.translatable("dmls.rulebook.connecting") : Component.translatable("dmls.rulebook.unavailable");
+            context.centeredText(font, message, width / 2, contentY(scaled(16)),
                     snapshot.status() == RulebookStatus.LOADING ? 0xFFFFFF55 : 0xFFFF5555);
         }
         endContentScissor(context);
         renderFindHint(context);
         if (findOpen) renderFindPanel(context);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
         if (snapshot.status() == RulebookStatus.STALE && snapshot.document() != null) renderStaleOutline(context);
         renderReloadIcon(context);
         if (findOpen) renderFindCount(context);
     }
 
-    private void renderStatus(DrawContext context) {
-        Text status;
+    private void renderStatus(GuiGraphicsExtractor context) {
+        Component status;
         int color;
         if (snapshot.fetchedAt() != null) {
             String timestamp = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
                     .withLocale(Locale.getDefault()).withZone(ZoneId.systemDefault()).format(snapshot.fetchedAt());
-            status = snapshot.error().isBlank() ? Text.translatable("dmls.rulebook.fetched_at", timestamp)
-                    : Text.translatable("dmls.rulebook.reload_failed", timestamp);
+            status = snapshot.error().isBlank() ? Component.translatable("dmls.rulebook.fetched_at", timestamp)
+                    : Component.translatable("dmls.rulebook.reload_failed", timestamp);
             color = snapshot.status() == RulebookStatus.STALE || !snapshot.error().isBlank() ? 0xFFFF7777 : 0xFFBBBBBB;
         } else {
-            status = Text.translatable(snapshot.refreshing() ? "dmls.rulebook.connecting" : "dmls.rulebook.unavailable");
+            status = Component.translatable(snapshot.refreshing() ? "dmls.rulebook.connecting" : "dmls.rulebook.unavailable");
             color = snapshot.refreshing() ? 0xFFFFFF55 : 0xFFFF5555;
         }
-        context.drawCenteredTextWithShadow(textRenderer, status, width / 2, scaled(8), color);
+        context.centeredText(font, status, width / 2, scaled(8), color);
     }
 
-    private void renderFindPanel(DrawContext context) {
+    private void renderFindPanel(GuiGraphicsExtractor context) {
         context.fill(findPanelX, findPanelY, findPanelX + findPanelWidth,
                 findPanelY + findPanelHeight, 0xF0181818);
-        context.drawStrokedRectangle(findPanelX, findPanelY, findPanelWidth, findPanelHeight, 0xFFD8D8D8);
+        context.outline(findPanelX, findPanelY, findPanelWidth, findPanelHeight, 0xFFD8D8D8);
     }
 
-    private void renderFindCount(DrawContext context) {
-        int countY = findPanelY + (findPanelHeight - textRenderer.fontHeight + 1) / 2;
-        context.drawCenteredTextWithShadow(textRenderer, Text.literal(findCountText()),
+    private void renderFindCount(GuiGraphicsExtractor context) {
+        int countY = findPanelY + (findPanelHeight - font.lineHeight + 1) / 2;
+        context.centeredText(font, Component.literal(findCountText()),
                 findCountX + findCountWidth / 2, countY, 0xFFDDDDDD);
     }
 
@@ -553,62 +552,62 @@ public final class RulebookScreen extends DMLSMenuScreen {
         return findMatches.isEmpty() ? "0 of 0" : selectedFindIndex + 1 + " of " + findMatches.size();
     }
 
-    private void renderFindHint(DrawContext context) {
-        context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.rulebook.find_hint"),
+    private void renderFindHint(GuiGraphicsExtractor context) {
+        context.centeredText(font, Component.translatable("dmls.rulebook.find_hint"),
                 width / 2, footerButtonY() - scaled(14), 0xFFBBBBBB);
     }
 
-    private void renderStaleOutline(DrawContext context) {
+    private void renderStaleOutline(GuiGraphicsExtractor context) {
         double pulse = (Math.sin(System.currentTimeMillis() / 320.0) + 1.0) / 2.0;
         int alpha = 55 + (int) (pulse * 145);
-        context.drawStrokedRectangle(documentX - 2, viewerTop - 2, documentWidth + 4,
+        context.outline(documentX - 2, viewerTop - 2, documentWidth + 4,
                 viewerBottom - viewerTop + 4, alpha << 24 | 0xFF3030);
     }
 
-    private void renderLayout(DrawContext context, Layout layout, int x, int y, int availableWidth) {
+    private void renderLayout(GuiGraphicsExtractor context, Layout layout, int x, int y, int availableWidth) {
         if (layout.block instanceof TextBlock) {
             int lineY = y;
             for (int lineIndex = 0; lineIndex < layout.lines.size(); lineIndex++) {
-                OrderedText line = layout.lines.get(lineIndex);
+                FormattedCharSequence line = layout.lines.get(lineIndex);
                 if (layout.textScale == 1.0F) {
                     drawStyledLine(context, line, x + layout.indent, lineY, layout, lineIndex);
                 } else {
-                    float lineWidth = textRenderer.getWidth(line) * layout.textScale;
+                    float lineWidth = font.width(line) * layout.textScale;
                     float lineX = layout.centered
                             ? x + (availableWidth - lineWidth) / 2.0F
                             : x + layout.indent;
-                    context.getMatrices().pushMatrix();
-                    context.getMatrices().translate(lineX, lineY);
-                    context.getMatrices().scale(layout.textScale, layout.textScale);
+                    context.pose().pushMatrix();
+                    context.pose().translate(lineX, lineY);
+                    context.pose().scale(layout.textScale, layout.textScale);
                     drawStyledLine(context, line, 0, 0, layout, lineIndex);
-                    context.getMatrices().popMatrix();
+                    context.pose().popMatrix();
                 }
                 lineY += layout.lineStep;
             }
         } else if (layout.block instanceof ImageBlock image) {
             Texture texture = texture(image);
             if (texture == null) {
-                context.drawCenteredTextWithShadow(textRenderer, Text.translatable("dmls.rulebook.image_unavailable"),
+                context.centeredText(font, Component.translatable("dmls.rulebook.image_unavailable"),
                         x + availableWidth / 2, y + scaled(8), 0xFFAAAAAA);
             } else {
                 int imageCenter = layout.primaryCrest ? documentX + documentWidth / 2 : x + availableWidth / 2;
                 int imageX = imageCenter - layout.renderWidth / 2;
-                context.drawTexture(RenderPipelines.GUI_TEXTURED, texture.identifier, imageX, y, 0, 0,
+                context.blit(RenderPipelines.GUI_TEXTURED, texture.identifier, imageX, y, 0, 0,
                         layout.renderWidth, layout.height, texture.width, texture.height, texture.width, texture.height);
             }
         } else if (layout.block instanceof RuleBox box) {
             int railWidth = scaled(RULE_RAIL_WIDTH);
             context.fill(x, y, x + railWidth, y + layout.height, 0xE81E2124);
-            context.drawStrokedRectangle(x, y, availableWidth, layout.height, WHITE_BORDER);
+            context.outline(x, y, availableWidth, layout.height, WHITE_BORDER);
             context.fill(x + railWidth - 1, y, x + railWidth, y + layout.height, WHITE_BORDER);
             boolean selected = selectedRule != null && selectedRule.id().equalsIgnoreCase(box.ruleId());
-            if (selected) context.drawStrokedRectangle(x + 1, y + 1, availableWidth - 2, layout.height - 2, 0xFFFFAA00);
+            if (selected) context.outline(x + 1, y + 1, availableWidth - 2, layout.height - 2, 0xFFFFAA00);
             Style ruleIdStyle = Style.EMPTY.withBold(true).withColor(box.ruleColor());
-            Text ruleId = Text.literal(box.ruleId()).setStyle(ruleIdStyle);
-            int ruleIdX = x + (railWidth - textRenderer.getWidth(ruleId)) / 2;
+            Component ruleId = Component.literal(box.ruleId()).setStyle(ruleIdStyle);
+            int ruleIdX = x + (railWidth - font.width(ruleId)) / 2;
             int ruleIdY = y + scaled(11);
             drawRuleIdSearchHighlights(context, layout, box.ruleId(), ruleIdStyle, ruleIdX, ruleIdY);
-            context.drawTextWithShadow(textRenderer, ruleId, ruleIdX, ruleIdY, 0xFFFFFFFF);
+            context.text(font, ruleId, ruleIdX, ruleIdY, 0xFFFFFFFF);
             int bodyX = x + railWidth + scaled(RULE_PADDING);
             int bodyWidth = availableWidth - railWidth - scaled(RULE_PADDING * 2);
             for (Layout child : layout.children) renderLayout(context, child, bodyX, y + child.y, bodyWidth);
@@ -617,10 +616,10 @@ public final class RulebookScreen extends DMLSMenuScreen {
         }
     }
 
-    private void renderTable(DrawContext context, TableLayout table, int x, int y, int availableWidth) {
+    private void renderTable(GuiGraphicsExtractor context, TableLayout table, int x, int y, int availableWidth) {
         int rowY = y;
         for (TableRow row : table.rows) {
-            context.drawStrokedRectangle(x, rowY, availableWidth, row.height, WHITE_BORDER);
+            context.outline(x, rowY, availableWidth, row.height, WHITE_BORDER);
             int cellX = x;
             for (int column = 0; column < table.columns; column++) {
                 int cellWidth = table.columnWidths[column];
@@ -642,30 +641,30 @@ public final class RulebookScreen extends DMLSMenuScreen {
         }
     }
 
-    private MutableText toText(RichText rich, boolean forceBold) {
-        MutableText result = Text.empty();
+    private MutableComponent toText(RichText rich, boolean forceBold) {
+        MutableComponent result = Component.empty();
         for (TextRun run : rich.runs()) {
             Style style = Style.EMPTY.withBold(forceBold || run.bold()).withItalic(run.italic())
-                    .withUnderline(run.underlined()).withStrikethrough(run.strikethrough())
+                    .withUnderlined(run.underlined()).withStrikethrough(run.strikethrough())
                     .withColor(readableColor(run.color()));
             if (run.backgroundColor() != null) {
                 style = style.withInsertion("dmls-bg:" + Integer.toHexString(run.backgroundColor()));
             }
-            if (run.href() != null) style = style.withClickEvent(new ClickEvent.OpenUrl(URI.create(run.href()))).withUnderline(true);
+            if (run.href() != null) style = style.withClickEvent(new ClickEvent.OpenUrl(URI.create(run.href()))).withUnderlined(true);
             if (run.inlineItem() == null) {
-                result.append(Text.literal(run.text()).setStyle(style));
+                result.append(Component.literal(run.text()).setStyle(style));
             } else {
                 int itemCount = run.text().codePointCount(0, run.text().length());
                 for (int index = 0; index < itemCount; index++) {
-                    result.append(Text.literal(" ").setStyle(style.withInsertion("dmls-item:" + run.inlineItem().name())));
-                    result.append(Text.literal("  ").setStyle(style.withInsertion(null)));
+                    result.append(Component.literal(" ").setStyle(style.withInsertion("dmls-item:" + run.inlineItem().name())));
+                    result.append(Component.literal("  ").setStyle(style.withInsertion(null)));
                 }
             }
         }
         return result;
     }
 
-    private void drawStyledLine(DrawContext context, OrderedText line, int x, int y,
+    private void drawStyledLine(GuiGraphicsExtractor context, FormattedCharSequence line, int x, int y,
                                 Layout layout, int lineIndex) {
         float[] cursor = {x};
         line.accept((index, style, codePoint) -> {
@@ -680,20 +679,20 @@ public final class RulebookScreen extends DMLSMenuScreen {
                 try {
                     int background = Integer.parseInt(insertion.substring("dmls-bg:".length()), 16);
                     context.fill((int) Math.floor(cursor[0]), y - 1, (int) Math.ceil(next),
-                            y + textRenderer.fontHeight + 1, 0xE0000000 | background);
+                            y + font.lineHeight + 1, 0xE0000000 | background);
                 } catch (NumberFormatException ignored) {
                 }
             }
             cursor[0] = next;
             return true;
         });
-        context.drawTextWithShadow(textRenderer, line, x, y, 0xFFFFFFFF);
+        context.text(font, line, x, y, 0xFFFFFFFF);
         if (drawSearchHighlights(context, line, x, y, layout, lineIndex)) {
-            context.drawTextWithShadow(textRenderer, line, x, y, 0xFFFFFFFF);
+            context.text(font, line, x, y, 0xFFFFFFFF);
         }
     }
 
-    private boolean drawSearchHighlights(DrawContext context, OrderedText line, int x, int y,
+    private boolean drawSearchHighlights(GuiGraphicsExtractor context, FormattedCharSequence line, int x, int y,
                                          Layout layout, int lineIndex) {
         List<SearchMatch> layoutMatches = matchesByLayout.get(layout);
         if (!findOpen || layoutMatches == null || layoutMatches.isEmpty()) return false;
@@ -705,14 +704,14 @@ public final class RulebookScreen extends DMLSMenuScreen {
             float[] bounds = textBounds(line, match.start, match.end);
             int left = (int) Math.floor(x + bounds[0]);
             int right = Math.max(left + 1, (int) Math.ceil(x + bounds[1]));
-            context.fill(left, y - 1, right, y + textRenderer.fontHeight + 1,
+            context.fill(left, y - 1, right, y + font.lineHeight + 1,
                     match == active ? FIND_HIGHLIGHT_ACTIVE : FIND_HIGHLIGHT);
             highlighted = true;
         }
         return highlighted;
     }
 
-    private void drawRuleIdSearchHighlights(DrawContext context, Layout layout, String ruleId,
+    private void drawRuleIdSearchHighlights(GuiGraphicsExtractor context, Layout layout, String ruleId,
                                             Style style, int x, int y) {
         List<SearchMatch> layoutMatches = matchesByLayout.get(layout);
         if (!findOpen || layoutMatches == null) return;
@@ -720,14 +719,14 @@ public final class RulebookScreen extends DMLSMenuScreen {
                 ? findMatches.get(selectedFindIndex) : null;
         for (SearchMatch match : layoutMatches) {
             if (match.lineIndex != -1) continue;
-            int left = x + textRenderer.getWidth(Text.literal(ruleId.substring(0, match.start)).setStyle(style));
-            int right = left + textRenderer.getWidth(Text.literal(ruleId.substring(match.start, match.end)).setStyle(style));
-            context.fill(left, y - 1, Math.max(left + 1, right), y + textRenderer.fontHeight + 1,
+            int left = x + font.width(Component.literal(ruleId.substring(0, match.start)).setStyle(style));
+            int right = left + font.width(Component.literal(ruleId.substring(match.start, match.end)).setStyle(style));
+            context.fill(left, y - 1, Math.max(left + 1, right), y + font.lineHeight + 1,
                     match == active ? FIND_HIGHLIGHT_ACTIVE : FIND_HIGHLIGHT);
         }
     }
 
-    private float[] textBounds(OrderedText line, int start, int end) {
+    private float[] textBounds(FormattedCharSequence line, int start, int end) {
         int[] offset = {0};
         float[] cursor = {0};
         float[] bounds = {0, 0};
@@ -748,21 +747,21 @@ public final class RulebookScreen extends DMLSMenuScreen {
     }
 
     private int styledGlyphWidth(Style style, int codePoint) {
-        return textRenderer.getWidth(Text.literal(new String(Character.toChars(codePoint))).setStyle(style));
+        return font.width(Component.literal(new String(Character.toChars(codePoint))).setStyle(style));
     }
 
-    private void drawInlineItem(DrawContext context, InlineItem item, float x, int y) {
+    private void drawInlineItem(GuiGraphicsExtractor context, InlineItem item, float x, int y) {
         ItemStack stack = switch (item) {
             case GOLD_INGOT -> GOLD_INGOT;
             case IRON_INGOT -> IRON_INGOT;
             case COPPER_INGOT -> COPPER_INGOT;
         };
         float scale = 0.75F;
-        context.getMatrices().pushMatrix();
-        context.getMatrices().translate(x, y - 2);
-        context.getMatrices().scale(scale, scale);
-        context.drawItem(stack, 0, 0);
-        context.getMatrices().popMatrix();
+        context.pose().pushMatrix();
+        context.pose().translate(x, y - 2);
+        context.pose().scale(scale, scale);
+        context.item(stack, 0, 0);
+        context.pose().popMatrix();
     }
 
     private int readableColor(Integer source) {
@@ -776,17 +775,17 @@ public final class RulebookScreen extends DMLSMenuScreen {
     }
 
     private int lineHeight() {
-        return textRenderer.fontHeight + scaled(LINE_GAP);
+        return font.lineHeight + scaled(LINE_GAP);
     }
 
     private Texture texture(ImageBlock image) {
         if (textures.containsKey(image)) return textures.get(image);
         try {
             NativeImage decoded = NativeImage.read(new ByteArrayInputStream(image.encoded()));
-            Identifier identifier = Identifier.of(DMLS.MOD_ID.toLowerCase(Locale.ROOT),
+            Identifier identifier = Identifier.fromNamespaceAndPath(DMLS.MOD_ID.toLowerCase(Locale.ROOT),
                     "rulebook/image_" + Integer.toUnsignedString(System.identityHashCode(image), 36));
-            NativeImageBackedTexture backed = new NativeImageBackedTexture(() -> "DMLS live rulebook image", decoded);
-            client.getTextureManager().registerTexture(identifier, backed);
+            DynamicTexture backed = new DynamicTexture(() -> "DMLS live rulebook image", decoded);
+            minecraft.getTextureManager().register(identifier, backed);
             Texture texture = new Texture(identifier, decoded.getWidth(), decoded.getHeight());
             textures.put(image, texture);
             return texture;
@@ -798,10 +797,10 @@ public final class RulebookScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
+    public boolean keyPressed(KeyEvent input) {
         int modifiers = input.modifiers();
-        boolean findModifier = (modifiers & (InputUtil.GLFW_MOD_CONTROL | InputUtil.GLFW_MOD_SUPER)) != 0;
-        if (input.getKeycode() == InputUtil.GLFW_KEY_F && findModifier) {
+        boolean findModifier = (modifiers & (InputConstants.MOD_CONTROL | InputConstants.MOD_SUPER)) != 0;
+        if (input.input() == InputConstants.KEY_F && findModifier) {
             openFind();
             return true;
         }
@@ -809,31 +808,31 @@ public final class RulebookScreen extends DMLSMenuScreen {
             closeFind();
             return true;
         }
-        if (findOpen && (input.getKeycode() == InputUtil.GLFW_KEY_ENTER
-                || input.getKeycode() == InputUtil.GLFW_KEY_KP_ENTER)) {
-            selectFindResult((modifiers & InputUtil.GLFW_MOD_SHIFT) != 0 ? -1 : 1);
+        if (findOpen && (input.input() == InputConstants.KEY_RETURN
+                || input.input() == InputConstants.KEY_NUMPADENTER)) {
+            selectFindResult((modifiers & InputConstants.MOD_SHIFT) != 0 ? -1 : 1);
             return true;
         }
         return super.keyPressed(input);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (handleDiscordAccountClick(click, doubled)) return true;
         if (findOpen && click.x() >= findPanelX && click.x() < findPanelX + findPanelWidth
                 && click.y() >= findPanelY && click.y() < findPanelY + findPanelHeight) {
             return super.mouseClicked(click, doubled);
         }
-        if (click.button() == 0 && click.y() >= viewerTop && click.y() < viewerBottom) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT && click.y() >= viewerTop && click.y() < viewerBottom) {
             for (Layout layout : layouts) {
                 Style style = styleAt(layout, documentX, contentY(layout.y), documentWidth, click.x(), click.y());
                 if (style != null && style.getClickEvent() != null) {
-                    handleClickEvent(style.getClickEvent(), client, this);
+                    defaultHandleGameClickEvent(style.getClickEvent(), minecraft, this);
                     return true;
                 }
             }
         }
-        if (click.button() == 0 && click.x() >= documentX && click.x() < documentX + documentWidth
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT && click.x() >= documentX && click.x() < documentX + documentWidth
                 && click.y() >= viewerTop && click.y() < viewerBottom && snapshot.document() != null) {
             for (Layout layout : layouts) {
                 if (!(layout.block instanceof RuleBox box)) continue;
@@ -841,9 +840,9 @@ public final class RulebookScreen extends DMLSMenuScreen {
                 if (click.y() >= y && click.y() < y + layout.height) {
                     RulebookRule clickedRule = snapshot.document().rule(box.ruleId()).orElse(null);
                     if (clickedRule != null && clickedRule.punishable()) {
-                        client.getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+                        minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
                         selectedRule = clickedRule;
-                        clearAndInit();
+                        rebuildWidgets();
                         scrollToRule(clickedRule.id());
                         return true;
                     }
@@ -860,18 +859,18 @@ public final class RulebookScreen extends DMLSMenuScreen {
         if (anchor != null) setContentScrollOffset(Math.max(0, anchor.y - scaled(8)));
     }
 
-    private void renderReloadIcon(DrawContext context) {
+    private void renderReloadIcon(GuiGraphicsExtractor context) {
         if (reloadButton == null || !reloadButton.visible) return;
-        Text icon = Text.literal(snapshot.refreshing() ? "…" : "↻");
+        Component icon = Component.literal(snapshot.refreshing() ? "…" : "↻");
         float scale = 1.6F;
-        context.getMatrices().pushMatrix();
-        context.getMatrices().translate(reloadButton.getX() + reloadButton.getWidth() / 2.0F,
+        context.pose().pushMatrix();
+        context.pose().translate(reloadButton.getX() + reloadButton.getWidth() / 2.0F,
                 reloadButton.getY() + reloadButton.getHeight() / 2.0F
-                        - textRenderer.fontHeight * scale / 2.0F - scaled(1));
-        context.getMatrices().scale(scale, scale);
-        context.drawCenteredTextWithShadow(textRenderer, icon, 0, 0,
+                        - font.lineHeight * scale / 2.0F - scaled(1));
+        context.pose().scale(scale, scale);
+        context.centeredText(font, icon, 0, 0,
                 reloadButton.active ? 0xFFFFFFFF : 0xFF999999);
-        context.getMatrices().popMatrix();
+        context.pose().popMatrix();
     }
 
     private Style styleAt(Layout layout, int x, int y, int availableWidth, double mouseX, double mouseY) {
@@ -911,12 +910,12 @@ public final class RulebookScreen extends DMLSMenuScreen {
         return null;
     }
 
-    private Style styleAt(OrderedText line, float targetX) {
-        if (targetX < 0 || targetX > textRenderer.getWidth(line)) return null;
+    private Style styleAt(FormattedCharSequence line, float targetX) {
+        if (targetX < 0 || targetX > font.width(line)) return null;
         float[] x = {0};
         Style[] found = {null};
         line.accept((index, style, codePoint) -> {
-            float next = x[0] + textRenderer.getWidth(new String(Character.toChars(codePoint)));
+            float next = x[0] + font.width(new String(Character.toChars(codePoint)));
             if (targetX >= x[0] && targetX < next) {
                 found[0] = style;
                 return false;
@@ -949,8 +948,8 @@ public final class RulebookScreen extends DMLSMenuScreen {
     }
 
     private void releaseTextures() {
-        if (client != null) {
-            for (Texture texture : textures.values()) if (texture != null) client.getTextureManager().destroyTexture(texture.identifier);
+        if (minecraft != null) {
+            for (Texture texture : textures.values()) if (texture != null) minecraft.getTextureManager().release(texture.identifier);
         }
         textures.clear();
     }
@@ -966,7 +965,7 @@ public final class RulebookScreen extends DMLSMenuScreen {
         private float textScale = 1.0F;
         private boolean centered;
         private boolean primaryCrest;
-        private List<OrderedText> lines = List.of();
+        private List<FormattedCharSequence> lines = List.of();
         private final List<Layout> children = new ArrayList<>();
         private TableLayout table;
 

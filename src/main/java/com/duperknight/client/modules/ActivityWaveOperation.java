@@ -9,13 +9,12 @@ import com.duperknight.client.session.OperationCancelReason;
 import com.duperknight.client.session.OperationHandle;
 import com.duperknight.client.session.PacedCommandSequence;
 import com.duperknight.client.session.ResponseStatus;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import net.minecraft.client.Minecraft;
 
 /** Managed, partial-result-preserving lifecycle for an activity wave. */
 final class ActivityWaveOperation implements ManagedOperation {
@@ -48,18 +47,18 @@ final class ActivityWaveOperation implements ManagedOperation {
     }
 
     interface Listener {
-        void started(MinecraftClient client, int playerCount);
+        void started(Minecraft client, int playerCount);
 
-        void progress(MinecraftClient client, String username, int playerIndex, int playerCount);
+        void progress(Minecraft client, String username, int playerIndex, int playerCount);
 
-        void finished(MinecraftClient client, Summary summary);
+        void finished(Minecraft client, Summary summary);
 
-        void cancelled(MinecraftClient client, Summary summary, OperationCancelReason reason);
+        void cancelled(Minecraft client, Summary summary, OperationCancelReason reason);
     }
 
     @FunctionalInterface
     interface Dispatcher {
-        CommandDispatch dispatch(OperationHandle handle, MinecraftClient client, String command);
+        CommandDispatch dispatch(OperationHandle handle, Minecraft client, String command);
     }
 
     private final List<String> usernames;
@@ -68,7 +67,7 @@ final class ActivityWaveOperation implements ManagedOperation {
     private final Map<String, ActivityValue> results = new LinkedHashMap<>();
 
     private OperationHandle handle;
-    private MinecraftClient client;
+    private Minecraft client;
     private PacedCommandSequence<String> sequence;
     private ActivityResponseParser parser;
     private ActivityResponseParser.ActivityResult parsedResult;
@@ -95,7 +94,7 @@ final class ActivityWaveOperation implements ManagedOperation {
     }
 
     @Override
-    public void onStarted(OperationHandle handle, MinecraftClient client) {
+    public void onStarted(OperationHandle handle, Minecraft client) {
         this.handle = handle;
         this.client = client;
         if (!handle.descriptor().dryRunCaptured()) listener.started(client, usernames.size());
@@ -103,7 +102,7 @@ final class ActivityWaveOperation implements ManagedOperation {
     }
 
     @Override
-    public void onTick(OperationHandle handle, MinecraftClient client) {
+    public void onTick(OperationHandle handle, Minecraft client) {
         if (finished) return;
         this.client = client;
         if (waitingForGap) {
@@ -119,7 +118,7 @@ final class ActivityWaveOperation implements ManagedOperation {
     }
 
     @Override
-    public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+    public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
         if (message.origin() != MessageOrigin.SERVER_SYSTEM) return;
         if (finished || waitingForGap || sequence == null) return;
         this.client = client;
@@ -128,7 +127,7 @@ final class ActivityWaveOperation implements ManagedOperation {
     }
 
     @Override
-    public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+    public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
         if (finished) return;
         finished = true;
         if (sequence != null) sequence.cancel();

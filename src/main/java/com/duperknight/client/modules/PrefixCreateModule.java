@@ -15,15 +15,14 @@ import com.duperknight.client.session.ResponseStatus;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.InputValidators;
 import com.duperknight.client.utils.PrefixTextFormatter;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import java.util.function.BooleanSupplier;
 
 public final class PrefixCreateModule extends DMLSModule {
@@ -40,8 +39,8 @@ public final class PrefixCreateModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.prefix.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.prefix.name");
     }
 
     @Override
@@ -50,10 +49,10 @@ public final class PrefixCreateModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
+    public List<Component> description() {
         return List.of(
-                Text.translatable("dmls.module.prefix.description.1"),
-                Text.translatable("dmls.module.prefix.description.2")
+                Component.translatable("dmls.module.prefix.description.1"),
+                Component.translatable("dmls.module.prefix.description.2")
         );
     }
 
@@ -63,8 +62,8 @@ public final class PrefixCreateModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new PrefixCreateScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new PrefixCreateScreen(parent, this));
     }
 
     @Override
@@ -74,7 +73,7 @@ public final class PrefixCreateModule extends DMLSModule {
 
     /** Starts the prefix creation. The command and GUI both call this method. */
     public ValidationResult submit(
-            MinecraftClient client,
+            Minecraft client,
             String ign,
             String limit,
             String prefixId,
@@ -86,7 +85,7 @@ public final class PrefixCreateModule extends DMLSModule {
 
         ValidationResult validation = validate(ign, limit, prefixId, prefixText);
         if (!validation.valid()) {
-            ChatUtils.sendClientMessage(client, Text.literal(PREFIX).append(validation.message()));
+            ChatUtils.sendClientMessage(client, Component.literal(PREFIX).append(validation.message()));
             return validation;
         }
 
@@ -99,7 +98,7 @@ public final class PrefixCreateModule extends DMLSModule {
                     ? "dmls.validation.prefix.active"
                     : "dmls.chat.command.not_sent";
             ValidationResult startError = ValidationResult.error(errorKey);
-            ChatUtils.sendClientMessage(client, Text.literal(PREFIX).append(startError.message()));
+            ChatUtils.sendClientMessage(client, Component.literal(PREFIX).append(startError.message()));
             return startError;
         }
 
@@ -205,13 +204,13 @@ public final class PrefixCreateModule extends DMLSModule {
         }
     }
 
-    public record ValidationResult(String limit, Text message) {
+    public record ValidationResult(String limit, Component message) {
         public static ValidationResult success(String limit) {
-            return new ValidationResult(limit, Text.empty());
+            return new ValidationResult(limit, Component.empty());
         }
 
         public static ValidationResult error(String translationKey, Object... args) {
-            return new ValidationResult("", Text.translatable(translationKey, args));
+            return new ValidationResult("", Component.translatable(translationKey, args));
         }
 
         public boolean valid() {
@@ -234,7 +233,7 @@ public final class PrefixCreateModule extends DMLSModule {
         }
 
         @Override
-        public void onStarted(OperationHandle handle, MinecraftClient client) {
+        public void onStarted(OperationHandle handle, Minecraft client) {
             if (!handle.descriptor().dryRunCaptured()) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.prefix.start",
                         request.prefixId(), request.ign());
@@ -245,12 +244,12 @@ public final class PrefixCreateModule extends DMLSModule {
         }
 
         @Override
-        public void onTick(OperationHandle handle, MinecraftClient client) {
+        public void onTick(OperationHandle handle, Minecraft client) {
             handleState(handle, client, sequence.tick());
         }
 
         @Override
-        public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+        public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
             if (message.origin() != MessageOrigin.SERVER_SYSTEM) return;
             sequence.accept(message.cleanText());
             handleState(handle, client, sequence.state());
@@ -259,7 +258,7 @@ public final class PrefixCreateModule extends DMLSModule {
         @Override
         public void onCancelled(
                 OperationHandle handle,
-                MinecraftClient client,
+                Minecraft client,
                 OperationCancelReason reason
         ) {
             if (terminalReported) return;
@@ -270,7 +269,7 @@ public final class PrefixCreateModule extends DMLSModule {
 
         private void handleState(
                 OperationHandle handle,
-                MinecraftClient client,
+                Minecraft client,
                 PacedCommandSequence.State state
         ) {
             if (terminalReported) return;
@@ -294,23 +293,23 @@ public final class PrefixCreateModule extends DMLSModule {
 
         private void finish(
                 OperationHandle handle,
-                MinecraftClient client,
+                Minecraft client,
                 String beforeKey,
                 String afterKey
         ) {
             terminalReported = true;
             handle.complete();
             PrefixTextFormatter.ParseResult formattedPrefix = PrefixTextFormatter.parse(request.prefixText());
-            Text displayedPrefix = formattedPrefix.valid()
+            Component displayedPrefix = formattedPrefix.valid()
                     ? formattedPrefix.preview()
-                    : Text.literal(request.prefixText());
-            ChatUtils.sendClientMessage(client, Text.literal(PREFIX)
+                    : Component.literal(request.prefixText());
+            ChatUtils.sendClientMessage(client, Component.literal(PREFIX)
                     .append(ChatUtils.translated(beforeKey, request.prefixId()))
                     .append(displayedPrefix)
                     .append(ChatUtils.translated(afterKey, request.limit(), request.ign())));
         }
 
-        private void cancel(OperationHandle handle, MinecraftClient client) {
+        private void cancel(OperationHandle handle, Minecraft client) {
             terminalReported = true;
             handle.complete();
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.prefix.cancelled");

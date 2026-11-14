@@ -1,19 +1,20 @@
 package com.duperknight.client.gui.widgets;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.cursor.StandardCursors;
-import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 /** Transparent Discord account control with a one-row unlink shelf. */
-public final class DiscordAccountWidget extends ClickableWidget {
+public final class DiscordAccountWidget extends AbstractWidget {
     public static final int HEIGHT = 24;
     private static final int AVATAR_SIZE = 20;
     private static final int SHELF_GAP = 2;
@@ -26,7 +27,7 @@ public final class DiscordAccountWidget extends ClickableWidget {
 
     public DiscordAccountWidget(int x, int y, int width, String displayName, Identifier avatarTexture,
                                 Runnable unlinkAction) {
-        super(x, y, width, HEIGHT, Text.literal(displayName));
+        super(x, y, width, HEIGHT, Component.literal(displayName));
         this.avatarTexture = avatarTexture;
         this.unlinkAction = unlinkAction;
     }
@@ -44,61 +45,61 @@ public final class DiscordAccountWidget extends ClickableWidget {
     }
 
     @Override
-    protected void renderWidget(DrawContext context, int mouseX, int mouseY, float delta) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         if (isHovered()) {
             context.fill(getX(), getY(), getRight(), getBottom(), 0x40FFFFFF);
-            context.drawStrokedRectangle(getX(), getY(), getWidth(), getHeight(), 0xFFFFFFFF);
-            context.setCursor(StandardCursors.POINTING_HAND);
+            context.outline(getX(), getY(), getWidth(), getHeight(), 0xFFFFFFFF);
+            context.requestCursor(CursorTypes.POINTING_HAND);
         }
 
         int avatarX = getX() + 2;
         int avatarY = getY() + (getHeight() - AVATAR_SIZE) / 2;
         if (avatarTexture != null) {
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, avatarTexture, avatarX, avatarY,
+            context.blit(RenderPipelines.GUI_TEXTURED, avatarTexture, avatarX, avatarY,
                     0.0F, 0.0F, AVATAR_SIZE, AVATAR_SIZE, AVATAR_SIZE, AVATAR_SIZE);
         } else {
             context.fill(avatarX, avatarY, avatarX + AVATAR_SIZE, avatarY + AVATAR_SIZE, 0xFF454545);
             String initial = getMessage().getString().isEmpty()
                     ? "?" : getMessage().getString().substring(0, 1).toUpperCase();
-            MinecraftClient client = MinecraftClient.getInstance();
-            context.drawCenteredTextWithShadow(client.textRenderer, initial,
+            Minecraft client = Minecraft.getInstance();
+            context.centeredText(client.font, initial,
                     avatarX + AVATAR_SIZE / 2,
-                    avatarY + (AVATAR_SIZE - client.textRenderer.fontHeight) / 2 + 1,
+                    avatarY + (AVATAR_SIZE - client.font.lineHeight) / 2 + 1,
                     0xFFFFFFFF);
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         int textX = avatarX + AVATAR_SIZE + 5;
         int availableWidth = Math.max(1, getRight() - textX - 5);
-        String label = client.textRenderer.trimToWidth(getMessage().getString(), availableWidth);
-        context.drawTextWithShadow(client.textRenderer, label, textX,
-                getY() + (getHeight() - client.textRenderer.fontHeight) / 2 + 1, 0xFFFFFFFF);
+        String label = client.font.plainSubstrByWidth(getMessage().getString(), availableWidth);
+        context.text(client.font, label, textX,
+                getY() + (getHeight() - client.font.lineHeight) / 2 + 1, 0xFFFFFFFF);
     }
 
-    public void renderShelf(DrawContext context, int mouseX, int mouseY) {
+    public void renderShelf(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         if (!visible || !open) return;
         int y = shelfY();
         boolean hovered = mouseX >= getX() && mouseX < getRight()
                 && mouseY >= y && mouseY < y + SHELF_HEIGHT;
-        context.createNewRootLayer();
+        context.nextStratum();
         context.fill(getX(), y, getRight(), y + SHELF_HEIGHT, DMLSMenuScreen.PANEL_BACKGROUND_COLOR);
         if (hovered && !unlinking) {
             context.fill(getX() + 1, y + 1, getRight() - 1, y + SHELF_HEIGHT - 1, 0x50FFFFFF);
-            context.setCursor(StandardCursors.POINTING_HAND);
+            context.requestCursor(CursorTypes.POINTING_HAND);
         }
-        context.drawStrokedRectangle(getX(), y, getWidth(), SHELF_HEIGHT,
+        context.outline(getX(), y, getWidth(), SHELF_HEIGHT,
                 DMLSMenuScreen.PANEL_BORDER_COLOR);
-        Text label = Text.translatable(unlinking
+        Component label = Component.translatable(unlinking
                 ? "dmls.account.unlinking" : "dmls.account.unlink");
-        MinecraftClient client = MinecraftClient.getInstance();
-        context.drawCenteredTextWithShadow(client.textRenderer, label, getX() + getWidth() / 2,
-                y + (SHELF_HEIGHT - client.textRenderer.fontHeight) / 2 + 1,
+        Minecraft client = Minecraft.getInstance();
+        context.centeredText(client.font, label, getX() + getWidth() / 2,
+                y + (SHELF_HEIGHT - client.font.lineHeight) / 2 + 1,
                 unlinking ? 0xFFAAAAAA : 0xFFFFFFFF);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
-        if (open && click.button() == 0 && click.x() >= getX() && click.x() < getRight()
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (open && click.button() == InputConstants.MOUSE_BUTTON_LEFT && click.x() >= getX() && click.x() < getRight()
                 && click.y() >= shelfY() && click.y() < shelfY() + SHELF_HEIGHT) {
             if (!unlinking) unlinkAction.run();
             return true;
@@ -109,18 +110,18 @@ public final class DiscordAccountWidget extends ClickableWidget {
     }
 
     @Override
-    public void onClick(Click click, boolean doubled) {
+    public void onClick(MouseButtonEvent click, boolean doubled) {
         if (!unlinking) open = !open;
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
+    public boolean keyPressed(KeyEvent input) {
         if (!isFocused()) return false;
         if (input.isEscape() && open) {
             open = false;
             return true;
         }
-        if (input.isEnterOrSpace()) {
+        if (input.isSelection()) {
             if (open && !unlinking) unlinkAction.run();
             else if (!unlinking) open = true;
             return true;
@@ -133,7 +134,7 @@ public final class DiscordAccountWidget extends ClickableWidget {
     }
 
     @Override
-    protected void appendClickableNarrations(NarrationMessageBuilder builder) {
-        appendDefaultNarrations(builder);
+    protected void updateWidgetNarration(NarrationElementOutput builder) {
+        defaultButtonNarrationText(builder);
     }
 }

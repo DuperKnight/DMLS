@@ -6,20 +6,20 @@ import com.duperknight.client.modules.ModuleCategory;
 import com.duperknight.client.moderation.ModerationScreen;
 import com.duperknight.client.modules.StaffRank;
 import com.duperknight.client.utils.DMLSConfig;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.cursor.StandardCursors;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.item.ItemStack;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.item.ItemStack;
 
 /** The registry-driven DMLS module picker. */
 public final class DMLSHomeScreen extends DMLSMenuScreen {
@@ -44,7 +44,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     private int maxScroll;
     private boolean draggingScrollbar;
     private boolean accessAtInit;
-    private Text hoveredDisabledReason;
+    private Component hoveredDisabledReason;
 
     public DMLSHomeScreen(List<DMLSModule> registeredModules) {
         this(registeredModules, null);
@@ -55,7 +55,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     }
 
     private DMLSHomeScreen(List<DMLSModule> registeredModules, Screen parent, RankAnnouncement announcement) {
-        super(Text.translatable("dmls.title.home"), parent);
+        super(Component.translatable("dmls.title.home"), parent);
         initializeConfigurableHeaderBehavior();
         this.registeredModules = List.copyOf(registeredModules);
         this.announcement = announcement;
@@ -84,31 +84,31 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     protected void init() {
         accessAtInit = DMLSConfig.hasRecognizedStaffRank();
         if (!accessAtInit) {
-            addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.exit"), button -> close())
-                    .dimensions(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
+            addRenderableWidget(Button.builder(Component.translatable("dmls.button.exit"), button -> onClose())
+                    .bounds(width / 2 - scaled(75), footerButtonY(), scaled(150), STANDARD_BUTTON_HEIGHT).build());
             return;
         }
         int gap = scaled(8);
         int buttonWidth = Math.min(scaled(135), (width - scaled(32) - gap * 3) / 4);
         int groupWidth = buttonWidth * 4 + gap * 3;
         int firstX = (width - groupWidth) / 2;
-        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.moderation.open"),
-                        button -> client.setScreen(new ModerationScreen(this)))
-                .dimensions(firstX, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
-        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.rulebook"),
-                        button -> client.setScreen(new RulebookScreen(this, null)))
-                .dimensions(firstX + buttonWidth + gap, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
-        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.options"),
-                        button -> client.setScreen(new DMLSOptionsScreen(this)))
-                .dimensions(firstX + (buttonWidth + gap) * 2, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
-        addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.exit"), button -> close())
-                .dimensions(firstX + (buttonWidth + gap) * 3, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(Component.translatable("dmls.moderation.open"),
+                        button -> minecraft.gui.setScreen(new ModerationScreen(this)))
+                .bounds(firstX, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(Component.translatable("dmls.button.rulebook"),
+                        button -> minecraft.gui.setScreen(new RulebookScreen(this, null)))
+                .bounds(firstX + buttonWidth + gap, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(Component.translatable("dmls.button.options"),
+                        button -> minecraft.gui.setScreen(new DMLSOptionsScreen(this)))
+                .bounds(firstX + (buttonWidth + gap) * 2, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(Component.translatable("dmls.button.exit"), button -> onClose())
+                .bounds(firstX + (buttonWidth + gap) * 3, footerButtonY(), buttonWidth, STANDARD_BUTTON_HEIGHT).build());
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         if (accessAtInit != DMLSConfig.hasRecognizedStaffRank()) {
-            clearChildren();
+            clearWidgets();
             init();
         }
         renderMenuBackground(context);
@@ -134,28 +134,28 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         context.disableScissor();
 
         if (visibleModules.isEmpty()) {
-            Text message = DMLSConfig.hasRecognizedStaffRank()
-                    ? Text.translatable("dmls.message.no_modules")
-                    : Text.translatable("dmls.message.staff_required");
-            context.drawCenteredTextWithShadow(textRenderer, message,
+            Component message = DMLSConfig.hasRecognizedStaffRank()
+                    ? Component.translatable("dmls.message.no_modules")
+                    : Component.translatable("dmls.message.staff_required");
+            context.centeredText(font, message,
                     width / 2, layout.viewportY() + layout.viewportHeight() / 2 - 4, 0xFFAAAAAA);
         }
         if (layout.scrollable()) {
             renderScrollbar(context, layout);
         }
 
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
         if (hoveredDisabledReason != null) {
-            context.drawTooltip(textRenderer, hoveredDisabledReason, mouseX, mouseY);
+            context.setTooltipForNextFrame(font, hoveredDisabledReason, mouseX, mouseY);
         }
     }
 
-    private void renderCard(DrawContext context, GridLayout layout, int cardX, int cardY,
+    private void renderCard(GuiGraphicsExtractor context, GridLayout layout, int cardX, int cardY,
                             DMLSModule module, int mouseX, int mouseY) {
         boolean hovered = mouseX >= cardX && mouseX < cardX + layout.cardSize()
                 && mouseY >= cardY && mouseY < cardY + layout.cardSize()
                 && mouseY >= layout.viewportY() && mouseY < layout.viewportBottom();
-        boolean disabled = !module.isEnabledForClient(client);
+        boolean disabled = !module.isEnabledForClient(minecraft);
         boolean newlyUnlocked = isNewlyUnlocked(module);
         int backgroundColor = disabled
                 ? (hovered ? 0xB82A2A2A : 0xA8181818)
@@ -166,46 +166,46 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                 ? (hovered ? 0xFF888888 : 0xFF555555)
                 : hovered ? 0xFFFFFFFF : newlyUnlocked ? 0xFF55FF55 : 0xFFAAAAAA;
         if (hovered && disabled) {
-            hoveredDisabledReason = module.disabledReason(client).orElse(null);
-            context.setCursor(StandardCursors.NOT_ALLOWED);
+            hoveredDisabledReason = module.disabledReason(minecraft).orElse(null);
+            context.requestCursor(CursorTypes.NOT_ALLOWED);
         }
         context.fill(cardX, cardY, cardX + layout.cardSize(), cardY + layout.cardSize(), backgroundColor);
-        context.drawStrokedRectangle(cardX, cardY, layout.cardSize(), layout.cardSize(), borderColor);
+        context.outline(cardX, cardY, layout.cardSize(), layout.cardSize(), borderColor);
 
         if (newlyUnlocked) {
-            Text badge = Text.translatable("dmls.promotion.new");
-            int badgeWidth = textRenderer.getWidth(badge) + scaled(8);
+            Component badge = Component.translatable("dmls.promotion.new");
+            int badgeWidth = font.width(badge) + scaled(8);
             int badgeX = cardX + layout.cardSize() - badgeWidth - scaled(4);
             int badgeY = cardY + scaled(4);
-            context.fill(badgeX, badgeY, badgeX + badgeWidth, badgeY + textRenderer.fontHeight + scaled(4), 0xD0206020);
-            context.drawCenteredTextWithShadow(textRenderer, badge,
+            context.fill(badgeX, badgeY, badgeX + badgeWidth, badgeY + font.lineHeight + scaled(4), 0xD0206020);
+            context.centeredText(font, badge,
                     badgeX + badgeWidth / 2, badgeY + scaled(2), 0xFFFFFFFF);
         }
 
         ItemStack icon = module.icon();
         float iconScale = 1.5F * UI_SCALE;
         int iconY = cardY + layout.cardSize() / 2 - scaled(31);
-        context.getMatrices().pushMatrix();
-        context.getMatrices().translate(cardX + layout.cardSize() / 2.0F - 8 * iconScale, iconY);
-        context.getMatrices().scale(iconScale, iconScale);
-        context.drawItem(icon, 0, 0);
-        context.getMatrices().popMatrix();
+        context.pose().pushMatrix();
+        context.pose().translate(cardX + layout.cardSize() / 2.0F - 8 * iconScale, iconY);
+        context.pose().scale(iconScale, iconScale);
+        context.item(icon, 0, 0);
+        context.pose().popMatrix();
 
         float labelScale = 1.25F * UI_SCALE;
-        List<OrderedText> lines = textRenderer.wrapLines(module.displayName(), (int) ((layout.cardSize() - scaled(14)) / labelScale));
+        List<FormattedCharSequence> lines = font.split(module.displayName(), (int) ((layout.cardSize() - scaled(14)) / labelScale));
         int labelY = iconY + scaled(35);
-        for (OrderedText line : lines) {
-            context.getMatrices().pushMatrix();
-            context.getMatrices().translate(cardX + layout.cardSize() / 2.0F, labelY);
-            context.getMatrices().scale(labelScale, labelScale);
-            context.drawCenteredTextWithShadow(textRenderer, line, 0, 0,
+        for (FormattedCharSequence line : lines) {
+            context.pose().pushMatrix();
+            context.pose().translate(cardX + layout.cardSize() / 2.0F, labelY);
+            context.pose().scale(labelScale, labelScale);
+            context.centeredText(font, line, 0, 0,
                     disabled ? 0xFF777777 : 0xFFFFFFFF);
-            context.getMatrices().popMatrix();
+            context.pose().popMatrix();
             labelY += scaled(12);
         }
     }
 
-    private void renderCategoryHeader(DrawContext context, GridLayout layout, CategoryLayout categoryLayout,
+    private void renderCategoryHeader(GuiGraphicsExtractor context, GridLayout layout, CategoryLayout categoryLayout,
                                       int mouseX, int mouseY) {
         int headerY = categoryLayout.headerY();
         boolean hovered = mouseX >= layout.viewportX() && mouseX < layout.viewportRight()
@@ -214,13 +214,13 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         if (hovered) {
             context.fill(layout.viewportX(), headerY, layout.viewportRight(), headerY + CATEGORY_HEADER_HEIGHT,
                     0x50383838);
-            context.setCursor(StandardCursors.POINTING_HAND);
+            context.requestCursor(CursorTypes.POINTING_HAND);
         }
 
-        Text label = categoryLayout.group().category().displayName();
+        Component label = categoryLayout.group().category().displayName();
         int centerX = layout.viewportX() + layout.viewportWidth() / 2;
         int centerY = headerY + CATEGORY_HEADER_HEIGHT / 2;
-        int halfLabelWidth = textRenderer.getWidth(label) / 2;
+        int halfLabelWidth = font.width(label) / 2;
         int linePadding = scaled(8);
         int lineLeft = layout.viewportX() + scaled(20);
         int leftEnd = centerX - halfLabelWidth - linePadding;
@@ -233,11 +233,11 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         }
         drawCategoryArrow(context, layout.viewportX() + scaled(9), centerY,
                 !collapsedCategories.contains(categoryLayout.group().category()));
-        context.drawCenteredTextWithShadow(textRenderer, label, centerX,
-                headerY + (CATEGORY_HEADER_HEIGHT - textRenderer.fontHeight) / 2, 0xFFFFFFFF);
+        context.centeredText(font, label, centerX,
+                headerY + (CATEGORY_HEADER_HEIGHT - font.lineHeight) / 2, 0xFFFFFFFF);
     }
 
-    private static void drawCategoryArrow(DrawContext context, int centerX, int centerY, boolean expanded) {
+    private static void drawCategoryArrow(GuiGraphicsExtractor context, int centerX, int centerY, boolean expanded) {
         int color = 0xFFE0E0E0;
         if (expanded) {
             context.fill(centerX - 3, centerY + 1, centerX + 4, centerY + 2, color);
@@ -250,7 +250,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         }
     }
 
-    private void renderScrollbar(DrawContext context, GridLayout layout) {
+    private void renderScrollbar(GuiGraphicsExtractor context, GridLayout layout) {
         int trackX = layout.viewportRight() + scaled(7);
         int thumbHeight = scrollbarThumbHeight(layout);
         int thumbY = layout.viewportY() + scrollbarThumbOffset(layout, thumbHeight);
@@ -258,7 +258,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (handleDiscordAccountClick(click, doubled)) return true;
         GridLayout layout = layoutFor(visibleCategories);
         if (layout.scrollable() && isOverScrollbar(layout, click.x(), click.y())) {
@@ -267,7 +267,7 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
             return true;
         }
 
-        if (click.button() == 0 && click.y() >= layout.viewportY() && click.y() < layout.viewportBottom()) {
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT && click.y() >= layout.viewportY() && click.y() < layout.viewportBottom()) {
             for (CategoryLayout categoryLayout : categoryLayouts(layout)) {
                 if (click.x() >= layout.viewportX() && click.x() < layout.viewportRight()
                         && click.y() >= categoryLayout.headerY()
@@ -276,8 +276,8 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                     if (!collapsedCategories.remove(category)) {
                         collapsedCategories.add(category);
                     }
-                    client.getSoundManager().play(
-                            PositionedSoundInstance.ui(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+                    minecraft.getSoundManager().play(
+                            SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
                     layoutFor(visibleCategories);
                     scrollOffset = Math.clamp(scrollOffset, 0, maxScroll);
                     return true;
@@ -289,8 +289,8 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
                     if (click.x() >= cardX && click.x() < cardX + layout.cardSize()
                             && click.y() >= cardY && click.y() < cardY + layout.cardSize()) {
                         DMLSModule module = categoryLayout.group().modules().get(index);
-                        if (module.isEnabledForClient(client)) {
-                            module.tryOpenScreen(client, this);
+                        if (module.isEnabledForClient(minecraft)) {
+                            module.tryOpenScreen(minecraft, this);
                         }
                         return true;
                     }
@@ -301,13 +301,13 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
+    public boolean mouseReleased(MouseButtonEvent click) {
         draggingScrollbar = false;
         return super.mouseReleased(click);
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
         if (draggingScrollbar) {
             GridLayout layout = layoutFor(visibleCategories);
             int thumbHeight = scrollbarThumbHeight(layout);
@@ -415,40 +415,40 @@ public final class DMLSHomeScreen extends DMLSMenuScreen {
         return layouts;
     }
 
-    private void renderRankAnnouncement(DrawContext context) {
+    private void renderRankAnnouncement(GuiGraphicsExtractor context) {
         int topPadding = announcement.type == AnnouncementType.WELCOME ? WELCOME_TOP_PADDING : 0;
-        Text heading = Text.translatable(announcement.type == AnnouncementType.WELCOME
+        Component heading = Component.translatable(announcement.type == AnnouncementType.WELCOME
                 ? "dmls.welcome.title"
                 : "dmls.promotion.title");
-        context.drawCenteredTextWithShadow(textRenderer, heading,
+        context.centeredText(font, heading,
                 width / 2, headerHeight() + scaled(4) + topPadding, 0xFFFFFFFF);
 
         int panelWidth = Math.min(scaled(220), width - scaled(48));
         int panelX = width / 2 - panelWidth / 2;
         int panelY = headerHeight() + scaled(24) + topPadding;
         renderPanel(context, panelX, panelY, panelWidth, STANDARD_BUTTON_HEIGHT);
-        context.drawCenteredTextWithShadow(textRenderer, announcement.currentRank.displayName(),
-                width / 2, panelY + (STANDARD_BUTTON_HEIGHT - textRenderer.fontHeight) / 2 + scaled(2), 0xFFFFFFFF);
+        context.centeredText(font, announcement.currentRank.displayName(),
+                width / 2, panelY + (STANDARD_BUTTON_HEIGHT - font.lineHeight) / 2 + scaled(2), 0xFFFFFFFF);
 
-        Text summary;
+        Component summary;
         if (announcement.type == AnnouncementType.WELCOME) {
-            summary = Text.translatable("dmls.welcome.summary", visibleModules.size());
+            summary = Component.translatable("dmls.welcome.summary", visibleModules.size());
         } else {
             int newlyUnlocked = (int) visibleModules.stream().filter(this::isNewlyUnlocked).count();
-            summary = Text.translatable(newlyUnlocked == 1
+            summary = Component.translatable(newlyUnlocked == 1
                             ? "dmls.promotion.summary.one"
                             : "dmls.promotion.summary.many",
                     announcement.previousRank.displayName(), newlyUnlocked);
         }
-        context.drawCenteredTextWithShadow(textRenderer, summary,
+        context.centeredText(font, summary,
                 width / 2, headerHeight() + scaled(57) + topPadding, 0xFFDDDDDD);
 
         if (announcement.type == AnnouncementType.WELCOME) {
-            Text hint = Text.translatable("dmls.welcome.open_menu_hint");
+            Component hint = Component.translatable("dmls.welcome.open_menu_hint");
             int hintWidth = Math.min(scaled(430), width - scaled(32));
             int hintY = headerHeight() + scaled(73) + topPadding;
-            for (OrderedText line : textRenderer.wrapLines(hint, hintWidth)) {
-                context.drawCenteredTextWithShadow(textRenderer, line, width / 2, hintY, 0xFFAAAAAA);
+            for (FormattedCharSequence line : font.split(hint, hintWidth)) {
+                context.centeredText(font, line, width / 2, hintY, 0xFFAAAAAA);
                 hintY += scaled(11);
             }
         }

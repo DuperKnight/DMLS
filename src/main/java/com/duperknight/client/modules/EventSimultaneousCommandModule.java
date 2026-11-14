@@ -5,17 +5,16 @@ import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.ServerGuard;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class EventSimultaneousCommandModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - Simultaneous§8] §7";
@@ -42,8 +41,8 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.event_simultaneous.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.event_simultaneous.name");
     }
 
     @Override
@@ -52,8 +51,8 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.event_simultaneous.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.event_simultaneous.description"));
     }
 
     @Override
@@ -62,8 +61,8 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new EventSimultaneousCommandScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new EventSimultaneousCommandScreen(parent, this));
     }
 
     @Override
@@ -84,7 +83,7 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     }
 
     /** Stores a command in a one-based slot for later use with runStored(). */
-    public boolean setCommand(MinecraftClient client, int slot, String command) {
+    public boolean setCommand(Minecraft client, int slot, String command) {
         Optional<String> validated = validateCommand(command);
         if (slot < 1 || slot > MAX_COMMANDS || validated.isEmpty()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.validation.event_simultaneous.command");
@@ -96,22 +95,22 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     }
 
     /** Backward-compatible alias for the original command1 subcommand. */
-    public boolean setCommandOne(MinecraftClient client, String command) {
+    public boolean setCommandOne(Minecraft client, String command) {
         return setCommand(client, 1, command);
     }
 
     /** Backward-compatible alias for the original command2 subcommand. */
-    public boolean setCommandTwo(MinecraftClient client, String command) {
+    public boolean setCommandTwo(Minecraft client, String command) {
         return setCommand(client, 2, command);
     }
 
     /** Runs the consecutive stored commands, starting at slot one, a single time. */
-    public RunResult runStored(MinecraftClient client) {
+    public RunResult runStored(Minecraft client) {
         return runStored(client, 1);
     }
 
     /** Runs the consecutive stored commands, starting at slot one, repeatCount times. */
-    public RunResult runStored(MinecraftClient client, int repeatCount) {
+    public RunResult runStored(Minecraft client, int repeatCount) {
         int lastCommand = -1;
         for (int index = storedCommands.size() - 1; index >= 0; index--) {
             if (storedCommands.get(index) != null) {
@@ -127,12 +126,12 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     }
 
     /** Validates every command before dispatching the full list in order, a single time. */
-    public RunResult run(MinecraftClient client, List<String> commands) {
+    public RunResult run(Minecraft client, List<String> commands) {
         return run(client, commands, 1);
     }
 
     /** Validates every command before dispatching the full list in order, repeatCount times. */
-    public RunResult run(MinecraftClient client, List<String> commands, int repeatCount) {
+    public RunResult run(Minecraft client, List<String> commands, int repeatCount) {
         if (commands == null || commands.size() < MIN_COMMANDS || commands.size() > MAX_COMMANDS) {
             return RunResult.INVALID_COMMAND_COUNT;
         }
@@ -162,16 +161,16 @@ public final class EventSimultaneousCommandModule extends DMLSModule {
     }
 
     /** Backward-compatible two-command entry point, a single time. */
-    public RunResult run(MinecraftClient client, String commandOne, String commandTwo) {
+    public RunResult run(Minecraft client, String commandOne, String commandTwo) {
         return run(client, Arrays.asList(commandOne, commandTwo), 1);
     }
 
     /** Backward-compatible two-command entry point, repeatCount times. */
-    public RunResult run(MinecraftClient client, String commandOne, String commandTwo, int repeatCount) {
+    public RunResult run(Minecraft client, String commandOne, String commandTwo, int repeatCount) {
         return run(client, Arrays.asList(commandOne, commandTwo), repeatCount);
     }
 
-    private void sendGuardBlockedMessage(MinecraftClient client) {
+    private void sendGuardBlockedMessage(Minecraft client) {
         ServerGuard.GuardResult guard = ServerGuard.check(client);
         ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.server_guard.blocked",
                 guard.reason(), guard.address());

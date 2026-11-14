@@ -1,11 +1,10 @@
 package com.duperknight.client.reimbursement;
 
-import net.minecraft.util.Identifier;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import net.minecraft.resources.Identifier;
 
 /** Immutable item request; the screen replaces entries as fields are edited. */
 public record ItemEntry(

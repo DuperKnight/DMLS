@@ -8,16 +8,15 @@ import com.duperknight.client.gui.modules.ChatAlertsScreen;
 import com.duperknight.client.message.MessageOrigin;
 import com.duperknight.client.message.ServerMessage;
 import com.duperknight.client.message.ServerMessageRouter;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-
 import java.util.List;
 import java.util.EnumSet;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class ChatAlertsModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - Alerts§8] §7";
@@ -28,8 +27,8 @@ public final class ChatAlertsModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.chat_alerts.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.chat_alerts.name");
     }
 
     @Override
@@ -38,13 +37,13 @@ public final class ChatAlertsModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.chat_alerts.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.chat_alerts.description"));
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new ChatAlertsScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new ChatAlertsScreen(parent, this));
     }
 
     @Override
@@ -80,7 +79,7 @@ public final class ChatAlertsModule extends DMLSModule {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (ClientUtils.isNotConnected(client)) {
             return;
         }
@@ -89,7 +88,7 @@ public final class ChatAlertsModule extends DMLSModule {
         WORDLIST.findMatch(raw).ifPresent(word -> {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.alerts.flagged", word);
             ChatUtils.sendTranslatedMessage(client, "", "dmls.chat.alerts.quote", raw);
-            client.player.playSound(SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 0.5f);
+            client.player.playSound(SoundEvents.EXPERIENCE_ORB_PICKUP, 1.0f, 0.5f);
         });
     }
 }

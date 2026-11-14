@@ -9,27 +9,25 @@ import com.duperknight.client.session.OperationHandle;
 import com.duperknight.client.session.OutboundSpamSafety;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.ScreenUtils;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
+import net.minecraft.world.Container;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 /** Preflight-first, partial-result-preserving reimbursement state machine. */
 public final class ReimbursementOperation implements ManagedOperation {
@@ -78,7 +76,7 @@ public final class ReimbursementOperation implements ManagedOperation {
     private final int totalSteps;
 
     private OperationHandle handle;
-    private MinecraftClient client;
+    private Minecraft client;
     private State state = State.STARTING;
     private boolean admin;
     private int waitTicks;
@@ -97,7 +95,7 @@ public final class ReimbursementOperation implements ManagedOperation {
     private boolean failed;
     private String failureMessage = "";
     private String status = "Preparing reimbursement";
-    private Vec3d origin;
+    private Vec3 origin;
     private float originYaw;
     private float originPitch;
     private String originDimension = "";
@@ -122,17 +120,17 @@ public final class ReimbursementOperation implements ManagedOperation {
     }
 
     @Override
-    public void onStarted(OperationHandle handle, MinecraftClient client) {
+    public void onStarted(OperationHandle handle, Minecraft client) {
         this.handle = handle;
         this.client = client;
         this.admin = DMLSConfig.staffRank() == StaffRank.ADMIN;
-        if (client.player == null || client.world == null) {
+        if (client.player == null || client.level == null) {
             finishFailure("The player or world is no longer available.");
             return;
         }
-        origin = client.player.getEntityPos();
-        originYaw = client.player.getYaw();
-        originPitch = client.player.getPitch();
+        origin = client.player.position();
+        originYaw = client.player.getYRot();
+        originPitch = client.player.getXRot();
         originDimension = dimension(client);
 
         if (handle.descriptor().dryRunCaptured()) {
@@ -145,13 +143,13 @@ public final class ReimbursementOperation implements ManagedOperation {
             return;
         }
 
-        client.setScreen(null);
+        client.gui.setScreen(null);
         state = plan.playerTargets().isEmpty() ? State.PREFLIGHT_CONTAINER : State.PREFLIGHT_PLAYER_COMMAND;
         publish("Checking destination capacity");
     }
 
     @Override
-    public void onTick(OperationHandle handle, MinecraftClient client) {
+    public void onTick(OperationHandle handle, Minecraft client) {
         if (state == State.TERMINAL) return;
         this.client = client;
         operationTicks++;
@@ -185,7 +183,7 @@ public final class ReimbursementOperation implements ManagedOperation {
     }
 
     @Override
-    public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+    public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
         if (state == State.TERMINAL || failed || !isServerRejection(message.cleanText())) return;
         failed = true;
         failureMessage = "The server rejected a reimbursement step: " + message.cleanText();
@@ -193,7 +191,7 @@ public final class ReimbursementOperation implements ManagedOperation {
             finishTerminal();
             return;
         }
-        if (origin != null && client.player != null && client.player.squaredDistanceTo(origin) >= 1.0) {
+        if (origin != null && client.player != null && client.player.distanceToSqr(origin) >= 1.0) {
             transition(State.RETURN_FINAL_COMMAND);
         } else {
             finishTerminal();
@@ -208,7 +206,7 @@ public final class ReimbursementOperation implements ManagedOperation {
     }
 
     @Override
-    public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+    public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
         if (state == State.TERMINAL) return;
         failed = true;
         failureMessage = "Reimbursement cancelled: " + reason.name().toLowerCase(Locale.ROOT).replace('_', ' ');
@@ -237,9 +235,9 @@ public final class ReimbursementOperation implements ManagedOperation {
 
     private void preflightPlayerScreen() {
         String ign = plan.playerTargets().get(playerScanIndex);
-        if (client.currentScreen instanceof HandledScreen<?> screen
+        if (client.gui.screen() instanceof AbstractContainerScreen<?> screen
                 && screen.getTitle().getString().toLowerCase(Locale.ROOT).contains(ign)) {
-            playerCapacity.put(ign, countEmptySlots(screen.getScreenHandler(), 0, 36, null));
+            playerCapacity.put(ign, countEmptySlots(screen.getMenu(), 0, 36, null));
             closeHandledScreen();
             playerScanIndex++;
             completedSteps++;
@@ -259,7 +257,7 @@ public final class ReimbursementOperation implements ManagedOperation {
             failAndReturn("A selected container is in another dimension. Reselect it before starting.");
             return;
         }
-        if (client.player.squaredDistanceTo(Vec3d.ofCenter(target.position())) > INTERACTION_DISTANCE_SQUARED) {
+        if (client.player.distanceToSqr(Vec3.atCenterOf(target.position())) > INTERACTION_DISTANCE_SQUARED) {
             if (!safeToDispatch()) return;
             if (dispatch(teleportCommand(target.position())) == CommandDispatch.BLOCKED) {
                 failAndReturn("Could not teleport to the selected container.");
@@ -282,7 +280,7 @@ public final class ReimbursementOperation implements ManagedOperation {
 
     private void preflightTeleportWait() {
         ContainerTarget target = plan.containerTargets().get(containerScanIndex);
-        boolean withinReach = client.player.squaredDistanceTo(Vec3d.ofCenter(target.position()))
+        boolean withinReach = client.player.distanceToSqr(Vec3.atCenterOf(target.position()))
                 <= INTERACTION_DISTANCE_SQUARED;
         if (withinReach && containerChunkLoaded(target)) {
             if (!containerStillValid(target)) {
@@ -306,8 +304,8 @@ public final class ReimbursementOperation implements ManagedOperation {
             transition(State.PREFLIGHT_CONTAINER);
             return;
         }
-        if (client.currentScreen instanceof HandledScreen<?> screen) {
-            containerCapacity.put(target, countContainerSlots(screen.getScreenHandler(), null));
+        if (client.gui.screen() instanceof AbstractContainerScreen<?> screen) {
+            containerCapacity.put(target, countContainerSlots(screen.getMenu(), null));
             closeHandledScreen();
             containerScanIndex++;
             completedSteps++;
@@ -319,7 +317,7 @@ public final class ReimbursementOperation implements ManagedOperation {
     }
 
     private void returnAfterScanCommand() {
-        if (origin == null || client.player.squaredDistanceTo(origin) < 1.0) {
+        if (origin == null || client.player.distanceToSqr(origin) < 1.0) {
             transition(State.VALIDATE_CAPACITY);
             return;
         }
@@ -332,7 +330,7 @@ public final class ReimbursementOperation implements ManagedOperation {
     }
 
     private void validateCapacity() {
-        int staffSlots = (int) client.player.getInventory().getMainStacks().stream()
+        int staffSlots = (int) client.player.getInventory().getNonEquipmentItems().stream()
                 .filter(ItemStack::isEmpty).count();
         if (!commands.stacks().isEmpty() && staffSlots == 0) {
             failed = true;
@@ -465,11 +463,11 @@ public final class ReimbursementOperation implements ManagedOperation {
 
     private void playerRouteScreen() {
         String ign = currentStack.entry().playerIgn().trim();
-        if (client.currentScreen instanceof HandledScreen<?> screen
+        if (client.gui.screen() instanceof AbstractContainerScreen<?> screen
                 && screen.getTitle().getString().toLowerCase(Locale.ROOT)
                 .contains(ign.toLowerCase(Locale.ROOT))) {
-            moveStagedStacks(screen.getScreenHandler(), 0,
-                    Math.min(36, screen.getScreenHandler().slots.size()));
+            moveStagedStacks(screen.getMenu(), 0,
+                    Math.min(36, screen.getMenu().slots.size()));
             if (!hasStagedItems()) {
                 closeHandledScreen();
                 completeCurrentStack(0);
@@ -492,7 +490,7 @@ public final class ReimbursementOperation implements ManagedOperation {
             routeContainerIndex++;
             return;
         }
-        if (client.player.squaredDistanceTo(Vec3d.ofCenter(target.position())) > INTERACTION_DISTANCE_SQUARED) {
+        if (client.player.distanceToSqr(Vec3.atCenterOf(target.position())) > INTERACTION_DISTANCE_SQUARED) {
             if (!safeToDispatch()) return;
             if (dispatch(teleportCommand(target.position())) == CommandDispatch.BLOCKED) {
                 routeContainerIndex++;
@@ -515,7 +513,7 @@ public final class ReimbursementOperation implements ManagedOperation {
 
     private void containerTeleportWait() {
         ContainerTarget target = currentStack.entry().containers().get(routeContainerIndex);
-        boolean withinReach = client.player.squaredDistanceTo(Vec3d.ofCenter(target.position()))
+        boolean withinReach = client.player.distanceToSqr(Vec3.atCenterOf(target.position()))
                 <= INTERACTION_DISTANCE_SQUARED;
         if (withinReach && containerChunkLoaded(target)) {
             if (!containerStillValid(target)) {
@@ -532,8 +530,8 @@ public final class ReimbursementOperation implements ManagedOperation {
     }
 
     private void containerRouteScreen() {
-        if (client.currentScreen instanceof HandledScreen<?> screen) {
-            ScreenHandler handler = screen.getScreenHandler();
+        if (client.gui.screen() instanceof AbstractContainerScreen<?> screen) {
+            AbstractContainerMenu handler = screen.getMenu();
             int containerEnd = firstPlayerInventorySlot(handler);
             moveStagedStacks(handler, 0, containerEnd);
             if (!hasStagedItems()) {
@@ -554,7 +552,7 @@ public final class ReimbursementOperation implements ManagedOperation {
 
     private void returnFinalCommand() {
         closeHandledScreen();
-        if (origin == null || client.player.squaredDistanceTo(origin) < 1.0) {
+        if (origin == null || client.player.distanceToSqr(origin) < 1.0) {
             finishTerminal();
             return;
         }
@@ -571,13 +569,13 @@ public final class ReimbursementOperation implements ManagedOperation {
 
     private void completeCurrentStack(int retainedCount) {
         String description = currentStack.count() + "x "
-                + net.minecraft.registry.Registries.ITEM.get(currentStack.entry().itemId())
-                .getDefaultStack().getName().getString();
+                + net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(currentStack.entry().itemId())
+                .getDefaultInstance().getHoverName().getString();
         completed.add(description);
         if (retainedCount > 0) {
             retained.add(retainedCount + "x "
-                    + net.minecraft.registry.Registries.ITEM.get(currentStack.entry().itemId())
-                    .getDefaultStack().getName().getString());
+                    + net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(currentStack.entry().itemId())
+                    .getDefaultInstance().getHoverName().getString());
         }
         completedSteps++;
         stackIndex += currentStackPlanCount;
@@ -596,16 +594,16 @@ public final class ReimbursementOperation implements ManagedOperation {
     }
 
     private boolean reserveHotbarSlot() {
-        ClientPlayerEntity player = client.player;
+        LocalPlayer player = client.player;
         for (int index = 0; index < 9; index++) {
-            if (player.getInventory().getStack(index).isEmpty()) {
+            if (player.getInventory().getItem(index).isEmpty()) {
                 selectHotbar(index);
                 return true;
             }
         }
         int emptyMain = -1;
         for (int index = 9; index < 36; index++) {
-            if (player.getInventory().getStack(index).isEmpty()) {
+            if (player.getInventory().getItem(index).isEmpty()) {
                 emptyMain = index;
                 break;
             }
@@ -613,12 +611,12 @@ public final class ReimbursementOperation implements ManagedOperation {
         if (emptyMain < 0) return false;
 
         int hotbar = player.getInventory().getSelectedSlot();
-        ScreenHandler handler = player.playerScreenHandler;
+        AbstractContainerMenu handler = player.inventoryMenu;
         Slot hotbarSlot = findPlayerSlot(handler, hotbar);
         Slot emptySlot = findPlayerSlot(handler, emptyMain);
-        if (hotbarSlot == null || emptySlot == null || client.interactionManager == null) return false;
-        client.interactionManager.clickSlot(handler.syncId, hotbarSlot.id, 0, SlotActionType.PICKUP, player);
-        client.interactionManager.clickSlot(handler.syncId, emptySlot.id, 0, SlotActionType.PICKUP, player);
+        if (hotbarSlot == null || emptySlot == null || client.gameMode == null) return false;
+        client.gameMode.handleContainerInput(handler.containerId, hotbarSlot.index, 0, ContainerInput.PICKUP, player);
+        client.gameMode.handleContainerInput(handler.containerId, emptySlot.index, 0, ContainerInput.PICKUP, player);
         selectHotbar(hotbar);
         return true;
     }
@@ -626,40 +624,40 @@ public final class ReimbursementOperation implements ManagedOperation {
     private void selectHotbar(int index) {
         selectedHotbar = index;
         client.player.getInventory().setSelectedSlot(index);
-        if (client.getNetworkHandler() != null) {
-            client.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(index));
+        if (client.getConnection() != null) {
+            client.getConnection().send(new ServerboundSetCarriedItemPacket(index));
         }
     }
 
-    private void moveStagedStacks(ScreenHandler handler, int start, int end) {
-        if (client.interactionManager == null) return;
+    private void moveStagedStacks(AbstractContainerMenu handler, int start, int end) {
+        if (client.gameMode == null) return;
         int safeEnd = Math.min(end, handler.slots.size());
         for (int stagedIndex : List.copyOf(stagedInventorySlots)) {
             Slot source = findPlayerSlot(handler, stagedIndex);
-            if (source == null || !source.hasStack()) {
+            if (source == null || !source.hasItem()) {
                 stagedInventorySlots.remove(Integer.valueOf(stagedIndex));
                 continue;
             }
             Slot target = null;
             for (int index = Math.max(0, start); index < safeEnd; index++) {
                 Slot candidate = handler.getSlot(index);
-                if (candidate.inventory == client.player.getInventory()) continue;
-                if (!candidate.hasStack() && candidate.canInsert(source.getStack())) {
+                if (candidate.container == client.player.getInventory()) continue;
+                if (!candidate.hasItem() && candidate.mayPlace(source.getItem())) {
                     target = candidate;
                     break;
                 }
             }
             if (target == null) return;
-            client.interactionManager.clickSlot(handler.syncId, source.id, 0,
-                    SlotActionType.PICKUP, client.player);
-            client.interactionManager.clickSlot(handler.syncId, target.id, 0,
-                    SlotActionType.PICKUP, client.player);
+            client.gameMode.handleContainerInput(handler.containerId, source.index, 0,
+                    ContainerInput.PICKUP, client.player);
+            client.gameMode.handleContainerInput(handler.containerId, target.index, 0,
+                    ContainerInput.PICKUP, client.player);
             stagedInventorySlots.remove(Integer.valueOf(stagedIndex));
         }
     }
 
     private int countEmptyStaffSlots() {
-        return (int) client.player.getInventory().getMainStacks().stream()
+        return (int) client.player.getInventory().getNonEquipmentItems().stream()
                 .filter(ItemStack::isEmpty)
                 .count();
     }
@@ -667,14 +665,14 @@ public final class ReimbursementOperation implements ManagedOperation {
     private List<Integer> emptyStaffSlots() {
         List<Integer> slots = new ArrayList<>();
         for (int index = 0; index < 36; index++) {
-            if (client.player.getInventory().getStack(index).isEmpty()) slots.add(index);
+            if (client.player.getInventory().getItem(index).isEmpty()) slots.add(index);
         }
         return List.copyOf(slots);
     }
 
     private int countStaffItem(ItemEntry entry) {
-        return client.player.getInventory().getMainStacks().stream()
-                .filter(stack -> stack.isOf(net.minecraft.registry.Registries.ITEM.get(entry.itemId())))
+        return client.player.getInventory().getNonEquipmentItems().stream()
+                .filter(stack -> stack.is(net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(entry.itemId())))
                 .mapToInt(ItemStack::getCount)
                 .sum();
     }
@@ -682,9 +680,9 @@ public final class ReimbursementOperation implements ManagedOperation {
     private void captureStagedSlots() {
         stagedInventorySlots.clear();
         for (int index : emptySlotsBeforeGive) {
-            ItemStack stack = client.player.getInventory().getStack(index);
-            if (!stack.isEmpty() && stack.isOf(
-                    net.minecraft.registry.Registries.ITEM.get(currentStack.entry().itemId()))) {
+            ItemStack stack = client.player.getInventory().getItem(index);
+            if (!stack.isEmpty() && stack.is(
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(currentStack.entry().itemId()))) {
                 stagedInventorySlots.add(index);
             }
         }
@@ -692,9 +690,9 @@ public final class ReimbursementOperation implements ManagedOperation {
 
     private boolean hasStagedItems() {
         stagedInventorySlots.removeIf(index -> {
-            ItemStack stack = client.player.getInventory().getStack(index);
-            return stack.isEmpty() || !stack.isOf(
-                    net.minecraft.registry.Registries.ITEM.get(currentStack.entry().itemId()));
+            ItemStack stack = client.player.getInventory().getItem(index);
+            return stack.isEmpty() || !stack.is(
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(currentStack.entry().itemId()));
         });
         return !stagedInventorySlots.isEmpty();
     }
@@ -704,65 +702,65 @@ public final class ReimbursementOperation implements ManagedOperation {
         hasStagedItems();
         int count = 0;
         for (int index : stagedInventorySlots) {
-            count += client.player.getInventory().getStack(index).getCount();
+            count += client.player.getInventory().getItem(index).getCount();
         }
         return count;
     }
 
-    private static Slot findPlayerSlot(ScreenHandler handler, int inventoryIndex) {
+    private static Slot findPlayerSlot(AbstractContainerMenu handler, int inventoryIndex) {
         for (Slot slot : handler.slots) {
-            if (MinecraftClient.getInstance().player != null
-                    && slot.inventory == MinecraftClient.getInstance().player.getInventory()
-                    && slot.getIndex() == inventoryIndex) return slot;
+            if (Minecraft.getInstance().player != null
+                    && slot.container == Minecraft.getInstance().player.getInventory()
+                    && slot.getContainerSlot() == inventoryIndex) return slot;
         }
         return null;
     }
 
-    private int countContainerSlots(ScreenHandler handler, ItemStack stack) {
+    private int countContainerSlots(AbstractContainerMenu handler, ItemStack stack) {
         int end = firstPlayerInventorySlot(handler);
         int count = 0;
         for (int index = 0; index < end; index++) {
             Slot slot = handler.getSlot(index);
-            if (slot.hasStack()) continue;
+            if (slot.hasItem()) continue;
             boolean acceptsEveryPlannedItem = plan.draft().entries().stream()
                     .filter(entry -> entry instanceof ItemEntry
                             && entry.destination() == Destination.CONTAINER)
                     .map(ItemEntry.class::cast)
-                    .map(entry -> net.minecraft.registry.Registries.ITEM.get(entry.itemId()).getDefaultStack())
-                    .allMatch(slot::canInsert);
-            if (acceptsEveryPlannedItem && (stack == null || slot.canInsert(stack))) count++;
+                    .map(entry -> net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(entry.itemId()).getDefaultInstance())
+                    .allMatch(slot::mayPlace);
+            if (acceptsEveryPlannedItem && (stack == null || slot.mayPlace(stack))) count++;
         }
         return count;
     }
 
-    private int firstPlayerInventorySlot(ScreenHandler handler) {
+    private int firstPlayerInventorySlot(AbstractContainerMenu handler) {
         for (int index = 0; index < handler.slots.size(); index++) {
-            if (handler.getSlot(index).inventory == client.player.getInventory()) return index;
+            if (handler.getSlot(index).container == client.player.getInventory()) return index;
         }
         return Math.max(0, handler.slots.size() - 36);
     }
 
-    private static int countEmptySlots(ScreenHandler handler, int start, int end, ItemStack stack) {
+    private static int countEmptySlots(AbstractContainerMenu handler, int start, int end, ItemStack stack) {
         int count = 0;
         int safeEnd = Math.min(end, handler.slots.size());
         for (int index = Math.max(0, start); index < safeEnd; index++) {
             Slot slot = handler.getSlot(index);
-            if (!slot.hasStack() && (stack == null || slot.canInsert(stack))) count++;
+            if (!slot.hasItem() && (stack == null || slot.mayPlace(stack))) count++;
         }
         return count;
     }
 
     private boolean containerStillValid(ContainerTarget target) {
         return containerChunkLoaded(target)
-                && client.world.getBlockEntity(target.position()) instanceof Inventory
-                && !(client.world.getBlockState(target.position()).getBlock()
-                instanceof net.minecraft.block.EnderChestBlock);
+                && client.level.getBlockEntity(target.position()) instanceof Container
+                && !(client.level.getBlockState(target.position()).getBlock()
+                instanceof net.minecraft.world.level.block.EnderChestBlock);
     }
 
     private boolean containerChunkLoaded(ContainerTarget target) {
-        return client.world != null
+        return client.level != null
                 && dimension(client).equals(target.dimension())
-                && client.world.isChunkLoaded(target.position());
+                && client.level.hasChunkAt(target.position());
     }
 
     private void removePreflightContainer(ContainerTarget target) {
@@ -782,8 +780,8 @@ public final class ReimbursementOperation implements ManagedOperation {
     private void interactContainer(ContainerTarget target) {
         closeHandledScreen();
         BlockPos pos = target.position();
-        BlockHitResult hit = new BlockHitResult(Vec3d.ofCenter(pos), Direction.UP, pos, false);
-        client.interactionManager.interactBlock(client.player, Hand.MAIN_HAND, hit);
+        BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false);
+        client.gameMode.useItemOn(client.player, InteractionHand.MAIN_HAND, hit);
     }
 
     private String teleportCommand(BlockPos pos) {
@@ -797,28 +795,28 @@ public final class ReimbursementOperation implements ManagedOperation {
     }
 
     private BlockPos safeStandingPosition(BlockPos container) {
-        for (Direction direction : Direction.Type.HORIZONTAL) {
-            BlockPos feet = container.offset(direction);
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos feet = container.relative(direction);
             if (canStandAt(feet)) return feet;
-            BlockPos raised = feet.up();
+            BlockPos raised = feet.above();
             if (canStandAt(raised)) return raised;
         }
-        BlockPos above = container.up();
-        return canStandAt(above) ? above : container.up(2);
+        BlockPos above = container.above();
+        return canStandAt(above) ? above : container.above(2);
     }
 
     private boolean canStandAt(BlockPos feet) {
-        return client.world != null
-                && client.world.getBlockState(feet).getCollisionShape(client.world, feet).isEmpty()
-                && client.world.getBlockState(feet.up()).getCollisionShape(client.world, feet.up()).isEmpty()
-                && !client.world.getBlockState(feet.down()).getCollisionShape(client.world, feet.down()).isEmpty();
+        return client.level != null
+                && client.level.getBlockState(feet).getCollisionShape(client.level, feet).isEmpty()
+                && client.level.getBlockState(feet.above()).getCollisionShape(client.level, feet.above()).isEmpty()
+                && !client.level.getBlockState(feet.below()).getCollisionShape(client.level, feet.below()).isEmpty();
     }
 
     private String returnCommand() {
         return formatReturnCommand(origin, originYaw, originPitch);
     }
 
-    static String formatReturnCommand(Vec3d position, float yaw, float pitch) {
+    static String formatReturnCommand(Vec3 position, float yaw, float pitch) {
         return String.format(Locale.ROOT, "tp @s %.3f %.3f %.3f",
                 position.x, position.y, position.z);
     }
@@ -838,7 +836,7 @@ public final class ReimbursementOperation implements ManagedOperation {
 
     private String staffIgn() {
         return client.player == null
-                ? client.getSession().getUsername()
+                ? client.getUser().getName()
                 : client.player.getGameProfile().name();
     }
 
@@ -912,7 +910,7 @@ public final class ReimbursementOperation implements ManagedOperation {
     private void failAndReturn(String message) {
         failed = true;
         failureMessage = message;
-        if (origin != null && client.player != null && client.player.squaredDistanceTo(origin) >= 1.0) {
+        if (origin != null && client.player != null && client.player.distanceToSqr(origin) >= 1.0) {
             transition(State.RETURN_FINAL_COMMAND);
         } else {
             finishTerminal();
@@ -938,7 +936,7 @@ public final class ReimbursementOperation implements ManagedOperation {
                     ? ReimbursementResult.Kind.SUCCESS
                     : ReimbursementResult.Kind.SUCCESS_WITH_WARNINGS;
             result = new ReimbursementResult(kind,
-                    ReimbursementLogFormatter.format(plan, client.world),
+                    ReimbursementLogFormatter.format(plan, client.level),
                     completed, retained, List.of(), failureMessage);
         }
         listener.finished(result);
@@ -957,14 +955,14 @@ public final class ReimbursementOperation implements ManagedOperation {
             if (entry instanceof MoneyEntry money) values.add("$" + money.amount().toPlainString());
             else {
                 ItemEntry item = (ItemEntry) entry;
-                values.add(item.amount() + "x " + net.minecraft.registry.Registries.ITEM.get(item.itemId())
-                        .getDefaultStack().getName().getString());
+                values.add(item.amount() + "x " + net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(item.itemId())
+                        .getDefaultInstance().getHoverName().getString());
             }
         }
         return values;
     }
 
-    private static String dimension(MinecraftClient client) {
-        return client.world == null ? "" : client.world.getRegistryKey().getValue().toString();
+    private static String dimension(Minecraft client) {
+        return client.level == null ? "" : client.level.dimension().identifier().toString();
     }
 }

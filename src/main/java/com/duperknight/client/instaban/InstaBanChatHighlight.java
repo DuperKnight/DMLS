@@ -1,9 +1,11 @@
 package com.duperknight.client.instaban;
 
-import net.minecraft.text.MutableText;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import com.duperknight.client.utils.LegacyColors;
+
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.util.FormattedCharSequence;
 
 /** Marks result chat rows with a render-only translucent background tint. */
 public final class InstaBanChatHighlight {
@@ -15,24 +17,24 @@ public final class InstaBanChatHighlight {
     private InstaBanChatHighlight() {
     }
 
-    public static MutableText tint(Text original, Formatting resultColor) {
+    public static MutableComponent tint(Component original, ChatFormatting resultColor) {
         String marker = switch (resultColor) {
             case GREEN -> SAFE_MARKER;
             case YELLOW -> UNSURE_MARKER;
             case RED -> UNSAFE_MARKER;
             default -> null;
         };
-        MutableText copy = original.copy();
-        return marker == null ? copy : copy.styled(style -> style.withInsertion(marker));
+        MutableComponent copy = original.copy();
+        return marker == null ? copy : copy.withStyle(style -> style.withInsertion(marker));
     }
 
-    public static int backgroundRgb(OrderedText text) {
+    public static int backgroundRgb(FormattedCharSequence text) {
         int[] color = {NONE};
         text.accept((index, style, codePoint) -> {
             color[0] = switch (style.getInsertion()) {
-                case SAFE_MARKER -> Formatting.GREEN.getColorValue();
-                case UNSURE_MARKER -> Formatting.YELLOW.getColorValue();
-                case UNSAFE_MARKER -> Formatting.RED.getColorValue();
+                case SAFE_MARKER -> LegacyColors.rgb(ChatFormatting.GREEN);
+                case UNSURE_MARKER -> LegacyColors.rgb(ChatFormatting.YELLOW);
+                case UNSAFE_MARKER -> LegacyColors.rgb(ChatFormatting.RED);
                 case null, default -> NONE;
             };
             return color[0] == NONE;

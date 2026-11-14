@@ -9,10 +9,9 @@ import com.duperknight.client.session.OperationCancelReason;
 import com.duperknight.client.session.OperationHandle;
 import com.duperknight.client.session.PacedCommandSequence;
 import com.duperknight.client.session.ResponseStatus;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.List;
 import java.util.Objects;
+import net.minecraft.client.Minecraft;
 
 /** One-step managed donor permission operation with truthful terminal outcomes. */
 final class DonorPetOperation implements ManagedOperation {
@@ -32,16 +31,16 @@ final class DonorPetOperation implements ManagedOperation {
     }
 
     interface Listener {
-        void waiting(MinecraftClient client, DonorPetModule.DonorPetRequest request);
+        void waiting(Minecraft client, DonorPetModule.DonorPetRequest request);
 
-        void finished(MinecraftClient client, Summary summary);
+        void finished(Minecraft client, Summary summary);
 
-        void cancelled(MinecraftClient client, Summary summary, OperationCancelReason reason);
+        void cancelled(Minecraft client, Summary summary, OperationCancelReason reason);
     }
 
     @FunctionalInterface
     interface Dispatcher {
-        CommandDispatch dispatch(OperationHandle handle, MinecraftClient client, String command);
+        CommandDispatch dispatch(OperationHandle handle, Minecraft client, String command);
     }
 
     private final DonorPetModule.DonorPetRequest request;
@@ -49,7 +48,7 @@ final class DonorPetOperation implements ManagedOperation {
     private final Dispatcher dispatcher;
 
     private OperationHandle handle;
-    private MinecraftClient client;
+    private Minecraft client;
     private PacedCommandSequence<DonorPetModule.DonorPetRequest> sequence;
     private boolean finished;
 
@@ -70,7 +69,7 @@ final class DonorPetOperation implements ManagedOperation {
     }
 
     @Override
-    public void onStarted(OperationHandle handle, MinecraftClient client) {
+    public void onStarted(OperationHandle handle, Minecraft client) {
         this.handle = handle;
         this.client = client;
         sequence = new PacedCommandSequence<>(List.of(request), 0, RESPONSE_TIMEOUT_TICKS,
@@ -89,7 +88,7 @@ final class DonorPetOperation implements ManagedOperation {
     }
 
     @Override
-    public void onTick(OperationHandle handle, MinecraftClient client) {
+    public void onTick(OperationHandle handle, Minecraft client) {
         if (finished) return;
         this.client = client;
         sequence.tick();
@@ -97,7 +96,7 @@ final class DonorPetOperation implements ManagedOperation {
     }
 
     @Override
-    public void onServerMessage(OperationHandle handle, MinecraftClient client, ServerMessage message) {
+    public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
         if (message.origin() != MessageOrigin.SERVER_SYSTEM) return;
         if (finished) return;
         this.client = client;
@@ -106,7 +105,7 @@ final class DonorPetOperation implements ManagedOperation {
     }
 
     @Override
-    public void onCancelled(OperationHandle handle, MinecraftClient client, OperationCancelReason reason) {
+    public void onCancelled(OperationHandle handle, Minecraft client, OperationCancelReason reason) {
         if (finished) return;
         finished = true;
         if (sequence != null) sequence.cancel();

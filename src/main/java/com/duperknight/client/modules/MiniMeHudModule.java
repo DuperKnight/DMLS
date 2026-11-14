@@ -2,13 +2,12 @@ package com.duperknight.client.modules;
 
 import com.duperknight.client.gui.modules.MiniMeHudScreen;
 import com.duperknight.client.hud.MiniMeHudOverlay;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
 import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** Configures the optional animated AdMinis shown on the in-game HUD. */
 public final class MiniMeHudModule extends DMLSModule {
@@ -17,8 +16,8 @@ public final class MiniMeHudModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.mini_me_hud.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.mini_me_hud.name");
     }
 
     @Override
@@ -27,10 +26,10 @@ public final class MiniMeHudModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
+    public List<Component> description() {
         return List.of(
-                Text.translatable("dmls.module.mini_me_hud.description.1"),
-                Text.translatable("dmls.module.mini_me_hud.description.2")
+                Component.translatable("dmls.module.mini_me_hud.description.1"),
+                Component.translatable("dmls.module.mini_me_hud.description.2")
         );
     }
 
@@ -40,8 +39,8 @@ public final class MiniMeHudModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new MiniMeHudScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new MiniMeHudScreen(parent, this));
     }
 
     @Override

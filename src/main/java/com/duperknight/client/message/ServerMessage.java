@@ -1,6 +1,6 @@
 package com.duperknight.client.message;
 
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 
-public record ServerMessage(Text text, String cleanText, MessageOrigin origin, boolean overlay, long receivedAtNanos) {
+public record ServerMessage(Component text, String cleanText, MessageOrigin origin, boolean overlay, long receivedAtNanos) {
 }

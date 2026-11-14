@@ -6,15 +6,14 @@ import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.EventPowerToolStorage;
 import com.duperknight.client.utils.InputValidators;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class EventPowerToolModule extends DMLSModule {
     private static final String PREFIX = "§8[§6DMLS - PowerTools§8] §7";
@@ -26,8 +25,8 @@ public final class EventPowerToolModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.event_powertool.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.event_powertool.name");
     }
 
     @Override
@@ -36,8 +35,8 @@ public final class EventPowerToolModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.event_powertool.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.event_powertool.description"));
     }
 
     @Override
@@ -46,8 +45,8 @@ public final class EventPowerToolModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new EventPowerToolScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new EventPowerToolScreen(parent, this));
     }
 
     @Override
@@ -60,7 +59,7 @@ public final class EventPowerToolModule extends DMLSModule {
     }
 
     /** Saves a named command, without binding it to anything yet. */
-    public boolean save(MinecraftClient client, String name, String command) {
+    public boolean save(Minecraft client, String name, String command) {
         String cleanName = normalizeName(name);
         Optional<String> cleanCommand = normalizeCommand(command);
         if (cleanName.isEmpty()) {
@@ -80,7 +79,7 @@ public final class EventPowerToolModule extends DMLSModule {
     }
 
     /** Binds a saved command to the currently held item via /powertool. */
-    public boolean load(MinecraftClient client, String name) {
+    public boolean load(Minecraft client, String name) {
         String cleanName = normalizeName(name);
         Optional<String> storedCommand = EventPowerToolStorage.get(cleanName);
         if (storedCommand.isEmpty()) {
@@ -105,7 +104,7 @@ public final class EventPowerToolModule extends DMLSModule {
         return true;
     }
 
-    public boolean delete(MinecraftClient client, String name) {
+    public boolean delete(Minecraft client, String name) {
         String cleanName = normalizeName(name);
         if (!EventPowerToolStorage.delete(cleanName)) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.powertool.unknown", cleanName);
@@ -116,7 +115,7 @@ public final class EventPowerToolModule extends DMLSModule {
     }
 
     /** Clears the /powertool binding on the currently held item. */
-    public boolean clear(MinecraftClient client) {
+    public boolean clear(Minecraft client) {
         if (!canRunPrivilegedOperation(client)) return false;
 
         CommandDispatch dispatch = ClientUtils.dispatchCommand(client, "powertool");

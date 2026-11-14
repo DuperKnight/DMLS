@@ -6,16 +6,15 @@ import com.duperknight.client.session.OperationCoordinator;
 import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.InputValidators;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class DonorPetModule extends DMLSModule {
     public static final String OPERATION_ID = "donor-pet";
@@ -73,8 +72,8 @@ public final class DonorPetModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.donor_pet.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.donor_pet.name");
     }
 
     @Override
@@ -83,8 +82,8 @@ public final class DonorPetModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.donor_pet.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.donor_pet.description"));
     }
 
     @Override
@@ -93,8 +92,8 @@ public final class DonorPetModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new DonorPetScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new DonorPetScreen(parent, this));
     }
 
     @Override
@@ -103,7 +102,7 @@ public final class DonorPetModule extends DMLSModule {
     }
 
     /** Gives the pet permission to the given player. The command and GUI share this entrypoint. */
-    public SubmitStatus submit(MinecraftClient client, String username, String pet) {
+    public SubmitStatus submit(Minecraft client, String username, String pet) {
         DonorPetRequest request = prepare(username, pet);
         if (!request.valid()) {
             if (request.status() == PreparationStatus.INVALID_USERNAME) {
@@ -142,13 +141,13 @@ public final class DonorPetModule extends DMLSModule {
     private DonorPetOperation.Listener listener() {
         return new DonorPetOperation.Listener() {
             @Override
-            public void waiting(MinecraftClient client, DonorPetRequest request) {
+            public void waiting(Minecraft client, DonorPetRequest request) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.waiting",
                         request.username(), request.pet());
             }
 
             @Override
-            public void finished(MinecraftClient client, DonorPetOperation.Summary summary) {
+            public void finished(Minecraft client, DonorPetOperation.Summary summary) {
                 DonorPetRequest request = summary.request();
                 switch (summary.outcome()) {
                     case CONFIRMED -> ChatUtils.sendTranslatedMessage(client, PREFIX,
@@ -170,7 +169,7 @@ public final class DonorPetModule extends DMLSModule {
             }
 
             @Override
-            public void cancelled(MinecraftClient client, DonorPetOperation.Summary summary,
+            public void cancelled(Minecraft client, DonorPetOperation.Summary summary,
                                   OperationCancelReason reason) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.donor_pet.cancelled",
                         summary.request().username(), summary.request().pet());

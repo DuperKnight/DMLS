@@ -5,23 +5,14 @@ import com.duperknight.client.accountlink.DiscordAccountProfileStore;
 import com.duperknight.client.accountlink.DiscordAvatarCache;
 import com.duperknight.client.accountlink.DiscordLinkService;
 import com.duperknight.client.accountlink.DiscordLinkTokenStore;
+import com.duperknight.client.gui.widgets.BouncingLogoBackground; // NEW
 import com.duperknight.client.gui.widgets.DiscordAccountWidget;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.DMLSModule;
 import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.HeaderBehavior;
 import com.duperknight.client.utils.ServerGuard;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.tooltip.Tooltip;
-import net.minecraft.client.gui.widget.ClickableWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-
+import com.duperknight.client.gui.widgets.NodeNetworkBackground;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -31,16 +22,29 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
+
+
 /** Shared in-game menu chrome used by every DMLS screen. */
 public abstract class DMLSMenuScreen extends Screen {
-    private static final Tooltip STONEWORKS_CONNECTION_TOOLTIP = Tooltip.of(
-            Text.translatable("dmls.tooltip.connect_stoneworks"));
+    private static final Tooltip STONEWORKS_CONNECTION_TOOLTIP = Tooltip.create(
+            Component.translatable("dmls.tooltip.connect_stoneworks"));
     protected static final float UI_SCALE = 0.85F;
-    private static final Identifier LOGO = Identifier.of(DMLS.MOD_ID.toLowerCase(), "logo.png");
-    private static final Identifier HEADER_SEPARATOR = Identifier.ofVanilla("textures/gui/inworld_header_separator.png");
-    private static final Identifier FOOTER_SEPARATOR = Identifier.ofVanilla("textures/gui/inworld_footer_separator.png");
-    protected static final Identifier SCROLLER = Identifier.ofVanilla("widget/scroller");
-    protected static final Identifier SCROLLER_BACKGROUND = Identifier.ofVanilla("widget/scroller_background");
+    private static final Identifier LOGO = Identifier.fromNamespaceAndPath(DMLS.MOD_ID.toLowerCase(), "logo.png");
+    private static final Identifier HEADER_SEPARATOR = Identifier.withDefaultNamespace("textures/gui/inworld_header_separator.png");
+    private static final Identifier FOOTER_SEPARATOR = Identifier.withDefaultNamespace("textures/gui/inworld_footer_separator.png");
+    protected static final Identifier SCROLLER = Identifier.withDefaultNamespace("widget/scroller");
+    protected static final Identifier SCROLLER_BACKGROUND = Identifier.withDefaultNamespace("widget/scroller_background");
     public static final int SCROLLBAR_WIDTH = 6;
     public static final int CONTENT_SHADE_COLOR = 0x58000000;
     public static final int PANEL_BACKGROUND_COLOR = 0xC0101010;
@@ -61,7 +65,7 @@ public abstract class DMLSMenuScreen extends Screen {
 
     protected final Screen parent;
     private final List<ScrollableWidget> scrollableWidgets = new ArrayList<>();
-    private final Set<ClickableWidget> disabledScrollableWidgets =
+    private final Set<AbstractWidget> disabledScrollableWidgets =
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final List<DropdownWidget<?>> dropdownWidgets = new ArrayList<>();
     private final List<CommandControl> commandControls = new ArrayList<>();
@@ -81,13 +85,13 @@ public abstract class DMLSMenuScreen extends Screen {
     private DiscordAccountWidget accountWidget;
     private Identifier accountAvatarTexture;
 
-    protected DMLSMenuScreen(Text title, Screen parent) {
+    protected DMLSMenuScreen(Component title, Screen parent) {
         super(title);
         this.parent = parent;
         headerCompactProgress = 1.0F;
     }
 
-    protected void renderMenuBackground(DrawContext context) {
+    protected void renderMenuBackground(GuiGraphicsExtractor context) {
         // Screen.renderBackground has already applied the vanilla blurred in-world background.
         initializeDiscordAccount();
         updateHeaderAnimation();
@@ -96,8 +100,26 @@ public abstract class DMLSMenuScreen extends Screen {
         if (accountWidget != null) {
             accountWidget.setY(Math.max(0, (headerHeight - DiscordAccountWidget.HEIGHT) / 2));
         }
-        context.fill(0, 0, width, headerHeight, 0x20000000);
 
+        int footerTop = height - FOOTER_TOP_OFFSET;
+        int contentShade = menuContentShade();
+
+        // Tints first...
+        context.fill(0, 0, width, headerHeight, 0x20000000);
+        if ((contentShade >>> 24) != 0) {
+            context.fill(0, headerHeight, width, footerTop, contentShade);
+        }
+        context.fill(0, footerTop, width, height, 0x20000000);
+
+        // ...then the node network, so the tints can't bury it.
+        NodeNetworkBackground.render(context);
+
+        // NEW: bouncing logo, above the network but below the header logo and widgets.
+        if (DMLSConfig.bouncingLogoBackground()) {
+            BouncingLogoBackground.render(context, width, height);
+        }
+
+        // Logo on top of the network.
         float compactProgress = easedHeaderCompactProgress();
         int expandedLogoWidth = Math.clamp(width - scaled(32), scaled(160), scaled(205));
         int compactLogoWidth = Math.min(expandedLogoWidth, scaled(160));
@@ -109,23 +131,16 @@ public abstract class DMLSMenuScreen extends Screen {
         int expandedLogoY = scaled(22);
         int compactLogoY = Math.max(0, (COMPACT_HEADER_HEIGHT - logoHeight) / 2);
         int logoY = interpolate(expandedLogoY, compactLogoY, compactProgress);
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, LOGO, logoX, logoY, 0.0F, 0.0F,
+        context.blit(RenderPipelines.GUI_TEXTURED, LOGO, logoX, logoY, 0.0F, 0.0F,
                 logoWidth, logoHeight, LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT,
                 LOGO_TEXTURE_WIDTH, LOGO_TEXTURE_HEIGHT);
 
-        int footerTop = height - FOOTER_TOP_OFFSET;
-        int contentShade = menuContentShade();
-        if ((contentShade >>> 24) != 0) {
-            context.fill(0, headerHeight, width, footerTop, contentShade);
-        }
-        context.fill(0, footerTop, width, height, 0x20000000);
-
         // Use the same two-layer translucent separators as vanilla in-world lists.
         if (renderSharedHeaderSeparator()) {
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, HEADER_SEPARATOR, 0, headerHeight - 2,
+            context.blit(RenderPipelines.GUI_TEXTURED, HEADER_SEPARATOR, 0, headerHeight - 2,
                     0.0F, 0.0F, width, 2, 32, 2);
         }
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
+        context.blit(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
                 0.0F, 0.0F, width, 2, 32, 2);
     }
 
@@ -140,34 +155,39 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     /** Full-height variant for dense readers that do not need the shared logo header. */
-    protected void renderMenuBackgroundWithoutHeader(DrawContext context) {
+    protected void renderMenuBackgroundWithoutHeader(GuiGraphicsExtractor context) {
         initializeDiscordAccount();
         if (accountWidget != null) accountWidget.setY(scaled(2));
         int footerTop = height - FOOTER_TOP_OFFSET;
         context.fill(0, 0, width, footerTop, menuContentShade());
         context.fill(0, footerTop, width, height, 0x20000000);
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
+        NodeNetworkBackground.render(context);
+        // NEW
+        if (DMLSConfig.bouncingLogoBackground()) {
+            BouncingLogoBackground.render(context, width, height);
+        }
+        context.blit(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
                 0.0F, 0.0F, width, 2, 32, 2);
     }
 
-    protected void renderPanel(DrawContext context, int x, int y, int panelWidth, int panelHeight) {
+    protected void renderPanel(GuiGraphicsExtractor context, int x, int y, int panelWidth, int panelHeight) {
         context.fill(x, y, x + panelWidth, y + panelHeight, PANEL_BACKGROUND_COLOR);
-        context.drawStrokedRectangle(x, y, panelWidth, panelHeight, PANEL_BORDER_COLOR);
+        context.outline(x, y, panelWidth, panelHeight, PANEL_BORDER_COLOR);
     }
 
     /** Renders the standard title and description block for a module screen. */
-    protected void renderModuleHeader(DrawContext context, DMLSModule module) {
+    protected void renderModuleHeader(GuiGraphicsExtractor context, DMLSModule module) {
         int descriptionY = headerHeight() + scaled(34);
         int descriptionWidth = Math.min(scaled(360), width - scaled(32));
-        List<OrderedText> wrappedLines = wrappedDescription(module, descriptionWidth);
+        List<FormattedCharSequence> wrappedLines = wrappedDescription(module, descriptionWidth);
         int lineSpacing = scaled(12);
         int descriptionHeight = descriptionHeight(wrappedLines.size());
-        context.drawCenteredTextWithShadow(textRenderer, module.displayName(), width / 2, headerHeight() + scaled(16), 0xFFFFFFFF);
+        context.centeredText(font, module.displayName(), width / 2, headerHeight() + scaled(16), 0xFFFFFFFF);
         renderPanel(context, width / 2 - descriptionWidth / 2, descriptionY, descriptionWidth, descriptionHeight);
 
         int lineY = descriptionY + (descriptionHeight - wrappedLines.size() * scaled(10)) / 2;
-        for (OrderedText line : wrappedLines) {
-            context.drawCenteredTextWithShadow(textRenderer, line, width / 2, lineY, 0xFFDDDDDD);
+        for (FormattedCharSequence line : wrappedLines) {
+            context.centeredText(font, line, width / 2, lineY, 0xFFDDDDDD);
             lineY += lineSpacing;
         }
     }
@@ -207,20 +227,20 @@ public abstract class DMLSMenuScreen extends Screen {
         return contentViewportTop + offset - contentScrollOffset;
     }
 
-    protected <T extends ClickableWidget> T addScrollableChild(T widget, int offset) {
+    protected <T extends AbstractWidget> T addScrollableChild(T widget, int offset) {
         scrollableWidgets.add(new ScrollableWidget(widget, offset));
-        T child = addDrawableChild(widget);
+        T child = addRenderableWidget(widget);
         updateScrollableWidgets();
         return child;
     }
 
     /** Marks a control as available only while connected to a configured allowed server. */
-    protected <T extends ClickableWidget> T registerCommandControl(T widget) {
+    protected <T extends AbstractWidget> T registerCommandControl(T widget) {
         return registerCommandControl(widget, () -> true);
     }
 
     /** Adds a local eligibility condition on top of the configured allowed-server requirement. */
-    protected <T extends ClickableWidget> T registerCommandControl(T widget, BooleanSupplier locallyEnabled) {
+    protected <T extends AbstractWidget> T registerCommandControl(T widget, BooleanSupplier locallyEnabled) {
         commandControls.add(new CommandControl(widget, locallyEnabled));
         refreshCommandControls();
         return widget;
@@ -228,7 +248,7 @@ public abstract class DMLSMenuScreen extends Screen {
 
     /** Shared connection predicate for non-button controls, such as moderation chat composers. */
     protected boolean isCommandServerAllowed() {
-        return ServerGuard.check(client).allowed();
+        return ServerGuard.check(minecraft).allowed();
     }
 
     private void refreshCommandControls() {
@@ -240,7 +260,7 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     /** Keeps a conditionally available scrolling control hidden without losing its scroll registration. */
-    protected void setScrollableChildEnabled(ClickableWidget widget, boolean enabled) {
+    protected void setScrollableChildEnabled(AbstractWidget widget, boolean enabled) {
         if (enabled) {
             disabledScrollableWidgets.remove(widget);
         } else {
@@ -253,7 +273,7 @@ public abstract class DMLSMenuScreen extends Screen {
     protected <T> DropdownWidget<T> addDropdownChild(DropdownWidget<T> dropdown) {
         dropdown.setDropdownBounds(scaled(4), height - scaled(4));
         dropdownWidgets.add(dropdown);
-        return addDrawableChild(dropdown);
+        return addRenderableWidget(dropdown);
     }
 
     /** Scrollable-content counterpart to {@link #addDropdownChild(DropdownWidget)}. */
@@ -268,11 +288,11 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     /** Clips custom-drawn scrolling content while still allowing partially visible elements to render. */
-    protected void beginContentScissor(DrawContext context) {
+    protected void beginContentScissor(GuiGraphicsExtractor context) {
         context.enableScissor(0, contentViewportTop, width, contentViewportBottom);
     }
 
-    protected void endContentScissor(DrawContext context) {
+    protected void endContentScissor(GuiGraphicsExtractor context) {
         context.disableScissor();
     }
 
@@ -377,9 +397,9 @@ public abstract class DMLSMenuScreen extends Screen {
         draggingContentScrollbar = false;
     }
 
-    private List<OrderedText> wrappedDescription(DMLSModule module, int descriptionWidth) {
+    private List<FormattedCharSequence> wrappedDescription(DMLSModule module, int descriptionWidth) {
         return module.description().stream()
-                .flatMap(line -> textRenderer.wrapLines(line, descriptionWidth - scaled(16)).stream())
+                .flatMap(line -> font.split(line, descriptionWidth - scaled(16)).stream())
                 .toList();
     }
 
@@ -389,7 +409,7 @@ public abstract class DMLSMenuScreen extends Screen {
 
     private void updateScrollableWidgets() {
         for (ScrollableWidget entry : scrollableWidgets) {
-            ClickableWidget widget = entry.widget();
+            AbstractWidget widget = entry.widget();
             widget.setY(contentY(entry.offset()));
             if (widget instanceof DropdownWidget<?> dropdown) {
                 dropdown.setDropdownBounds(contentViewportTop, contentViewportBottom);
@@ -400,24 +420,24 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         refreshCommandControls();
         // Screen renders all drawable children together. Hide scrolling children for that pass, then
         // render them separately through the viewport scissor so partial widgets are cut smoothly.
         for (ScrollableWidget entry : scrollableWidgets) {
             entry.widget().visible = false;
         }
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
         int clippedMouseX = mouseY >= contentViewportTop && mouseY < contentViewportBottom
                 ? mouseX : Integer.MIN_VALUE;
         int clippedMouseY = mouseY >= contentViewportTop && mouseY < contentViewportBottom
                 ? mouseY : Integer.MIN_VALUE;
         context.enableScissor(0, contentViewportTop, width, contentViewportBottom);
         for (ScrollableWidget entry : scrollableWidgets) {
-            ClickableWidget widget = entry.widget();
+            AbstractWidget widget = entry.widget();
             widget.visible = !disabledScrollableWidgets.contains(widget)
                     && isContentVisible(widget.getY(), widget.getHeight());
-            if (widget.visible) widget.render(context, clippedMouseX, clippedMouseY, delta);
+            if (widget.visible) widget.extractRenderState(context, clippedMouseX, clippedMouseY, delta);
         }
         context.disableScissor();
         if (maxContentScroll > 0) {
@@ -456,7 +476,7 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         refreshCommandControls();
         if (handleDiscordAccountClick(click, doubled)) {
             return true;
@@ -467,7 +487,7 @@ public abstract class DMLSMenuScreen extends Screen {
                 return true;
             }
         }
-        if (maxContentScroll > 0 && click.button() == 0
+        if (maxContentScroll > 0 && click.button() == InputConstants.MOUSE_BUTTON_LEFT
                 && click.x() >= contentScrollbarX() && click.x() <= contentScrollbarX() + SCROLLBAR_WIDTH
                 && click.y() >= contentScrollbarTop() && click.y() < contentScrollbarBottom()) {
             draggingContentScrollbar = true;
@@ -488,13 +508,13 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
+    public boolean keyPressed(KeyEvent input) {
         refreshCommandControls();
         return super.keyPressed(input);
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
         for (DropdownWidget<?> dropdown : dropdownWidgets) {
             if (dropdown.mouseDragged(click, deltaX, deltaY)) {
                 return true;
@@ -510,7 +530,7 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
+    public boolean mouseReleased(MouseButtonEvent click) {
         for (DropdownWidget<?> dropdown : dropdownWidgets) {
             if (dropdown.isDraggingScrollbar() && dropdown.mouseReleased(click)) {
                 return true;
@@ -521,8 +541,8 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     @Override
-    protected void clearChildren() {
-        super.clearChildren();
+    protected void clearWidgets() {
+        super.clearWidgets();
         scrollableWidgets.clear();
         disabledScrollableWidgets.clear();
         dropdownWidgets.clear();
@@ -547,7 +567,7 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     /** Gives an open account shelf priority over screen-specific controls. */
-    protected boolean handleDiscordAccountClick(Click click, boolean doubled) {
+    protected boolean handleDiscordAccountClick(MouseButtonEvent click, boolean doubled) {
         if (accountWidget == null || !accountWidget.isShelfOpen()) return false;
         if (!accountWidget.mouseClicked(click, doubled)) return false;
         setFocused(accountWidget);
@@ -564,8 +584,8 @@ public abstract class DMLSMenuScreen extends Screen {
     private void initializeDiscordAccount() {
         if (discordAccountInitialized) return;
         discordAccountInitialized = true;
-        if (client == null || client.getSession().getUuidOrNull() == null) return;
-        java.util.UUID minecraftUuid = client.getSession().getUuidOrNull();
+        if (minecraft == null || minecraft.getUser().getProfileId() == null) return;
+        java.util.UUID minecraftUuid = minecraft.getUser().getProfileId();
         String token = DiscordLinkTokenStore.load(minecraftUuid).orElse("");
         if (token.isEmpty()) return;
 
@@ -573,15 +593,15 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     private void showCachedDiscordAccount(java.util.UUID minecraftUuid) {
-        if (accountWidget != null || client == null) return;
+        if (accountWidget != null || minecraft == null) return;
         DiscordAccountProfileStore.load(minecraftUuid).ifPresent(profile -> {
-            accountAvatarTexture = DiscordAvatarCache.loadTexture(client, profile);
+            accountAvatarTexture = DiscordAvatarCache.loadTexture(minecraft, profile);
             int minimumWidth = scaled(70);
             int maximumWidth = Math.max(minimumWidth,
                     Math.min(scaled(210), width / 2 - scaled(110)));
-            int desiredWidth = 32 + textRenderer.getWidth(profile.discordUsername());
+            int desiredWidth = 32 + font.width(profile.discordUsername());
             int widgetWidth = Math.clamp(desiredWidth, minimumWidth, maximumWidth);
-            accountWidget = addDrawableChild(new DiscordAccountWidget(
+            accountWidget = addRenderableWidget(new DiscordAccountWidget(
                     scaled(8), Math.max(0, (headerHeight() - DiscordAccountWidget.HEIGHT) / 2),
                     widgetWidth, profile.discordUsername(), accountAvatarTexture,
                     this::unlinkDiscordAccount));
@@ -589,9 +609,9 @@ public abstract class DMLSMenuScreen extends Screen {
                 DiscordAccountWidget targetWidget = accountWidget;
                 DiscordAvatarCache.ensureCached(profile).thenAccept(path -> {
                     if (path == null) return;
-                    client.execute(() -> {
-                        if (client.currentScreen != this || accountWidget != targetWidget) return;
-                        accountAvatarTexture = DiscordAvatarCache.loadTexture(client, profile);
+                    minecraft.execute(() -> {
+                        if (minecraft.gui.screen() != this || accountWidget != targetWidget) return;
+                        accountAvatarTexture = DiscordAvatarCache.loadTexture(minecraft, profile);
                         accountWidget.setAvatarTexture(accountAvatarTexture);
                     });
                 });
@@ -600,8 +620,8 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     private void unlinkDiscordAccount() {
-        if (client == null || accountWidget == null || client.getSession().getUuidOrNull() == null) return;
-        java.util.UUID minecraftUuid = client.getSession().getUuidOrNull();
+        if (minecraft == null || accountWidget == null || minecraft.getUser().getProfileId() == null) return;
+        java.util.UUID minecraftUuid = minecraft.getUser().getProfileId();
         String token = DiscordLinkTokenStore.load(minecraftUuid).orElse("");
         if (token.isEmpty()) {
             clearLocalDiscordAccount(minecraftUuid);
@@ -616,7 +636,7 @@ public abstract class DMLSMenuScreen extends Screen {
 
     private void attemptDiscordUnlink(java.util.UUID minecraftUuid, String token,
                                       DiscordAccountWidget targetWidget, int attempt) {
-        DiscordLinkService.unlink(token).thenAccept(result -> client.execute(() -> {
+        DiscordLinkService.unlink(token).thenAccept(result -> minecraft.execute(() -> {
             if (accountWidget != targetWidget) return;
             if (result.unlinkedLocally()) {
                 clearLocalDiscordAccount(minecraftUuid);
@@ -626,7 +646,7 @@ public abstract class DMLSMenuScreen extends Screen {
             if (retriable && attempt < 4) {
                 int retryDelaySeconds = 2 << attempt;
                 CompletableFuture.delayedExecutor(retryDelaySeconds, TimeUnit.SECONDS).execute(() ->
-                        client.execute(() -> {
+                        minecraft.execute(() -> {
                             if (accountWidget == targetWidget) {
                                 attemptDiscordUnlink(minecraftUuid, token, targetWidget, attempt + 1);
                             }
@@ -634,7 +654,7 @@ public abstract class DMLSMenuScreen extends Screen {
                 return;
             }
             targetWidget.setUnlinking(false);
-            targetWidget.setTooltip(Tooltip.of(Text.translatable(
+            targetWidget.setTooltip(Tooltip.create(Component.translatable(
                     result.status() == DiscordLinkService.UnlinkStatus.RATE_LIMITED
                             ? "dmls.account.unlink.error.rate_limited"
                             : "dmls.account.unlink.error.service")));
@@ -656,14 +676,14 @@ public abstract class DMLSMenuScreen extends Screen {
         releaseAccountTexture();
         if (accountWidget != null) {
             accountWidget.visible = false;
-            remove(accountWidget);
+            removeWidget(accountWidget);
         }
         accountWidget = null;
     }
 
     private void releaseAccountTexture() {
-        if (client != null && accountAvatarTexture != null) {
-            client.getTextureManager().destroyTexture(accountAvatarTexture);
+        if (minecraft != null && accountAvatarTexture != null) {
+            minecraft.getTextureManager().release(accountAvatarTexture);
         }
         accountAvatarTexture = null;
     }
@@ -733,11 +753,11 @@ public abstract class DMLSMenuScreen extends Screen {
                 32, Math.max(32, trackHeight - 8));
     }
 
-    public static void renderVanillaScrollbar(DrawContext context, int x, int y, int height,
-                                               int thumbY, int thumbHeight) {
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SCROLLER_BACKGROUND,
+    public static void renderVanillaScrollbar(GuiGraphicsExtractor context, int x, int y, int height,
+                                              int thumbY, int thumbHeight) {
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, SCROLLER_BACKGROUND,
                 x, y, SCROLLBAR_WIDTH, height);
-        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SCROLLER,
+        context.blitSprite(RenderPipelines.GUI_TEXTURED, SCROLLER,
                 x, thumbY, SCROLLBAR_WIDTH, thumbHeight);
     }
 
@@ -763,13 +783,13 @@ public abstract class DMLSMenuScreen extends Screen {
 
     /** Closes the whole DMLS menu stack and returns directly to gameplay. */
     protected void closeToGame() {
-        client.setScreen(null);
+        minecraft.gui.setScreen(null);
     }
 
-    private record ScrollableWidget(ClickableWidget widget, int offset) {
+    private record ScrollableWidget(AbstractWidget widget, int offset) {
     }
 
-    private record CommandControl(ClickableWidget widget, BooleanSupplier locallyEnabled) {
+    private record CommandControl(AbstractWidget widget, BooleanSupplier locallyEnabled) {
     }
 
     @Override
@@ -779,7 +799,7 @@ public abstract class DMLSMenuScreen extends Screen {
     }
 
     @Override
-    public void close() {
-        client.setScreen(parent);
+    public void onClose() {
+        minecraft.gui.setScreen(parent);
     }
 }

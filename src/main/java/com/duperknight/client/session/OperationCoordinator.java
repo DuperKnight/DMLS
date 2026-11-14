@@ -9,8 +9,7 @@ import com.duperknight.client.utils.DMLSConfig;
 import com.duperknight.client.utils.DryRunFeedback;
 import com.duperknight.client.utils.ServerGuard;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.MinecraftClient;
-
+import net.minecraft.client.Minecraft;
 import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Optional;
@@ -25,13 +24,13 @@ public final class OperationCoordinator {
     private ActiveOperation active;
     private long nextSequence;
     private boolean registered;
-    private final Function<MinecraftClient, ConnectionSnapshot> connectionProvider;
+    private final Function<Minecraft, ConnectionSnapshot> connectionProvider;
 
     public OperationCoordinator() {
         this(ConnectionSnapshot::capture);
     }
 
-    OperationCoordinator(Function<MinecraftClient, ConnectionSnapshot> connectionProvider) {
+    OperationCoordinator(Function<Minecraft, ConnectionSnapshot> connectionProvider) {
         this.connectionProvider = Objects.requireNonNull(connectionProvider, "connectionProvider");
     }
 
@@ -53,7 +52,7 @@ public final class OperationCoordinator {
     }
 
     public OperationStartResult start(
-            MinecraftClient client,
+            Minecraft client,
             String operationId,
             String displayName,
             ManagedOperation operation
@@ -66,7 +65,7 @@ public final class OperationCoordinator {
     }
 
     public OperationStartResult start(
-            MinecraftClient client,
+            Minecraft client,
             OperationDescriptor descriptor,
             ManagedOperation operation
     ) {
@@ -102,7 +101,7 @@ public final class OperationCoordinator {
         }
     }
 
-    public OperationCancelResult cancelActive(MinecraftClient client) {
+    public OperationCancelResult cancelActive(Minecraft client) {
         ActiveOperation removed;
         synchronized (this) {
             if (active == null) return OperationCancelResult.NO_ACTIVE_OPERATION;
@@ -114,7 +113,7 @@ public final class OperationCoordinator {
     }
 
     /** Cancels only when the named module owns the active slot. */
-    public OperationCancelResult cancel(String operationId, MinecraftClient client) {
+    public OperationCancelResult cancel(String operationId, Minecraft client) {
         if (operationId == null) return OperationCancelResult.NOT_OWNER;
         ActiveOperation removed;
         synchronized (this) {
@@ -129,7 +128,7 @@ public final class OperationCoordinator {
         return OperationCancelResult.CANCELLED;
     }
 
-    public void tick(MinecraftClient client) {
+    public void tick(Minecraft client) {
         ActiveOperation current = activeSnapshot();
         if (current == null) return;
         if (!current.handle.descriptor().connectionStillMatches(connectionProvider.apply(client))) {
@@ -160,14 +159,14 @@ public final class OperationCoordinator {
         }
     }
 
-    CommandDispatch dispatchCommand(OperationHandle handle, MinecraftClient client, String command) {
+    CommandDispatch dispatchCommand(OperationHandle handle, Minecraft client, String command) {
         if (!isActive(handle)) return CommandDispatch.BLOCKED;
         OperationDescriptor descriptor = handle.descriptor();
         return ClientUtils.dispatchCommand(client, command,
                 descriptor.dryRunCaptured(), descriptor.connection(), DryRunFeedback.OPERATION_SUMMARY);
     }
 
-    CommandDispatch dispatchChatMessage(OperationHandle handle, MinecraftClient client, String message) {
+    CommandDispatch dispatchChatMessage(OperationHandle handle, Minecraft client, String message) {
         if (!isActive(handle)) return CommandDispatch.BLOCKED;
         OperationDescriptor descriptor = handle.descriptor();
         return ClientUtils.dispatchChatMessage(client, message,
@@ -184,7 +183,7 @@ public final class OperationCoordinator {
 
     OperationCancelResult cancel(
             OperationHandle handle,
-            MinecraftClient client,
+            Minecraft client,
             OperationCancelReason reason
     ) {
         ActiveOperation removed;
@@ -201,7 +200,7 @@ public final class OperationCoordinator {
     private void onServerMessage(ServerMessage message) {
         ActiveOperation current = activeSnapshot();
         if (current == null) return;
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (!current.handle.descriptor().connectionStillMatches(connectionProvider.apply(client))) {
             cancel(current.handle, client, OperationCancelReason.CONNECTION_CHANGED);
             return;
@@ -227,7 +226,7 @@ public final class OperationCoordinator {
 
     private void notifyCancelled(
             ActiveOperation removed,
-            MinecraftClient client,
+            Minecraft client,
             OperationCancelReason reason
     ) {
         Objects.requireNonNull(reason, "reason");

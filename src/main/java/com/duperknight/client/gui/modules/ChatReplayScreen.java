@@ -2,18 +2,19 @@ package com.duperknight.client.gui.modules;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
 import com.duperknight.client.modules.ChatReplayModule;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.OrderedText;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 
 /** Asynchronously searches and displays bounded chunks from persistent Minecraft-session chat logs. */
 public final class ChatReplayScreen extends DMLSMenuScreen {
@@ -23,11 +24,11 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     private static final int SESSION_LIST_WIDTH = scaled(140);
     private static final int PANE_GAP = scaled(14);
 
-    private TextFieldWidget filterField;
-    private ButtonWidget jumpToLatestButton;
-    private ButtonWidget exportButton;
+    private EditBox filterField;
+    private Button jumpToLatestButton;
+    private Button exportButton;
     private String filter;
-    private List<OrderedText> lines = List.of();
+    private List<FormattedCharSequence> lines = List.of();
     private final List<SessionButton> sessionButtons = new ArrayList<>();
     private String selectedSessionId;
     private ChatReplayModule.Chunk chunk = new ChatReplayModule.Chunk(List.of(), 0, 0, false, false);
@@ -46,10 +47,10 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     private boolean loadFailed;
     private boolean exporting;
     private boolean draggingSessionScrollbar;
-    private Text exportStatus;
+    private Component exportStatus;
 
     public ChatReplayScreen(Screen parent, ChatReplayModule module, String initialFilter) {
-        super(Text.translatable("dmls.module.chat_replay.name"), parent);
+        super(Component.translatable("dmls.module.chat_replay.name"), parent);
         this.filter = initialFilter;
     }
 
@@ -69,25 +70,25 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         maxSessionScroll = 0;
 
         FooterLayout footer = footerLayout();
-        filterField = addDrawableChild(new TextFieldWidget(textRenderer, footer.filterX(), footerButtonY(),
-                footer.filterWidth(), STANDARD_BUTTON_HEIGHT, Text.translatable("dmls.field.filter")));
+        filterField = addRenderableWidget(new EditBox(font, footer.filterX(), footerButtonY(),
+                footer.filterWidth(), STANDARD_BUTTON_HEIGHT, Component.translatable("dmls.field.filter")));
         filterField.setMaxLength(64);
-        filterField.setText(filter);
-        filterField.setSuggestion(filter.isEmpty() ? Text.translatable("dmls.placeholder.filter").getString() : null);
-        filterField.setChangedListener(value -> {
+        filterField.setValue(filter);
+        filterField.setSuggestion(filter.isEmpty() ? Component.translatable("dmls.placeholder.filter").getString() : null);
+        filterField.setResponder(value -> {
             filter = value;
-            filterField.setSuggestion(value.isEmpty() ? Text.translatable("dmls.placeholder.filter").getString() : null);
+            filterField.setSuggestion(value.isEmpty() ? Component.translatable("dmls.placeholder.filter").getString() : null);
             filterDebounce = FILTER_DEBOUNCE_TICKS;
         });
 
-        exportButton = addDrawableChild(ButtonWidget.builder(Text.translatable("dmls.button.export"), ignored -> exportCurrent())
-                .dimensions(footer.exportX(), footerButtonY(), footer.buttonWidth(), STANDARD_BUTTON_HEIGHT).build());
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.BACK, button -> close())
-                .dimensions(footer.backX(), footerButtonY(), footer.buttonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        exportButton = addRenderableWidget(Button.builder(Component.translatable("dmls.button.export"), ignored -> exportCurrent())
+                .bounds(footer.exportX(), footerButtonY(), footer.buttonWidth(), STANDARD_BUTTON_HEIGHT).build());
+        addRenderableWidget(Button.builder(CommonComponents.GUI_BACK, button -> onClose())
+                .bounds(footer.backX(), footerButtonY(), footer.buttonWidth(), STANDARD_BUTTON_HEIGHT).build());
 
         ReplayLayout layout = replayLayout();
-        jumpToLatestButton = addDrawableChild(ButtonWidget.builder(Text.literal("↓"), ignored -> jumpToLatest())
-                .dimensions(layout.navigationX(), height - FOOTER_TOP_OFFSET - STANDARD_BUTTON_HEIGHT - scaled(5),
+        jumpToLatestButton = addRenderableWidget(Button.builder(Component.literal("↓"), ignored -> jumpToLatest())
+                .bounds(layout.navigationX(), height - FOOTER_TOP_OFFSET - STANDARD_BUTTON_HEIGHT - scaled(5),
                         STANDARD_BUTTON_HEIGHT, STANDARD_BUTTON_HEIGHT)
                 .build());
 
@@ -99,9 +100,9 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         }
         for (int index = 0; index < sessions.size(); index++) {
             ChatReplayModule.Session session = sessions.get(index);
-            ButtonWidget button = addDrawableChild(ButtonWidget.builder(Text.literal(session.startedAt()),
+            Button button = addRenderableWidget(Button.builder(Component.literal(session.startedAt()),
                             ignored -> selectSession(session.id()))
-                    .dimensions(layout.sessionX(), layout.viewportTop() + index * (STANDARD_BUTTON_HEIGHT + SESSION_BUTTON_GAP),
+                    .bounds(layout.sessionX(), layout.viewportTop() + index * (STANDARD_BUTTON_HEIGHT + SESSION_BUTTON_GAP),
                             layout.sessionWidth(), STANDARD_BUTTON_HEIGHT)
                     .build());
             sessionButtons.add(new SessionButton(session.id(), button));
@@ -144,13 +145,13 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     private void exportCurrent() {
         if (selectedSessionId == null || exporting) return;
         exporting = true;
-        exportStatus = Text.translatable("dmls.screen.chat_replay.exporting");
+        exportStatus = Component.translatable("dmls.screen.chat_replay.exporting");
         updateNavigationButtons();
-        ChatReplayModule.export(selectedSessionId, filter).whenComplete((path, error) -> client.execute(() -> {
+        ChatReplayModule.export(selectedSessionId, filter).whenComplete((path, error) -> minecraft.execute(() -> {
             exporting = false;
             exportStatus = error == null
-                    ? Text.translatable("dmls.screen.chat_replay.exported", path.getFileName().toString())
-                    : Text.translatable("dmls.screen.chat_replay.export_failed");
+                    ? Component.translatable("dmls.screen.chat_replay.exported", path.getFileName().toString())
+                    : Component.translatable("dmls.screen.chat_replay.export_failed");
             updateNavigationButtons();
         }));
     }
@@ -176,7 +177,7 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         loadFailed = false;
         updateNavigationButtons();
         future.whenComplete((loadedChunk, error) ->
-                client.execute(() -> {
+                minecraft.execute(() -> {
                     if (generation != loadGeneration) return;
                     loading = false;
                     loadFailed = error != null;
@@ -210,12 +211,12 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         contentX = layout.contentX();
         contentWidth = layout.contentWidth();
         scrollbarX = layout.scrollbarX();
-        lineHeight = Math.max(textRenderer.fontHeight + 1, scaled(10));
+        lineHeight = Math.max(font.lineHeight + 1, scaled(10));
 
-        List<OrderedText> built = new ArrayList<>();
+        List<FormattedCharSequence> built = new ArrayList<>();
         for (ChatReplayModule.Entry entry : chunk.entries()) {
-            Text line = Text.literal("§8[" + entry.time() + "] §r").append(entry.text());
-            built.addAll(textRenderer.wrapLines(line, contentWidth - scaled(8)));
+            Component line = Component.literal("§8[" + entry.time() + "] §r").append(entry.text());
+            built.addAll(font.split(line, contentWidth - scaled(8)));
         }
         lines = List.copyOf(built);
         int contentHeight = lines.isEmpty() ? 0 : lines.size() * lineHeight + scaled(8);
@@ -266,9 +267,9 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         ReplayLayout layout = replayLayout();
-        if (click.button() == 0 && maxSessionScroll > 0
+        if (click.button() == InputConstants.MOUSE_BUTTON_LEFT && maxSessionScroll > 0
                 && click.x() >= layout.sessionScrollbarX()
                 && click.x() <= layout.sessionScrollbarX() + SCROLLBAR_WIDTH
                 && click.y() >= layout.viewportTop() && click.y() < sessionViewportBottom()) {
@@ -292,7 +293,7 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
         if (draggingSessionScrollbar) {
             updateSessionScrollFromMouse(click.y());
             return true;
@@ -307,7 +308,7 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
+    public boolean mouseReleased(MouseButtonEvent click) {
         draggingSessionScrollbar = false;
         return super.mouseReleased(click);
     }
@@ -361,26 +362,26 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         renderMenuBackground(context);
         updateSessionScrollBounds();
-        context.drawCenteredTextWithShadow(textRenderer, title, width / 2,
+        context.centeredText(font, title, width / 2,
                 headerHeight() + scaled(16), 0xFFFFFFFF);
 
         beginContentScissor(context);
         if (loading && lines.isEmpty()) {
-            drawStatus(context, Text.translatable("dmls.screen.chat_replay.loading"));
+            drawStatus(context, Component.translatable("dmls.screen.chat_replay.loading"));
         } else if (loadFailed) {
-            drawStatus(context, Text.translatable("dmls.screen.chat_replay.load_failed"));
+            drawStatus(context, Component.translatable("dmls.screen.chat_replay.load_failed"));
         } else if (lines.isEmpty()) {
-            drawStatus(context, Text.translatable("dmls.screen.chat_replay.empty"));
+            drawStatus(context, Component.translatable("dmls.screen.chat_replay.empty"));
         } else {
             int firstVisibleLine = firstVisibleContentIndex(lineHeight);
             int endVisibleLine = visibleContentEndIndex(lineHeight, lines.size());
             for (int index = firstVisibleLine; index < endVisibleLine; index++) {
                 int y = contentY(index * lineHeight);
-                if (isContentVisible(y, textRenderer.fontHeight)) {
-                    context.drawTextWithShadow(textRenderer, lines.get(index), contentX, y, 0xFFFFFFFF);
+                if (isContentVisible(y, font.lineHeight)) {
+                    context.text(font, lines.get(index), contentX, y, 0xFFFFFFFF);
                 }
             }
         }
@@ -388,23 +389,23 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         renderPageIndicator(context);
         updateNavigationButtons();
         if (exportStatus != null) {
-            context.drawCenteredTextWithShadow(textRenderer, exportStatus, width / 2,
+            context.centeredText(font, exportStatus, width / 2,
                     height - FOOTER_TOP_OFFSET + scaled(4), exporting ? 0xFFAAAAAA : 0xFFFFFFFF);
         }
         sessionButtons.forEach(entry -> entry.button().visible = false);
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
         renderSessionButtons(context, mouseX, mouseY, delta);
         renderSessionScrollbar(context);
     }
 
-    private void drawStatus(DrawContext context, Text message) {
+    private void drawStatus(GuiGraphicsExtractor context, Component message) {
         int y = contentY(scaled(14));
-        if (isContentVisible(y, textRenderer.fontHeight)) {
-            context.drawCenteredTextWithShadow(textRenderer, message, width / 2, y, 0xFFAAAAAA);
+        if (isContentVisible(y, font.lineHeight)) {
+            context.centeredText(font, message, width / 2, y, 0xFFAAAAAA);
         }
     }
 
-    private void renderPageIndicator(DrawContext context) {
+    private void renderPageIndicator(GuiGraphicsExtractor context) {
         if (selectedSessionId == null || loading || loadFailed) return;
         ReplayLayout layout = replayLayout();
         int pageStride = Math.max(1, ChatReplayModule.DISPLAY_CHUNK_SIZE - 1);
@@ -415,8 +416,8 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         int totalPageNumerator = Math.max(0, chunk.totalMatches() - 1);
         int totalPages = Math.max(1, (totalPageNumerator + pageStride - 1) / pageStride);
         int currentPage = Math.max(1, totalPages - chronologicalPage + 1);
-        Text page = Text.translatable("dmls.screen.chat_replay.page", currentPage, totalPages);
-        context.drawCenteredTextWithShadow(textRenderer, page,
+        Component page = Component.translatable("dmls.screen.chat_replay.page", currentPage, totalPages);
+        context.centeredText(font, page,
                 layout.contentX() + layout.contentWidth() / 2, pageIndicatorY(), 0xFFAAAAAA);
     }
 
@@ -450,14 +451,14 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         int viewportTop = replayLayout().viewportTop();
         int viewportBottom = sessionViewportBottom();
         for (int index = 0; index < sessionButtons.size(); index++) {
-            ButtonWidget button = sessionButtons.get(index).button();
+            Button button = sessionButtons.get(index).button();
             int y = viewportTop + index * (STANDARD_BUTTON_HEIGHT + SESSION_BUTTON_GAP) - sessionScrollOffset;
             button.setY(y);
             button.visible = y < viewportBottom && y + STANDARD_BUTTON_HEIGHT > viewportTop;
         }
     }
 
-    private void renderSessionButtons(DrawContext context, int mouseX, int mouseY, float delta) {
+    private void renderSessionButtons(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         ReplayLayout layout = replayLayout();
         int viewportBottom = sessionViewportBottom();
         boolean mouseInside = mouseX >= layout.sessionX()
@@ -470,13 +471,13 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
         updateSessionButtonPositions();
         for (SessionButton entry : sessionButtons) {
             if (entry.button().visible) {
-                entry.button().render(context, clippedMouseX, clippedMouseY, delta);
+                entry.button().extractRenderState(context, clippedMouseX, clippedMouseY, delta);
             }
         }
         context.disableScissor();
     }
 
-    private void renderSessionScrollbar(DrawContext context) {
+    private void renderSessionScrollbar(GuiGraphicsExtractor context) {
         if (maxSessionScroll <= 0) return;
         ReplayLayout layout = replayLayout();
         int viewportHeight = sessionViewportBottom() - layout.viewportTop();
@@ -534,7 +535,7 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     }
 
     private int pageIndicatorY() {
-        return height - FOOTER_TOP_OFFSET - textRenderer.fontHeight - scaled(7);
+        return height - FOOTER_TOP_OFFSET - font.lineHeight - scaled(7);
     }
 
     private FooterLayout footerLayout() {
@@ -555,6 +556,6 @@ public final class ChatReplayScreen extends DMLSMenuScreen {
     private record FooterLayout(int filterX, int filterWidth, int exportX, int backX, int buttonWidth) {
     }
 
-    private record SessionButton(String sessionId, ButtonWidget button) {
+    private record SessionButton(String sessionId, Button button) {
     }
 }

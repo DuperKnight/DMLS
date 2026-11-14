@@ -6,13 +6,12 @@ import com.duperknight.client.gui.DMLSHomeScreen;
 import com.duperknight.client.modules.StaffRank;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.scoreboard.ScoreboardDisplaySlot;
-import net.minecraft.scoreboard.ScoreboardEntry;
-import net.minecraft.scoreboard.ScoreboardObjective;
-import net.minecraft.scoreboard.Team;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.scores.DisplaySlot;
+import net.minecraft.world.scores.Objective;
+import net.minecraft.world.scores.PlayerScoreEntry;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Scoreboard;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -25,9 +24,9 @@ public final class HubStaffRankDetector {
     private static final int CHECK_INTERVAL_TICKS = 10;
     private static final Pattern RANK_LINE = Pattern.compile("(?i)^rank\\s*:\\s*(.*)$");
     private static final Pattern LOBBY_LINE = Pattern.compile("(?i)^current\\s+lobby\\s*:\\s*(.*)$");
-    private static final Comparator<ScoreboardEntry> DISPLAY_ORDER = Comparator
-            .comparingInt(ScoreboardEntry::value).reversed()
-            .thenComparing(ScoreboardEntry::owner, String.CASE_INSENSITIVE_ORDER);
+    private static final Comparator<PlayerScoreEntry> DISPLAY_ORDER = Comparator
+            .comparingInt(PlayerScoreEntry::value).reversed()
+            .thenComparing(PlayerScoreEntry::owner, String.CASE_INSENSITIVE_ORDER);
 
     private static int ticksUntilCheck;
     private static String lastAppliedSignature = "";
@@ -56,7 +55,7 @@ public final class HubStaffRankDetector {
         ClientTickEvents.END_CLIENT_TICK.register(HubStaffRankDetector::tick);
     }
 
-    private static void tick(MinecraftClient client) {
+    private static void tick(Minecraft client) {
         openPendingAnnouncement(client);
         if (--ticksUntilCheck > 0) return;
         ticksUntilCheck = CHECK_INTERVAL_TICKS;
@@ -64,16 +63,16 @@ public final class HubStaffRankDetector {
         if (!stoneworksSessionInitialized) {
             initializeStoneworksSession();
         }
-        if (client.world == null) return;
+        if (client.level == null) return;
 
-        Scoreboard scoreboard = client.world.getScoreboard();
-        ScoreboardObjective objective = scoreboard.getObjectiveForSlot(ScoreboardDisplaySlot.SIDEBAR);
+        Scoreboard scoreboard = client.level.getScoreboard();
+        Objective objective = scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR);
         if (objective == null) return;
 
-        List<String> lines = scoreboard.getScoreboardEntries(objective).stream()
-                .filter(entry -> !entry.hidden())
+        List<String> lines = scoreboard.listPlayerScores(objective).stream()
+                .filter(entry -> !entry.isHidden())
                 .sorted(DISPLAY_ORDER)
-                .map(entry -> Team.decorateName(scoreboard.getScoreHolderTeam(entry.owner()), entry.name()).getString())
+                .map(entry -> PlayerTeam.formatNameForTeam(scoreboard.getPlayersTeam(entry.owner()), entry.ownerName()).getString())
                 .toList();
         Detection detection = detect(objective.getDisplayName().getString(), lines);
         if (detection.status == Status.STAFF) {
@@ -109,14 +108,14 @@ public final class HubStaffRankDetector {
         return true;
     }
 
-    private static void openPendingAnnouncement(MinecraftClient client) {
-        if (pendingAnnouncement == null || client == null || client.world == null
-                || client.currentScreen != null || !DMLSConfig.hasRecognizedStaffRank()) {
+    private static void openPendingAnnouncement(Minecraft client) {
+        if (pendingAnnouncement == null || client == null || client.level == null
+                || client.gui.screen() != null || !DMLSConfig.hasRecognizedStaffRank()) {
             return;
         }
         PendingAnnouncement announcement = pendingAnnouncement;
         pendingAnnouncement = null;
-        client.setScreen(announcement.kind == AnnouncementKind.WELCOME
+        client.gui.setScreen(announcement.kind == AnnouncementKind.WELCOME
                 ? DMLSHomeScreen.welcome(DMLSClient.modules(), announcement.currentRank)
                 : DMLSHomeScreen.promotion(DMLSClient.modules(), announcement.previousRank, announcement.currentRank));
     }
@@ -130,9 +129,9 @@ public final class HubStaffRankDetector {
         return currentRank.level() > previousRank.level() ? AnnouncementKind.PROMOTION : AnnouncementKind.NONE;
     }
 
-    private static boolean isStoneworks(MinecraftClient client) {
-        return client != null && !client.isInSingleplayer() && client.getCurrentServerEntry() != null
-                && ServerGuard.isAllowed(client.getCurrentServerEntry().address, ServerGuard.DEFAULT_ALLOWED_SERVERS);
+    private static boolean isStoneworks(Minecraft client) {
+        return client != null && !client.isLocalServer() && client.getCurrentServer() != null
+                && ServerGuard.isAllowed(client.getCurrentServer().ip, ServerGuard.DEFAULT_ALLOWED_SERVERS);
     }
 
     /** Pure parser kept separate from Minecraft state so scoreboard formats can be regression-tested. */

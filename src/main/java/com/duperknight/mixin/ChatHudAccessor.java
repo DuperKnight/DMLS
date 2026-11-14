@@ -1,18 +1,17 @@
 package com.duperknight.mixin;
 
-import net.minecraft.client.gui.hud.ChatHud;
-import net.minecraft.client.gui.hud.ChatHudLine;
+import java.util.List;
+import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.client.multiplayer.chat.GuiMessage;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-import java.util.List;
-
-@Mixin(ChatHud.class)
+@Mixin(ChatComponent.class)
 public interface ChatHudAccessor {
-    @Accessor("messages")
-    List<ChatHudLine> dmls$getMessages();
+    @Accessor("allMessages")
+    List<GuiMessage> dmls$getMessages();
 
-    @Invoker("refresh")
+    @Invoker("refreshTrimmedMessages")
     void dmls$refresh();
 }

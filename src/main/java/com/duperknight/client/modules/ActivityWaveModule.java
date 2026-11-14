@@ -7,17 +7,16 @@ import com.duperknight.client.session.OperationCoordinator;
 import com.duperknight.client.session.OperationStartResult;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.InputValidators;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** Checks the recent activity of a whole staff wave with the server's /activity command. */
 public final class ActivityWaveModule extends DMLSModule {
@@ -57,8 +56,8 @@ public final class ActivityWaveModule extends DMLSModule {
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.activity.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.activity.name");
     }
 
     @Override
@@ -67,8 +66,8 @@ public final class ActivityWaveModule extends DMLSModule {
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.activity.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.activity.description"));
     }
 
     @Override
@@ -77,8 +76,8 @@ public final class ActivityWaveModule extends DMLSModule {
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new ActivityWaveScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new ActivityWaveScreen(parent, this));
     }
 
     @Override
@@ -87,7 +86,7 @@ public final class ActivityWaveModule extends DMLSModule {
     }
 
     /** Starts an activity check for the given players. The command and GUI share this entrypoint. */
-    public SubmitStatus submit(MinecraftClient client, String input) {
+    public SubmitStatus submit(Minecraft client, String input) {
         ActivityRequest request = prepare(input);
         if (!request.skipped().isEmpty()) {
             ChatUtils.sendTranslatedMessage(client, PREFIX,
@@ -129,7 +128,7 @@ public final class ActivityWaveModule extends DMLSModule {
     }
 
     /** Cancels only this module's active operation; another module's slot is left untouched. */
-    public boolean cancel(MinecraftClient client) {
+    public boolean cancel(Minecraft client) {
         OperationCancelResult result = OperationCoordinator.global().cancel(OPERATION_ID, client);
         if (result != OperationCancelResult.CANCELLED) {
             ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.activity.nothing");
@@ -140,7 +139,7 @@ public final class ActivityWaveModule extends DMLSModule {
     private ActivityWaveOperation.Listener listener() {
         return new ActivityWaveOperation.Listener() {
             @Override
-            public void started(MinecraftClient client, int playerCount) {
+            public void started(Minecraft client, int playerCount) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX,
                         playerCount == 1
                                 ? "dmls.chat.activity.start.one" : "dmls.chat.activity.start.many",
@@ -148,18 +147,18 @@ public final class ActivityWaveModule extends DMLSModule {
             }
 
             @Override
-            public void progress(MinecraftClient client, String username, int playerIndex, int playerCount) {
+            public void progress(Minecraft client, String username, int playerIndex, int playerCount) {
                 ChatUtils.sendTranslatedMessage(client, PREFIX, "dmls.chat.activity.progress",
                         username, playerIndex, playerCount);
             }
 
             @Override
-            public void finished(MinecraftClient client, ActivityWaveOperation.Summary summary) {
+            public void finished(Minecraft client, ActivityWaveOperation.Summary summary) {
                 report(client, summary);
             }
 
             @Override
-            public void cancelled(MinecraftClient client, ActivityWaveOperation.Summary summary,
+            public void cancelled(Minecraft client, ActivityWaveOperation.Summary summary,
                                   OperationCancelReason reason) {
                 report(client, summary);
                 String key = switch (reason) {
@@ -172,7 +171,7 @@ public final class ActivityWaveModule extends DMLSModule {
         };
     }
 
-    private void report(MinecraftClient client, ActivityWaveOperation.Summary summary) {
+    private void report(Minecraft client, ActivityWaveOperation.Summary summary) {
         long simulated = summary.results().values().stream()
                 .filter(value -> value.kind() == ActivityWaveOperation.ResultKind.SIMULATED)
                 .count();
@@ -199,7 +198,7 @@ public final class ActivityWaveModule extends DMLSModule {
                     Object[] args = entry.getValue().kind() == ActivityWaveOperation.ResultKind.HOURS
                             ? new Object[]{entry.getKey(), String.format(Locale.ROOT, "%.1f", entry.getValue().hours())}
                             : new Object[]{entry.getKey()};
-                    ChatUtils.sendClientMessage(client, Text.literal("§8• ").append(ChatUtils.translated(key, args)));
+                    ChatUtils.sendClientMessage(client, Component.literal("§8• ").append(ChatUtils.translated(key, args)));
                 });
         ChatUtils.sendClientMessage(client, "§7" + ChatUtils.separatorForChatWidth(client, ""));
     }

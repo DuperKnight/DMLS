@@ -1,9 +1,8 @@
 package com.duperknight.client.session;
 
 import com.duperknight.client.utils.DMLSConfig;
-import net.minecraft.client.MinecraftClient;
-
 import java.util.Objects;
+import net.minecraft.client.Minecraft;
 
 /** Immutable metadata and safety policy captured when a managed operation starts. */
 public record OperationDescriptor(
@@ -19,7 +18,7 @@ public record OperationDescriptor(
     }
 
     public static OperationDescriptor capture(
-            MinecraftClient client,
+            Minecraft client,
             String operationId,
             String displayName
     ) {
@@ -27,7 +26,7 @@ public record OperationDescriptor(
                 ConnectionSnapshot.capture(client), DMLSConfig.dryRun());
     }
 
-    public boolean connectionStillMatches(MinecraftClient client) {
+    public boolean connectionStillMatches(Minecraft client) {
         return connection.matches(client);
     }
 

@@ -1,16 +1,15 @@
 package com.duperknight.client.utils;
 
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
-import net.minecraft.text.TextColor;
-import net.minecraft.util.Formatting;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.TextColor;
 
 /**
  * Utility methods for interacting with the Minecraft tooltips.
@@ -25,7 +24,7 @@ public final class TooltipUtils {
      * @param text the Text object to convert
      * @return the resulting TooltipLine
      */
-    public static TooltipLine toTooltipLine(Text text) {
+    public static TooltipLine toTooltipLine(Component text) {
         List<TooltipSegment> segments = new ArrayList<>();
         text.visit((style, value) -> {
             String cleaned = ChatUtils.cleanSegment(value);
@@ -94,9 +93,9 @@ public final class TooltipUtils {
     public static String stylePrefix(Style style) {
         StringBuilder prefix = new StringBuilder();
         if (style.getColor() != null) {
-            for (Formatting formatting : Formatting.values()) {
-                if (formatting.isColor() && style.getColor().equals(TextColor.fromFormatting(formatting))) {
-                    prefix.append('§').append(formatting.getCode());
+            for (ChatFormatting formatting : ChatFormatting.values()) {
+                if (LegacyColors.isColor(formatting) && style.getColor().equals(TextColor.fromLegacyFormat(formatting))) {
+                    prefix.append('§').append(LegacyColors.code(formatting));
                     break;
                 }
             }
@@ -174,7 +173,7 @@ public final class TooltipUtils {
      * @param style the style of the tooltip segment
      */
     public record TooltipSegment(String text, Style style) {
-        private static final TextColor GRAY = TextColor.fromFormatting(Formatting.GRAY);
+        private static final TextColor GRAY = TextColor.fromLegacyFormat(ChatFormatting.GRAY);
 
         public boolean isGray() {
             return java.util.Objects.equals(style.getColor(), GRAY);

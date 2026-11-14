@@ -5,15 +5,13 @@ import com.duperknight.client.session.CommandDispatch;
 import com.duperknight.client.utils.ChatUtils;
 import com.duperknight.client.utils.ClientUtils;
 import com.duperknight.client.utils.ServerGuard;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.text.Text;
-
-
 import java.util.List;
 import java.util.Optional;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class EventProtectModule extends DMLSModule{
     private static final String PREFIX = "§8[§6DMLS - Event Protect§8] §7";
@@ -34,8 +32,8 @@ public final class EventProtectModule extends DMLSModule{
     }
 
     @Override
-    public Text displayName() {
-        return Text.translatable("dmls.module.event_protect.name");
+    public Component displayName() {
+        return Component.translatable("dmls.module.event_protect.name");
     }
 
     @Override
@@ -44,8 +42,8 @@ public final class EventProtectModule extends DMLSModule{
     }
 
     @Override
-    public List<Text> description() {
-        return List.of(Text.translatable("dmls.module.event_protect.description"));
+    public List<Component> description() {
+        return List.of(Component.translatable("dmls.module.event_protect.description"));
     }
 
     @Override
@@ -54,8 +52,8 @@ public final class EventProtectModule extends DMLSModule{
     }
 
     @Override
-    public void openScreen(MinecraftClient client, Screen parent) {
-        client.setScreen(new EventProtectScreen(parent, this));
+    public void openScreen(Minecraft client, Screen parent) {
+        client.gui.setScreen(new EventProtectScreen(parent, this));
     }
 
     @Override
@@ -67,7 +65,7 @@ public final class EventProtectModule extends DMLSModule{
      * Issues /broadcastraw with a protection notice after validating the
      * immutable value supplied by this submission.
      */
-    public BroadcastResult broadcastProtection(MinecraftClient client, String eventName, String landName) {
+    public BroadcastResult broadcastProtection(Minecraft client, String eventName, String landName) {
         Optional<String> validatedEventName = validateEventName(eventName);
         if (validatedEventName.isEmpty()) {
             return BroadcastResult.INVALID_EVENT;

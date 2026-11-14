@@ -1,35 +1,34 @@
 package com.duperknight.client.gui.widgets;
 
 import com.duperknight.client.gui.DMLSMenuScreen;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
-import net.minecraft.client.gui.screen.narration.NarrationPart;
-import net.minecraft.client.gui.widget.PressableWidget;
-import net.minecraft.client.input.AbstractInput;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.screen.ScreenTexts;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractButton;
+import net.minecraft.client.gui.narration.NarratedElementType;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.InputWithModifiers;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.CommonComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.Identifier;
 
 /**
  * A reusable DMLS panel-styled dropdown for choosing one value from a fixed list.
  *
- * <p>The owning screen should render {@link #renderDropdown(DrawContext, int, int, float)} after its normal
+ * <p>The owning screen should render {@link #renderDropdown(GuiGraphicsExtractor, int, int, float)} after its normal
  * children so the expanded list stays above nearby controls. While the list is open, the screen should also
  * offer this widget mouse input before other children; this lets an option cover another control safely.</p>
  */
-public final class DropdownWidget<T> extends PressableWidget {
+public final class DropdownWidget<T> extends AbstractButton {
     private static final int DEFAULT_MAX_VISIBLE_ROWS = 6;
     private static final int ARROW_AREA_WIDTH = 18;
     private static final int SCROLLBAR_GAP = 2;
@@ -38,9 +37,9 @@ public final class DropdownWidget<T> extends PressableWidget {
     private static final int INDICATOR_RENDER_SIZE = 12;
     private static final int EXPANDED_BACKGROUND_COLOR = 0xEC101010;
 
-    private final Text optionText;
+    private final Component optionText;
     private final List<T> values;
-    private final Function<T, Text> valueToText;
+    private final Function<T, Component> valueToText;
     private final UpdateCallback<T> callback;
     private final boolean showOptionLabel;
     private final int maxVisibleRows;
@@ -58,7 +57,7 @@ public final class DropdownWidget<T> extends PressableWidget {
     private int dropdownBottomBound = Integer.MAX_VALUE;
 
     private DropdownWidget(Builder<T> builder) {
-        super(builder.x, builder.y, builder.width, builder.height, Text.empty());
+        super(builder.x, builder.y, builder.width, builder.height, Component.empty());
         if (builder.values.isEmpty()) {
             throw new IllegalArgumentException("A dropdown needs at least one value");
         }
@@ -78,8 +77,8 @@ public final class DropdownWidget<T> extends PressableWidget {
         updateMessage();
     }
 
-    public static <T> Builder<T> builder(Text optionText, List<T> values, T initialValue,
-                                          Function<T, Text> valueToText, UpdateCallback<T> callback) {
+    public static <T> Builder<T> builder(Component optionText, List<T> values, T initialValue,
+                                          Function<T, Component> valueToText, UpdateCallback<T> callback) {
         return new Builder<>(optionText, values, initialValue, valueToText, callback);
     }
 
@@ -119,7 +118,7 @@ public final class DropdownWidget<T> extends PressableWidget {
     }
 
     @Override
-    public void onPress(AbstractInput input) {
+    public void onPress(InputWithModifiers input) {
         if (open) {
             closeDropdown();
         } else {
@@ -130,20 +129,20 @@ public final class DropdownWidget<T> extends PressableWidget {
     }
 
     @Override
-    protected void drawIcon(DrawContext context, int mouseX, int mouseY, float delta) {
+    protected void extractContents(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         drawPanel(context, getX(), getY(), width, height);
         drawLeftAlignedLabel(context, this, ARROW_AREA_WIDTH);
         drawArrow(context);
     }
 
     /** Draws the expanded list or collapsed indicator in a fresh layer above the screen's regular controls. */
-    public void renderDropdown(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void renderDropdown(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         if (!visible) {
             return;
         }
         if (!open) {
             if (indicatorTexture != null && showCollapsedIndicator.getAsBoolean()) {
-                context.createNewRootLayer();
+                context.nextStratum();
                 drawIndicator(context, getRight() - INDICATOR_RENDER_SIZE / 2,
                         getY() - INDICATOR_RENDER_SIZE / 2);
             }
@@ -151,21 +150,21 @@ public final class DropdownWidget<T> extends PressableWidget {
         }
 
         layoutVisibleButtons();
-        context.createNewRootLayer();
+        context.nextStratum();
         drawExpandedPanel(context, getX(), menuTop(), width, menuHeight());
         int end = Math.min(values.size(), scrollOffset + visibleRowCount());
         for (int index = scrollOffset; index < end; index++) {
-            optionButtons.get(index).render(context, mouseX, mouseY, delta);
+            optionButtons.get(index).extractRenderState(context, mouseX, mouseY, delta);
         }
         if (hasScrollbar()) {
             renderScrollbar(context);
         }
         // Rows and the scrollbar are intentionally inset; redraw the frame last to keep one crisp outer border.
-        context.drawStrokedRectangle(getX(), menuTop(), width, menuHeight(), DMLSMenuScreen.PANEL_BORDER_COLOR);
+        context.outline(getX(), menuTop(), width, menuHeight(), DMLSMenuScreen.PANEL_BORDER_COLOR);
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (!open) {
             return super.mouseClicked(click, doubled);
         }
@@ -201,7 +200,7 @@ public final class DropdownWidget<T> extends PressableWidget {
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
         if (!draggingScrollbar) {
             return false;
         }
@@ -210,7 +209,7 @@ public final class DropdownWidget<T> extends PressableWidget {
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
+    public boolean mouseReleased(MouseButtonEvent click) {
         if (!draggingScrollbar) {
             return false;
         }
@@ -219,7 +218,7 @@ public final class DropdownWidget<T> extends PressableWidget {
     }
 
     @Override
-    public boolean keyPressed(KeyInput input) {
+    public boolean keyPressed(KeyEvent input) {
         if (!open) {
             return super.keyPressed(input);
         }
@@ -227,7 +226,7 @@ public final class DropdownWidget<T> extends PressableWidget {
             closeDropdown();
             return true;
         }
-        if (input.isTab()) {
+        if (input.isCycleFocus()) {
             closeDropdown();
             return false;
         }
@@ -239,24 +238,24 @@ public final class DropdownWidget<T> extends PressableWidget {
             moveHighlight(1);
             return true;
         }
-        if (input.getKeycode() == InputUtil.GLFW_KEY_HOME) {
+        if (input.input() == InputConstants.KEY_HOME) {
             setHighlight(0);
             return true;
         }
-        if (input.getKeycode() == InputUtil.GLFW_KEY_END) {
+        if (input.input() == InputConstants.KEY_END) {
             setHighlight(values.size() - 1);
             return true;
         }
-        if (input.getKeycode() == InputUtil.GLFW_KEY_PAGE_UP) {
+        if (input.input() == InputConstants.KEY_PAGEUP) {
             setHighlight(Math.max(0, highlightedIndex - visibleRowCount()));
             return true;
         }
-        if (input.getKeycode() == InputUtil.GLFW_KEY_PAGE_DOWN) {
+        if (input.input() == InputConstants.KEY_PAGEDOWN) {
             setHighlight(Math.min(values.size() - 1, highlightedIndex + visibleRowCount()));
             return true;
         }
-        if (input.isEnterOrSpace()) {
-            playDownSound(MinecraftClient.getInstance().getSoundManager());
+        if (input.isSelection()) {
+            playDownSound(Minecraft.getInstance().getSoundManager());
             select(highlightedIndex);
             return true;
         }
@@ -272,16 +271,16 @@ public final class DropdownWidget<T> extends PressableWidget {
     }
 
     @Override
-    protected MutableText getNarrationMessage() {
+    protected MutableComponent createNarrationMessage() {
         T narratedValue = open ? values.get(highlightedIndex) : value;
-        return getNarrationMessage(ScreenTexts.composeGenericOptionText(optionText, valueToText.apply(narratedValue)));
+        return wrapDefaultNarrationMessage(CommonComponents.optionNameValue(optionText, valueToText.apply(narratedValue)));
     }
 
     @Override
-    public void appendClickableNarrations(NarrationMessageBuilder builder) {
-        builder.put(NarrationPart.TITLE, getNarrationMessage());
+    public void updateWidgetNarration(NarrationElementOutput builder) {
+        builder.add(NarratedElementType.TITLE, createNarrationMessage());
         if (active) {
-            builder.put(NarrationPart.USAGE, Text.translatable(open
+            builder.add(NarratedElementType.USAGE, Component.translatable(open
                     ? "dmls.dropdown.usage.open"
                     : "dmls.dropdown.usage.closed"));
         }
@@ -319,11 +318,11 @@ public final class DropdownWidget<T> extends PressableWidget {
     }
 
     private void updateMessage() {
-        Text valueText = valueToText.apply(value);
-        setMessage(showOptionLabel ? ScreenTexts.composeGenericOptionText(optionText, valueText) : valueText);
+        Component valueText = valueToText.apply(value);
+        setMessage(showOptionLabel ? CommonComponents.optionNameValue(optionText, valueText) : valueText);
     }
 
-    private void drawArrow(DrawContext context) {
+    private void drawArrow(GuiGraphicsExtractor context) {
         int centerX = getRight() - ARROW_AREA_WIDTH / 2;
         int centerY = getY() + height / 2;
         int color = active ? 0xFFE0E0E0 : 0xFFA0A0A0;
@@ -338,28 +337,28 @@ public final class DropdownWidget<T> extends PressableWidget {
         }
     }
 
-    private void drawIndicator(DrawContext context, int x, int y) {
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, indicatorTexture, x, y, 0.0F, 0.0F,
+    private void drawIndicator(GuiGraphicsExtractor context, int x, int y) {
+        context.blit(RenderPipelines.GUI_TEXTURED, indicatorTexture, x, y, 0.0F, 0.0F,
                 INDICATOR_RENDER_SIZE, INDICATOR_RENDER_SIZE,
                 INDICATOR_TEXTURE_SIZE, INDICATOR_TEXTURE_SIZE,
                 INDICATOR_TEXTURE_SIZE, INDICATOR_TEXTURE_SIZE);
     }
 
-    private static void drawLeftAlignedLabel(DrawContext context, PressableWidget widget, int rightInset) {
+    private static void drawLeftAlignedLabel(GuiGraphicsExtractor context, AbstractButton widget, int rightInset) {
         int left = widget.getX() + 8;
         int right = Math.max(left + 1, widget.getRight() - rightInset);
-        context.getHoverListener(widget, DrawContext.HoverType.NONE)
-                .marqueedText(widget.getMessage(), left, left, right, widget.getY(), widget.getBottom());
+        context.textRendererForWidget(widget, GuiGraphicsExtractor.HoveredTextEffects.NONE)
+                .acceptScrolling(widget.getMessage(), left, left, right, widget.getY(), widget.getBottom());
     }
 
-    private static void drawPanel(DrawContext context, int x, int y, int width, int height) {
+    private static void drawPanel(GuiGraphicsExtractor context, int x, int y, int width, int height) {
         context.fill(x, y, x + width, y + height, DMLSMenuScreen.PANEL_BACKGROUND_COLOR);
-        context.drawStrokedRectangle(x, y, width, height, DMLSMenuScreen.PANEL_BORDER_COLOR);
+        context.outline(x, y, width, height, DMLSMenuScreen.PANEL_BORDER_COLOR);
     }
 
-    private static void drawExpandedPanel(DrawContext context, int x, int y, int width, int height) {
+    private static void drawExpandedPanel(GuiGraphicsExtractor context, int x, int y, int width, int height) {
         context.fill(x, y, x + width, y + height, EXPANDED_BACKGROUND_COLOR);
-        context.drawStrokedRectangle(x, y, width, height, DMLSMenuScreen.PANEL_BORDER_COLOR);
+        context.outline(x, y, width, height, DMLSMenuScreen.PANEL_BORDER_COLOR);
     }
 
     private void layoutVisibleButtons() {
@@ -368,7 +367,7 @@ public final class DropdownWidget<T> extends PressableWidget {
         int end = Math.min(values.size(), scrollOffset + visibleRowCount());
         for (int index = scrollOffset; index < end; index++) {
             OptionButton button = optionButtons.get(index);
-            button.setDimensionsAndPosition(rowWidth, height, getX(), top + (index - scrollOffset) * height);
+            button.setRectangle(rowWidth, height, getX(), top + (index - scrollOffset) * height);
         }
     }
 
@@ -391,7 +390,7 @@ public final class DropdownWidget<T> extends PressableWidget {
                 && mouseY >= menuTop() && mouseY < menuTop() + menuHeight();
     }
 
-    private void renderScrollbar(DrawContext context) {
+    private void renderScrollbar(GuiGraphicsExtractor context) {
         int menuHeight = menuHeight();
         int thumbHeight = scrollbarThumbHeight();
         int thumbTravel = menuHeight - thumbHeight;
@@ -460,10 +459,10 @@ public final class DropdownWidget<T> extends PressableWidget {
     }
 
     public static final class Builder<T> {
-        private final Text optionText;
+        private final Component optionText;
         private final List<T> values;
         private final T initialValue;
-        private final Function<T, Text> valueToText;
+        private final Function<T, Component> valueToText;
         private final UpdateCallback<T> callback;
         private int x;
         private int y;
@@ -475,8 +474,8 @@ public final class DropdownWidget<T> extends PressableWidget {
         private Predicate<T> showOptionIndicator = ignored -> false;
         private BooleanSupplier showCollapsedIndicator = () -> false;
 
-        private Builder(Text optionText, List<T> values, T initialValue,
-                        Function<T, Text> valueToText, UpdateCallback<T> callback) {
+        private Builder(Component optionText, List<T> values, T initialValue,
+                        Function<T, Component> valueToText, UpdateCallback<T> callback) {
             this.optionText = Objects.requireNonNull(optionText);
             this.values = List.copyOf(values);
             this.initialValue = initialValue;
@@ -523,7 +522,7 @@ public final class DropdownWidget<T> extends PressableWidget {
         }
     }
 
-    private final class OptionButton extends PressableWidget {
+    private final class OptionButton extends AbstractButton {
         private final T option;
 
         private OptionButton(T option) {
@@ -533,12 +532,12 @@ public final class DropdownWidget<T> extends PressableWidget {
         }
 
         @Override
-        public void onPress(AbstractInput input) {
+        public void onPress(InputWithModifiers input) {
             select(values.indexOf(option));
         }
 
         @Override
-        protected void drawIcon(DrawContext context, int mouseX, int mouseY, float delta) {
+        protected void extractContents(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
             int inset = 1;
             boolean selected = Objects.equals(option, value);
             if (isHovered()) {
@@ -547,13 +546,13 @@ public final class DropdownWidget<T> extends PressableWidget {
                 context.fill(getX() + inset, getY(), getRight() - inset, getBottom(), 0x403A3A3A);
             }
             if (selected) {
-                context.drawStrokedRectangle(getX(), getY(), getWidth(), getHeight(),
+                context.outline(getX(), getY(), getWidth(), getHeight(),
                         DMLSMenuScreen.PANEL_BORDER_COLOR);
             }
             boolean showIndicator = indicatorTexture != null && showOptionIndicator.test(option);
             drawLeftAlignedLabel(context, this, showIndicator ? INDICATOR_RENDER_SIZE + 8 : 8);
             if (showIndicator) {
-                int afterLabel = getX() + 8 + MinecraftClient.getInstance().textRenderer.getWidth(getMessage()) + 4;
+                int afterLabel = getX() + 8 + Minecraft.getInstance().font.width(getMessage()) + 4;
                 int rightmost = getRight() - INDICATOR_RENDER_SIZE - 4;
                 drawIndicator(context, Math.min(afterLabel, rightmost),
                         getY() + (getHeight() - INDICATOR_RENDER_SIZE) / 2);
@@ -561,8 +560,8 @@ public final class DropdownWidget<T> extends PressableWidget {
         }
 
         @Override
-        public void appendClickableNarrations(NarrationMessageBuilder builder) {
-            appendDefaultNarrations(builder);
+        public void updateWidgetNarration(NarrationElementOutput builder) {
+            defaultButtonNarrationText(builder);
         }
     }
 }
