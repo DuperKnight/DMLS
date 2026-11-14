@@ -5,6 +5,7 @@ import com.duperknight.client.accountlink.DiscordAccountProfileStore;
 import com.duperknight.client.accountlink.DiscordAvatarCache;
 import com.duperknight.client.accountlink.DiscordLinkService;
 import com.duperknight.client.accountlink.DiscordLinkTokenStore;
+import com.duperknight.client.gui.widgets.BouncingLogoBackground; // NEW
 import com.duperknight.client.gui.widgets.DiscordAccountWidget;
 import com.duperknight.client.gui.widgets.DropdownWidget;
 import com.duperknight.client.modules.DMLSModule;
@@ -113,6 +114,11 @@ public abstract class DMLSMenuScreen extends Screen {
         // ...then the node network, so the tints can't bury it.
         NodeNetworkBackground.render(context);
 
+        // NEW: bouncing logo, above the network but below the header logo and widgets.
+        if (DMLSConfig.bouncingLogoBackground()) {
+            BouncingLogoBackground.render(context, width, height);
+        }
+
         // Logo on top of the network.
         float compactProgress = easedHeaderCompactProgress();
         int expandedLogoWidth = Math.clamp(width - scaled(32), scaled(160), scaled(205));
@@ -156,6 +162,10 @@ public abstract class DMLSMenuScreen extends Screen {
         context.fill(0, 0, width, footerTop, menuContentShade());
         context.fill(0, footerTop, width, height, 0x20000000);
         NodeNetworkBackground.render(context);
+        // NEW
+        if (DMLSConfig.bouncingLogoBackground()) {
+            BouncingLogoBackground.render(context, width, height);
+        }
         context.blit(RenderPipelines.GUI_TEXTURED, FOOTER_SEPARATOR, 0, footerTop,
                 0.0F, 0.0F, width, 2, 32, 2);
     }

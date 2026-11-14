@@ -23,11 +23,21 @@ public final class BackgroundsScreen extends DMLSMenuScreen {
         int formWidth = Math.min(scaled(360), width - scaled(48));
         int formX = (width - formWidth) / 2;
 
+        int nodeY = scaled(14);
+        int logoY = nodeY + STANDARD_BUTTON_HEIGHT + scaled(6); // NEW
+
         addScrollableChild(Button.builder(nodeNetworkLabel(), button -> {
                     DMLSConfig.setNodeNetworkBackground(!DMLSConfig.nodeNetworkBackground());
                     button.setMessage(nodeNetworkLabel());
                 })
-                .bounds(formX, contentY(scaled(14)), formWidth, STANDARD_BUTTON_HEIGHT).build(), scaled(14));
+                .bounds(formX, contentY(nodeY), formWidth, STANDARD_BUTTON_HEIGHT).build(), nodeY);
+
+        // NEW
+        addScrollableChild(Button.builder(bouncingLogoLabel(), button -> {
+                    DMLSConfig.setBouncingLogoBackground(!DMLSConfig.bouncingLogoBackground());
+                    button.setMessage(bouncingLogoLabel());
+                })
+                .bounds(formX, contentY(logoY), formWidth, STANDARD_BUTTON_HEIGHT).build(), logoY);
 
         addRenderableWidget(Button.builder(Component.translatable("dmls.backgrounds.button.back"),
                         button -> minecraft.gui.setScreen(parent))
@@ -35,8 +45,18 @@ public final class BackgroundsScreen extends DMLSMenuScreen {
     }
 
     private static Component nodeNetworkLabel() {
-        return Component.translatable("dmls.backgrounds.node_network",
-                Component.translatable(DMLSConfig.nodeNetworkBackground() ? "dmls.option.on" : "dmls.option.off"));
+        return onOffLabel("dmls.backgrounds.node_network", DMLSConfig.nodeNetworkBackground());
+    }
+
+    // NEW
+    private static Component bouncingLogoLabel() {
+        return onOffLabel("dmls.backgrounds.bouncing_logo", DMLSConfig.bouncingLogoBackground());
+    }
+
+    // NEW
+    private static Component onOffLabel(String key, boolean enabled) {
+        return Component.translatable(key,
+                Component.translatable(enabled ? "dmls.option.on" : "dmls.option.off"));
     }
 
     @Override

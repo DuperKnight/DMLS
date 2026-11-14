@@ -65,6 +65,7 @@ public final class DMLSConfig {
     private static final String MINI_ME_SNOWBALL_FIGHTS_KEY = "miniMe.snowballFights";
     private static final String MINI_ME_CUSTOM_ENABLED_KEY = "miniMe.customEnabled";
     private static final String NODE_NETWORK_BACKGROUND_KEY = "backgrounds.nodeNetwork";
+    private static final String BOUNCING_LOGO_BACKGROUND_KEY = "backgrounds.bouncingLogo"; // NEW
     private static final StaffRank DEFAULT_RANK = StaffRank.NONE;
 
     private static boolean loaded;
@@ -86,6 +87,7 @@ public final class DMLSConfig {
     private static final Map<String, Boolean> moderationRuleOverrides = new HashMap<>();
     private static MiniMeHudPreferences miniMeHudPreferences = MiniMeHudPreferences.defaults();
     private static boolean nodeNetworkBackground = true;
+    private static boolean bouncingLogoBackground = true; // NEW
 
     // Deliberately not persisted: the game always starts live, so a forgotten
     // dry run can never suppress real commands in a later session.
@@ -339,6 +341,22 @@ public final class DMLSConfig {
         return false;
     }
 
+    // NEW
+    public static boolean bouncingLogoBackground() {
+        ensureLoaded();
+        return bouncingLogoBackground;
+    }
+
+    // NEW
+    public static boolean setBouncingLogoBackground(boolean enabled) {
+        ensureLoaded();
+        boolean previous = bouncingLogoBackground;
+        bouncingLogoBackground = enabled;
+        if (save()) return true;
+        bouncingLogoBackground = previous;
+        return false;
+    }
+
     /** While enabled, DMLS previews each action without sending it. Not persisted. */
     public static boolean dryRun() {
         return dryRun;
@@ -508,6 +526,8 @@ public final class DMLSConfig {
 
         nodeNetworkBackground = Boolean.parseBoolean(
                 properties.getProperty(NODE_NETWORK_BACKGROUND_KEY, "true"));
+        bouncingLogoBackground = Boolean.parseBoolean( // NEW
+                properties.getProperty(BOUNCING_LOGO_BACKGROUND_KEY, "true"));
 
         if (properties.containsKey(ALLOWED_SERVERS_KEY)) {
             allowedServers = withMandatoryAllowedServers(java.util.Arrays.asList(
@@ -591,6 +611,7 @@ public final class DMLSConfig {
                 String.join(",", new TreeSet<>(miniMeHudPreferences.customEnabled())));
 
         properties.setProperty(NODE_NETWORK_BACKGROUND_KEY, Boolean.toString(nodeNetworkBackground));
+        properties.setProperty(BOUNCING_LOGO_BACKGROUND_KEY, Boolean.toString(bouncingLogoBackground)); // NEW
 
         return properties;
     }

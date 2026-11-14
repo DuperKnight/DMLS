@@ -23,6 +23,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
@@ -220,11 +221,27 @@ public final class CheckLandsModule extends DMLSModule {
 
         @Override
         public void onServerMessage(OperationHandle handle, Minecraft client, ServerMessage message) {
-            if (stage != Stage.WAITING_FOR_LANDS || message.origin() != MessageOrigin.SERVER_SYSTEM) return;
-            String lower = message.cleanText().toLowerCase(java.util.Locale.ROOT);
-            if (lower.startsWith("lands:") && lower.contains("no player with the name")
-                    && lower.contains(ign.toLowerCase(java.util.Locale.ROOT))) {
+            if (message.origin() != MessageOrigin.SERVER_SYSTEM || ign == null) return;
+            String lower = message.cleanText().toLowerCase(Locale.ROOT);
+
+            // Player has no lands profile: skip to the next player.
+            if (stage == Stage.WAITING_FOR_LANDS
+                    && lower.contains("no player with the name")
+                    && lower.contains(ign.toLowerCase(Locale.ROOT))) {
                 finishPlayer(client);
+                return;
+            }
+
+            // A claim from the list doesn't exist: skip just that claim instead of timing out.
+            if (stage == Stage.WAITING_FOR_INFO
+                    && currentClaim != null
+                    && lower.contains("doesn't exist")
+                    && lower.contains(currentClaim.toLowerCase(Locale.ROOT))) {
+                ScreenUtils.closeHandledScreen(client);
+                ChatUtils.sendClientMessage(client,
+                        PREFIX + "Skipped §6" + currentClaim + "§7 (land does not exist).");
+                activeQuery = null;
+                stage = Stage.SENDING_NEXT_INFO_COMMAND;
             }
         }
 
@@ -318,6 +335,7 @@ public final class CheckLandsModule extends DMLSModule {
         }
 
         private void waitForInfo(Minecraft client) {
+            if (activeQuery == null) return;
             MenuCommandQuery.TickResult tick = activeQuery.tick(client);
             if (!handleTerminalQueryStatus(client, tick, "/lands info land " + currentClaim)) return;
             if (tick.status() != MenuCommandQuery.Status.READY) return;
