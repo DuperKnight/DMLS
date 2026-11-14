@@ -108,6 +108,12 @@ public class DMLSClient implements ClientModInitializer {
                                     StringArgumentType.getString(context, "igns"))
                                     == OperationStartResult.STARTED ? 1 : 0;
                         })))
+                .then(moduleLiteral("landsalts", CheckLandsAltModule.class)
+                        .then(ClientCommands.argument("ign", StringArgumentType.word()).executes(context -> {
+                            return module(CheckLandsAltModule.class).submit(context.getSource().getClient(),
+                                    StringArgumentType.getString(context, "ign"))
+                                    == OperationStartResult.STARTED ? 1 : 0;
+                        })))
                 .then(moduleLiteral("members", CheckMembersModule.class)
                         .then(ClientCommands.argument("land", StringArgumentType.greedyString()).executes(context -> {
                             return module(CheckMembersModule.class).submit(context.getSource().getClient(),
@@ -565,6 +571,8 @@ public class DMLSClient implements ClientModInitializer {
         ChatUtils.sendClientMessage(client, header + ChatUtils.separatorForChatWidth(client, header));
         moduleHelpLine(client, CheckLandsModule.class,
                 "/dmls lands <ign...>", Component.translatable("dmls.help.checklands"));
+        moduleHelpLine(client, CheckLandsAltModule.class,
+                "/dmls landsalts <ign>", Component.translatable("dmls.help.checklandsalts", StaffRank.MODERATOR.displayName()));
         moduleHelpLine(client, CheckMembersModule.class,
                 "/dmls members <land>", Component.translatable("dmls.help.checkmembers"));
         moduleHelpLine(client, CheckAltsModule.class,
@@ -863,6 +871,7 @@ public class DMLSClient implements ClientModInitializer {
                 new ChatSpamMuteModule(),
                 new CheckAltsModule(),
                 new CheckLandsModule(),
+                new CheckLandsAltModule(),
                 new CheckMembersModule(),
                 new ContainerScanModule(),
                 new CoreProtectBuilderModule(),
