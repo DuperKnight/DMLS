@@ -49,7 +49,6 @@ public final class DiscordLinkSessionValidator {
     private static boolean applyResult(UUID minecraftUuid, DiscordLinkService.LinkStatusResult result) {
         if (result.status() == DiscordLinkService.LinkStatus.LINKED) {
             DiscordLinkAvailability.markLinked(minecraftUuid);
-            DMLSConfig.enableDoNotInstaBanByDefaultForConfirmedLink();
             if (result.profile() != null) {
                 DiscordAccountProfileStore.save(result.profile());
                 DiscordAvatarCache.ensureCached(result.profile());
